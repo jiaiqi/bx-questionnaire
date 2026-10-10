@@ -10,7 +10,7 @@
 | 状态 | Pinia |
 | 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
 | 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
-| 测试 | Vitest（201 项） |
+| 测试 | Vitest（209 项） |
 | 校验 | vue-tsc + ESLint |
 
 `pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
@@ -28,7 +28,7 @@
 │   ├── stores/              # session 等
 │   └── utils/               # request（请求层）/ storage / query（页面参数解析）
 ├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
-├── test/                    # 单元测试 + 集成测试（含 env-config.spec.ts：环境变量配置回归防护）
+├── test/                    # 单元测试 + 集成测试（含 env-config.spec.ts：环境变量配置回归防护、directives/aria-label.spec.ts：可访问性指令）
 ├── pages.config.ts          # 路由配置源
 ├── manifest.config.ts       # 应用配置源
 └── vite.config.ts           # 含 H5 子路径 base
@@ -45,7 +45,7 @@ pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
 常用校验：
 
 ```bash
-pnpm test            # 201 项测试
+pnpm test            # 209 项测试
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑
