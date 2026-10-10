@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "mutation": "node scripts/mutation.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",
