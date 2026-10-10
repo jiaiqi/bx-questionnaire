@@ -10,7 +10,7 @@
 | 状态 | Pinia |
 | 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
 | 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
-| 测试 | Vitest（49 项） |
+| 测试 | Vitest（101 项） |
 | 校验 | vue-tsc + ESLint |
 
 `pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
@@ -20,9 +20,9 @@
 
 ```
 ├── src/
-│   ├── api/                 # 按应用分组的接口封装（daq / config）
+│   ├── api/                 # 按应用分组的接口封装（daq / file / config）
 │   ├── components/          # base（基础组件）/ form（题型）/ questionnaire（业务组件）
-│   ├── composables/         # useQuestionnaire 等
+│   ├── composables/         # useQuestionnaire / useDraft / useSubmit 等
 │   ├── domain/questionnaire # 纯逻辑：题型映射、序列化、校验、计分
 │   ├── pages/questionnaire/ # 10 个页面
 │   ├── stores/              # session 等
@@ -45,7 +45,7 @@ pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
 常用校验：
 
 ```bash
-pnpm test            # 49 项测试
+pnpm test            # 101 项测试
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm build h5        # 产物 dist/build/h5
@@ -137,11 +137,11 @@ pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具�
 - 写入（`operate`）请求体是**顶层数组**：`[{ serviceName, data: [...] }]`
 - 鉴权头同时带 `bx_auth_ticket` 与 `bx-auth-ticket`
 
-已知的接口行为差异（实测，详见 `docs` 内方案文档 §11）：
+已知的接口行为差异（实测）。完整记录见 `bx-health` 仓库的 `docs/questionnaire-migration/方案文档.md` §10–§11，以及本工程 `docs/验收清单.md` 的「平台行为实测」一节：
 
 - `srvdaq_record_reply_merge_select` **没有 `activity_no` / `item_no` 列**，题目维度用 `item_seq`，作答值在 `svalue`
-- `srvdaq_item_cfg_select` 的服务端条件过滤不生效，需全量拉取后在前端过滤
-- `srvdaq_record_reply_select` 必须带 `condition`，否则返回「系统繁忙」
+- `srvdaq_record_reply_select` **不接受 `order`**：传任何排序字段（asc / desc 皆然）都会静默返回 0 条，而不是报错
+- `srvdaq_record_reply_select` **必须带 `condition`**，空数组会直接 FAILURE
 - 记录类服务按**会话**校验：本地开发跨域（`localhost:5173` → 内网）时拿不到数据，
   结果页会回退本地计算；生产同域部署不受影响
 
