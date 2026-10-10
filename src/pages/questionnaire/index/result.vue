@@ -107,7 +107,6 @@ const rows = computed(() =>
     .filter(field => field.widget !== 'section')
     .map(field => ({
       key: field.key,
-      index: field.index,
       title: formatQuestionTitle(field.index, field.label),
       // 老工程按 item_no 取值，parkDev 实测返回 item_seq（映射里两个键都写了），逐个兜底
       mine: serverAnswers.value[String(field.raw.item_no ?? '')]
@@ -175,7 +174,6 @@ function goHome(): void {
         <view class="r-list">
           <view v-for="row in rows" :key="row.key" class="r-item">
             <view class="r-item__head">
-              <text class="r-item__index">{{ row.index }}.</text>
               <text class="r-item__label">{{ row.title }}</text>
             </view>
             <view class="r-item__line">
@@ -334,14 +332,6 @@ function goHome(): void {
 .r-item__head {
   display: flex;
   align-items: flex-start;
-}
-
-.r-item__index {
-  flex-shrink: 0;
-  margin-right: 4px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--bx-text);
 }
 
 .r-item__label {
