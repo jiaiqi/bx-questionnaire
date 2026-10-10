@@ -28,6 +28,8 @@ const rows = ref<DaqRecordReplyRow[]>([])
 const loading = ref(false)
 const finished = ref(false)
 const loaded = ref(false)
+/** 加载失败：与 finished 区分开，失败后必须允许重试 */
+const failed = ref(false)
 const pageNo = ref(1)
 const rownumber = 10
 
@@ -60,10 +62,13 @@ async function fetchPage(reset = false): Promise<void> {
     finished.value = rows.value.length >= total || page.length === 0
     pageNo.value += 1
     loaded.value = true
+    failed.value = false
   }
   catch (error) {
+    // 不置 finished：一次网络抖动不该让列表永久停在「没有更多了」；
+    // pageNo 也不递增，重试请求的仍是同一页。
+    failed.value = true
     toast(error instanceof BxError ? error.message : '记录加载失败')
-    finished.value = true
   }
   finally {
     loading.value = false
@@ -149,6 +154,7 @@ void fetchPage(true)
       <view class="records__more">
         <text v-if="loading" class="records__more-text">正在加载…</text>
         <text v-else-if="finished" class="records__more-text">没有更多了</text>
+        <text v-else-if="failed" class="records__more-text" @click="loadMore">加载失败，点击重试</text>
         <text v-else class="records__more-text" @click="loadMore">点击加载更多</text>
       </view>
     </view>
