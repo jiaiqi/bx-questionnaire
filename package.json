@@ -18,6 +18,7 @@
     "perf": "node scripts/perf.mjs",
     "a11y": "node scripts/a11y.mjs",
     "scan:dist": "node scripts/scan-dist.mjs",
+    "check:mp": "node scripts/check-mp.mjs",
     "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
