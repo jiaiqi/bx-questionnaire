@@ -24,6 +24,8 @@ const batchNo = ref('')
 const serverScore = ref<number | null>(null)
 const serverState = ref('')
 const serverAnswers = ref<Record<string, string>>({})
+/** 服务端结果不可用时的原因（仅内部记录，不打扰用户） */
+const serverTip = ref('')
 
 onLoad((query) => {
   activityNo.value = String(query?.activity_no ?? '')
@@ -55,19 +57,14 @@ async function loadServerResult(): Promise<void> {
     return
   }
 
+  // 两个查询分开容错：维度汇总（merge）在部分活动上没有数据，
+  // 不能因为它失败而丢掉更重要的得分与状态。
   try {
-    const [reply, merge] = await Promise.all([
-      recordReplySelect({
-        activityNo: activityNo.value,
-        fillBatchNo: batchNo.value,
-        rownumber: 1,
-      }),
-      recordReplyMergeSelect({
-        activityNo: activityNo.value,
-        fillBatchNo: batchNo.value,
-      }),
-    ])
-
+    const reply = await recordReplySelect({
+      activityNo: activityNo.value,
+      fillBatchNo: batchNo.value,
+      rownumber: 1,
+    })
     const record = reply.data?.[0]
     if (record) {
       const rawScore = record.score
@@ -76,7 +73,19 @@ async function loadServerResult(): Promise<void> {
         : Number(rawScore)
       serverState.value = String(record.state ?? '')
     }
+    else {
+      serverTip.value = '未查到作答记录'
+    }
+  }
+  catch (error) {
+    serverTip.value = `记录查询失败：${error instanceof Error ? error.message : String(error)}`
+  }
 
+  try {
+    const merge = await recordReplyMergeSelect({
+      activityNo: activityNo.value,
+      fillBatchNo: batchNo.value,
+    })
     const map: Record<string, string> = {}
     for (const row of merge.data ?? []) {
       const itemNo = String((row as Record<string, unknown>).item_no ?? '')
@@ -87,8 +96,8 @@ async function loadServerResult(): Promise<void> {
     }
     serverAnswers.value = map
   }
-  catch {
-    // 结果页容错：服务端数据不可用时保持本地计算结果
+  catch (error) {
+    serverTip.value += `${serverTip.value ? '；' : ''}汇总查询失败：${error instanceof Error ? error.message : String(error)}`
   }
 }
 
@@ -146,7 +155,7 @@ function goHome(): void {
         <view class="r-card">
           <text class="r-card__title">{{ activity?.title || '问卷' }}</text>
 
-          <view v-if="hasScore" class="r-score">
+          <text v-if="serverTip" style="display:block;font-size:12px;color:#F53F3F">{{ serverTip }}</text>`n          <view v-if="hasScore" class="r-score">
             <text class="r-score__value">{{ score.score }}</text>
             <text class="r-score__unit">/ {{ score.total }} 分</text>
           </view>

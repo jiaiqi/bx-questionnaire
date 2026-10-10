@@ -61,6 +61,13 @@ const candidates = [
   'srvdaq_activity_sug_select',
   'srvdaq_record_share_select',
   'srvdaq_classify_cfg_select',
+  // 图片题型可能用到的附件服务（老工程只出现过 select）
+  'srvfile_attachment_select',
+  'srvfile_attachment_add',
+  'srvfile_attachment_upload',
+  'srvfile_upload',
+  'srvfile_file_select',
+  'srvfile_file_add',
 ]
 
 for (const serviceName of candidates) {
