@@ -95,10 +95,20 @@ async function clickSelector(selector, label) {
  * 才能让 Vue 的 v-model 真正更新 —— 只改 value 不派事件的话框架收不到，
  * 那样的「通过」是假的。
  */
-async function typeInto(selector, text, label) {
+/**
+ * 往输入框写值并触发 Vue 的 input 事件
+ *
+ * 不能用 Input.insertText / 坐标点击：headless 下 dispatchMouseEvent 之后
+ * document.activeElement 仍停在 BODY，值写不进去。必须直接调原型上的 value
+ * setter 再派发 input 事件 —— 只设 DOM value 不派发事件，Vue 状态不会更新。
+ *
+ * nth 用于同一选择器命中多个元素时取第 n 个（uni-app 把 <input> 包在
+ * <uni-input> 里，placeholder 属性不在内层 input 上，只能按索引定位）。
+ */
+async function typeInto(selector, text, label, nth = 0) {
   const r = await send('Runtime.evaluate', {
     expression: `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)})
+      const el = document.querySelectorAll(${JSON.stringify(selector)})[${nth}]
       if (!el) return 'not-found'
       el.focus()
       const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
@@ -773,6 +783,93 @@ async function main() {
       pass: surveyAfterSubmit.hash.includes('survey/result'),
     })
   }
+
+  // ── 场景八：登记信息页（submitInfo）────────────────────────────
+  // 老工程把登记表单序列化进 ?submitInfo= 传给答题页，但答题页从未消费该参数，
+  // 登记信息实际从未生效。新工程改为写入本地存储，由答题页按题目名称预填。
+  // 这里验证三条：必填校验、手机号格式校验、通过后写存储并跳转。
+  console.log('\n\n=== 场景八：登记信息页校验与跳转 ===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/index/submitInfo?activity_no=${ACTIVITY_NO}`,
+  })
+  await sleep(9000)
+
+  // 先清掉可能残留的登记信息，避免上一轮的值影响断言
+  await send('Runtime.evaluate', { expression: 'localStorage.clear()' })
+  await send('Page.reload')
+  await sleep(9000)
+
+  /** 读 toast 文案（uni.showToast 在 H5 渲染为 .uni-toast） */
+  const readToast = async () => {
+    const r = await send('Runtime.evaluate', {
+      expression: `(() => {
+        const el = document.querySelector('.uni-toast, .uni-sample-toast')
+        return el ? (el.innerText || '').trim() : ''
+      })()`,
+      returnByValue: true,
+    })
+    return r.result.value
+  }
+
+  const siState = await readState()
+  console.log(`  页面文本：${siState.text.slice(0, 160)}`)
+  checks.push({
+    name: '登记信息页渲染出表单',
+    pass: siState.text.includes('所属单位') && siState.text.includes('下一步'),
+  })
+
+  // ① 空单位：应被必填校验拦住
+  await clickByText('下一步，开始作答', '登记页下一步（空单位）')
+  await sleep(900)
+  const toastEmpty = await readToast()
+  const afterEmpty = await readState()
+  console.log(`  空单位 toast：${JSON.stringify(toastEmpty)}，hash 是否仍在登记页：${afterEmpty.hash.includes('submitInfo')}`)
+  checks.push({ name: '登记页空单位被拦住并提示', pass: toastEmpty.includes('所属单位') })
+  checks.push({ name: '登记页空单位不跳转', pass: afterEmpty.hash.includes('submitInfo') })
+
+  // ② 填单位 + 错误手机号：应被格式校验拦住
+  // uni-app 的 <input placeholder> 在 H5 渲染成 uni-input 包裹结构，
+  // placeholder 属性不在内层 input 上，所以只能按索引定位（3 个字段顺序固定）
+  await typeInto('uni-input input', '测试单位', '登记页所属单位', 0)
+  await typeInto('uni-input input', '12345', '登记页错误手机号', 2)
+  await sleep(600)
+  await clickByText('下一步，开始作答', '登记页下一步（错误手机号）')
+  await sleep(900)
+  const toastPhone = await readToast()
+  const afterPhone = await readState()
+  console.log(`  错误手机号 toast：${JSON.stringify(toastPhone)}`)
+  checks.push({ name: '登记页错误手机号被拦住并提示', pass: toastPhone.includes('手机号码') })
+  checks.push({ name: '登记页错误手机号不跳转', pass: afterPhone.hash.includes('submitInfo') })
+
+  // ③ 正确手机号：应写入存储并跳转到答题页
+  await typeInto('uni-input input', '测试姓名', '登记页姓名', 1)
+  await typeInto('uni-input input', '13800138000', '登记页正确手机号', 2)
+  await sleep(600)
+  await clickByText('下一步，开始作答', '登记页下一步（正确）')
+  await sleep(8000)
+  const afterOk = await readState()
+  console.log(`  填写正确后 hash：${afterOk.hash.slice(0, 110)}`)
+  // H5 会把 navigateTo 的目标路径重写成 #/?query 形式，地址栏里没有 index/index，
+  // 所以要按「已经离开登记页 + 带着 formType=form 与 activity_no」来判断
+  checks.push({
+    name: '登记页填写正确后跳转到答题页',
+    pass: !afterOk.hash.includes('submitInfo')
+      && afterOk.hash.includes('formType=form')
+      && afterOk.hash.includes(ACTIVITY_NO),
+  })
+
+  const entry = await send('Runtime.evaluate', {
+    expression: `(() => {
+      try { return JSON.stringify(uni.getStorageSync('bxq:entry_params') || null) }
+      catch (e) { return 'ERR:' + e.message }
+    })()`,
+    returnByValue: true,
+  })
+  console.log(`  写入的登记信息：${entry.result.value}`)
+  checks.push({ name: '登记信息写入本地存储', pass: String(entry.result.value).includes('测试单位') })
+  checks.push({ name: '登记信息含姓名与手机号', pass: String(entry.result.value).includes('13800138000') })
 
   ws.close()
   chrome.kill()
