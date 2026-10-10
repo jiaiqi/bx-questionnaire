@@ -138,12 +138,24 @@ export function recordReplyMergeSelect(params: { activityNo: string, fillBatchNo
   })
 }
 
-/** 评估建议文案 */
-export function activitySugSelect(params: { activityNo: string }) {
+/**
+ * 评估建议文案
+ *
+ * 老工程按 `activity_no` + `fill_batch_no` 两个条件查询，
+ * 批次号可精确定位到某一次作答对应的建议区间。
+ */
+export function activitySugSelect(params: { activityNo: string, fillBatchNo?: string }) {
+  const condition: BxCondition[] = [
+    { colName: 'activity_no', ruleType: 'eq', value: params.activityNo },
+  ]
+  if (params.fillBatchNo) {
+    condition.push({ colName: 'fill_batch_no', ruleType: 'eq', value: params.fillBatchNo })
+  }
+
   return bxSelect<DaqActivitySugRow>({
     serviceName: 'srvdaq_activity_sug_select',
     colNames: ['*'],
-    condition: [{ colName: 'activity_no', ruleType: 'eq', value: params.activityNo }],
+    condition,
   })
 }
 

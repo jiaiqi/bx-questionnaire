@@ -4,7 +4,12 @@
  * 只做必要的重置与通用排版，业务样式留在各组件内（scoped）。
  */
 
-page {
+/* H5 端 <view>/<text> 会编译成 <uni-view>/<uni-text> 自定义元素，
+ * 因此根节点与盒模型必须同时覆盖标签名与 uni-* 元素名，
+ * 否则 box-sizing 失效会让带 padding 的定宽容器横向溢出。 */
+page,
+body,
+uni-page-body {
   background-color: var(--bx-bg);
   color: var(--bx-text);
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -13,12 +18,20 @@ page {
   -webkit-font-smoothing: antialiased;
 }
 
-view,
-text,
-button,
-input,
-textarea {
-  box-sizing: border-box;
+/* H5 端 <view> 编译为 <uni-view>：uni-app 内置的元素级规则会盖掉通配选择器（优先级 0,0,0），
+ * 导致带 padding 的卡片按 content-box 撑宽、整页横向溢出。
+ * 这里连同 uni-* 元素一起提升优先级，统一盒模型。 */
+*,
+*::before,
+*::after,
+uni-view,
+uni-text,
+uni-button,
+uni-input,
+uni-textarea,
+uni-image,
+uni-scroll-view {
+  box-sizing: border-box !important;
 }
 
 /* 去掉小程序 button 默认边框与背景，统一由业务样式控制 */
@@ -34,12 +47,28 @@ button {
   }
 }
 
-/* 双端布局：容器宽时居中定宽，窄时全宽 */
+/* 双端布局：容器宽时居中定宽，窄时全宽
+ *
+ * 覆盖三种运行形态：
+ * - 浏览器 PC（宽屏）与微信小程序 PC 横屏窗口：居中定宽 + 更大留白；
+ * - 浏览器移动端与公众号 H5：全宽紧凑；
+ * - 微信小程序移动端竖屏：全宽紧凑。
+ */
 .bx-container {
+  /* 显式声明盒模型：H5 端 <view> 编译为 <uni-view>，通配符重置未必覆盖到，
+   * 一旦 box-sizing 失效，width: 100% + padding 就会横向溢出。
+   * width: 100% 也不能省：flex 父级下 margin: 0 auto 会让子项收缩。 */
+  box-sizing: border-box;
   width: 100%;
   max-width: var(--bx-content-width);
   margin: 0 auto;
   padding: 0 16px;
+}
+
+@media (min-width: 760px) {
+  .bx-container {
+    padding: 0 24px;
+  }
 }
 
 /* 通用文本截断 */

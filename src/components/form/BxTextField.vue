@@ -64,6 +64,7 @@ function onInput(event: { detail: { value: string } }): void {
 }
 
 .bx-text__control {
+  box-sizing: border-box;
   width: 100%;
   height: 44px;
   padding: 0 12px;
