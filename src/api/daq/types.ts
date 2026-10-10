@@ -80,6 +80,13 @@ export interface DaqActivityRow {
   activity_image?: string | null
   classify?: string | null
   classify_name?: string | null
+  /** 活动简介（真实字段，封面页优先展示） */
+  summary?: string | null
+  logo?: string | null
+  remark?: string | null
+  submit_count?: number | null
+  /** 提交后是否允许修改 */
+  modify_after_submit?: string | null
   /** 题目列表（仅 init_view_select 返回） */
   item_data?: DaqItemRow[]
   [k: string]: unknown

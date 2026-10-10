@@ -58,7 +58,13 @@ export function initViewSelect(query: InitViewQuery) {
   })
 }
 
-/** 拉活动配置（不含题目），用于封面与元信息展示 */
+/**
+ * 拉活动配置（不含题目）
+ *
+ * 注意：parkDev 环境下该服务对当前票据返回 0011「无权限访问」，
+ * 因此活动元信息应优先取自 `init_view_select` 的返回行（该行含完整活动字段）。
+ * 本函数保留，用于兼容其他环境的权限配置。
+ */
 export function activityCfgSelect(activityNo: string) {
   return bxSelect<DaqActivityRow>({
     serviceName: 'srvdaq_activity_cfg_select',
