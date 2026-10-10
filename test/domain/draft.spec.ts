@@ -10,9 +10,9 @@
  *   会把不存在的题算进去。
  */
 
-import { describe, expect, it } from 'vitest'
-
 import type { QuestionField } from '@/domain/questionnaire'
+
+import { describe, expect, it } from 'vitest'
 
 import { fromLocalDraft, toLocalDraft } from '@/domain/questionnaire'
 
