@@ -9,6 +9,7 @@
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
 
 import { computed } from 'vue'
+import BxAddressPicker from './BxAddressPicker.vue'
 import BxDatePicker from './BxDatePicker.vue'
 import BxOptionList from './BxOptionList.vue'
 import BxQuestionItem from './BxQuestionItem.vue'
@@ -44,7 +45,10 @@ const kind = computed(() => {
       return 'text'
     case 'date':
     case 'time':
+    case 'datetime':
       return 'date'
+    case 'address':
+      return 'address'
     default:
       return 'unsupported'
   }
@@ -67,6 +71,12 @@ const kind = computed(() => {
     />
     <BxDatePicker
       v-else-if="kind === 'date'"
+      v-model="value"
+      :field="props.field"
+      :disabled="props.disabled"
+    />
+    <BxAddressPicker
+      v-else-if="kind === 'address'"
       v-model="value"
       :field="props.field"
       :disabled="props.disabled"
