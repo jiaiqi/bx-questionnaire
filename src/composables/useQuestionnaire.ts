@@ -17,7 +17,7 @@ import { applyBackfill, toQuestionFields } from '@/domain/questionnaire'
 import { BxError } from '@/utils/request'
 
 export interface LoadOptions {
-  /** 取值模式：plain 不带 type 条件（默认），use 进行中活动，cfg 未开始活动 */
+  /** 取值模式：plain 不带 type 条件（默认）；use 用于进行中活动 */
   mode?: InitViewMode
   /** 续答 / 详情：指定批次号 */
   fillBatchNo?: string
@@ -32,7 +32,16 @@ export function useQuestionnaire() {
   const backfill = ref<AnswerMap>({})
   const errorMessage = ref('')
 
+  /**
+   * 加载序号
+   *
+   * 用来丢弃过期响应：activityNo / fillBatchNo 变化时会重新加载，
+   * 若旧请求后返回，会把新数据覆盖成旧数据，并且提前收起 loading。
+   */
+  let loadToken = 0
+
   async function load(activityNo: string, options: LoadOptions = {}): Promise<boolean> {
+    const token = ++loadToken
     loading.value = true
     errorMessage.value = ''
 
@@ -42,6 +51,11 @@ export function useQuestionnaire() {
         mode: options.mode ?? 'plain',
         fillBatchNo: options.fillBatchNo,
       })
+
+      // 已有更新的加载发起，本次结果作废
+      if (token !== loadToken) {
+        return false
+      }
 
       const row = envelope.data?.[0]
       if (!row) {
@@ -55,6 +69,10 @@ export function useQuestionnaire() {
       return true
     }
     catch (error) {
+      if (token !== loadToken) {
+        return false
+      }
+
       const message = error instanceof BxError ? error.message : '问卷加载失败'
       errorMessage.value = message
 
@@ -70,7 +88,10 @@ export function useQuestionnaire() {
       return false
     }
     finally {
-      loading.value = false
+      // 只有最新一次加载结束时才收起 loading，否则加载态会提前消失
+      if (token === loadToken) {
+        loading.value = false
+      }
     }
   }
 
