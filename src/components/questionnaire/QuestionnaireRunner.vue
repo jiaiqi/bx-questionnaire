@@ -7,6 +7,7 @@
  */
 
 import type { AnswerValue, LocalDraft, QuestionField } from '@/domain/questionnaire'
+import type { EntryParams } from '@/domain/questionnaire/prefill'
 
 import { computed, ref, watch } from 'vue'
 
@@ -21,6 +22,7 @@ import { useDraft } from '@/composables/useDraft'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useSubmit } from '@/composables/useSubmit'
 import { fromLocalDraft, toArray, toLocalDraft, validateRequired } from '@/domain/questionnaire'
+import { matchEntryPrefill } from '@/domain/questionnaire/prefill'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { draftAnswersKey, storage, STORAGE_KEYS } from '@/utils/storage'
@@ -159,13 +161,7 @@ async function restoreDraftBatch(): Promise<void> {
  * 仅在题目尚未作答时生效。
  */
 function applyEntryPrefill(): void {
-  const entry = storage.get<Record<string, string>>(STORAGE_KEYS.ENTRY_PARAMS, {})
-  const rules: Array<[string, string | undefined]> = [
-    ['单位', entry.company],
-    ['姓名', entry.user_name],
-    ['电话', entry.user_phone],
-    ['手机', entry.user_phone],
-  ]
+  const entry = storage.get<EntryParams>(STORAGE_KEYS.ENTRY_PARAMS, {})
 
   for (const field of fields.value) {
     if (field.widget !== 'text' && field.widget !== 'textarea') {
@@ -174,9 +170,9 @@ function applyEntryPrefill(): void {
     if (toArray(answers[field.key]).length > 0) {
       continue
     }
-    const matched = rules.find(([keyword, value]) => !!value && field.label.includes(keyword))
-    if (matched?.[1]) {
-      answers[field.key] = matched[1]
+    const matched = matchEntryPrefill(field.label, entry)
+    if (matched) {
+      answers[field.key] = matched
     }
   }
 }
