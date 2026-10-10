@@ -134,4 +134,84 @@ describe.skipIf(!ticket)('真实网关集成 · 只读', () => {
   it('网关地址与默认环境一致', () => {
     expect(gateway).toContain('192.168.0.214/bxapi')
   })
+
+  /**
+   * 服务端**不按调用者身份过滤数据**
+   *
+   * 这决定了两件事，所以必须固化下来：
+   *  - `history` 页按 activity_no 查询，**匿名也能看到该活动的全部记录**；
+   *  - 前端不能指望服务端做数据隔离，展示层要自己控制。
+   *
+   * 实测（同一活动，带票据与不带票据对比）：行数与涉及的 user_no 完全一致。
+   */
+  it('按 activity_no 查询不按调用者身份过滤（匿名与带票据结果一致）', async () => {
+    const body = {
+      serviceName: 'srvdaq_record_reply_select',
+      colNames: ['user_no', 'activity_no', 'state'],
+      condition: [{ colName: 'activity_no', ruleType: 'eq', value: RECORD_ACTIVITY_NO }],
+      page: { pageNo: 1, rownumber: 100 },
+    }
+    const url = `${gateway}/daq/select/srvdaq_record_reply_select?srvdaq_record_reply_select`
+
+    const withTicket = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'bx_auth_ticket': ticket,
+        'bx-auth-ticket': ticket,
+      },
+      body: JSON.stringify(body),
+    }).then(r => r.json() as Promise<{ data?: unknown[] }>)
+
+    const anonymous = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json() as Promise<{ data?: unknown[] }>)
+
+    const a = withTicket.data ?? []
+    const b = anonymous.data ?? []
+    expect(a.length).toBeGreaterThan(0)
+    expect(b.length, '匿名查询应返回与带票据相同的行数').toBe(a.length)
+  }, 30000)
+
+  /**
+   * `user_no` 条件在**无票据时被静默忽略**（返回 0 行，不报错）
+   *
+   * 这条曾经被误读成「该服务不支持按用户过滤」，实际上过滤完全生效，
+   * 只是必须带票据。因为它**不报错**，前端无法区分「没有记录」与「没带票据」，
+   * 所以开发环境票据缺失时 couple 页会一直显示空列表而没有任何线索。
+   */
+  it('按 user_no 查询必须带票据，否则静默返回 0 行', async () => {
+    const body = {
+      serviceName: 'srvdaq_record_reply_select',
+      colNames: ['user_no', 'activity_no', 'state'],
+      condition: [{ colName: 'user_no', ruleType: 'eq', value: 'jq' }],
+      page: { pageNo: 1, rownumber: 100 },
+    }
+    const url = `${gateway}/daq/select/srvdaq_record_reply_select?srvdaq_record_reply_select`
+
+    const withTicket = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'bx_auth_ticket': ticket,
+        'bx-auth-ticket': ticket,
+      },
+      body: JSON.stringify(body),
+    }).then(r => r.json() as Promise<{ state?: string, data?: unknown[] }>)
+
+    expect(withTicket.state).toBe('SUCCESS')
+    expect((withTicket.data ?? []).length, '带票据时应能查到 jq 的记录').toBeGreaterThan(0)
+
+    const anonymous = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json() as Promise<{ state?: string, data?: unknown[] }>)
+
+    // 关键：不报错，只是空
+    expect(anonymous.state).toBe('SUCCESS')
+    expect((anonymous.data ?? []).length, '无票据时 user_no 条件被静默忽略').toBe(0)
+  }, 30000)
 })
