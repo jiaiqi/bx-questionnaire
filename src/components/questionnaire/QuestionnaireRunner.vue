@@ -62,9 +62,18 @@ const intro = computed(() => activity.value?.start_remark || '')
  * 所以这里把标题暴露出去，页面通过模板 ref 读取。
  */
 defineExpose({ activityTitle: title })
+/** 活动本身已结束 */
+const activityEnded = computed(() => activity.value?.status === '已结束')
 /** 已结束的活动按只读展示；formType 为 view / detail 亦为查看模式 */
 const readOnly = computed(() =>
-  activity.value?.status === '已结束' || props.formType === 'view' || props.formType === 'detail',
+  activityEnded.value || props.formType === 'view' || props.formType === 'detail',
+)
+/**
+ * 只读提示要区分原因：活动已结束，和用户点开自己的历史作答，是两回事。
+ * 从「作答记录」进来时活动往往仍在进行中，此时若说「该问卷已结束」是误导。
+ */
+const readOnlyTip = computed(() =>
+  activityEnded.value ? '该问卷已结束，以下为查看模式' : '以下为查看模式，仅供查看',
 )
 
 async function init(): Promise<void> {
@@ -337,7 +346,7 @@ async function onSubmit(): Promise<void> {
               <text class="runner__intro-meta-text">{{ activity.answer_times }}</text>
             </template>
           </view>
-          <text v-if="readOnly" class="runner__intro-readonly">该问卷已结束，以下为查看模式</text>
+          <text v-if="readOnly" class="runner__intro-readonly">{{ readOnlyTip }}</text>
         </view>
 
         <view class="runner__list">
