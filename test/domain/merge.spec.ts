@@ -19,7 +19,7 @@ describe('toMergeAnswerMap', () => {
       { item_seq: 1, svalue: '1' },
       { item_seq: 2, svalue: 'A,B' },
     ])
-    expect(map).toEqual({ '1': '1', '2': 'A,B' })
+    expect(map).toEqual({ 1: '1', 2: 'A,B' })
   })
 
   it('跳过空序号与空作答值', () => {
@@ -30,7 +30,7 @@ describe('toMergeAnswerMap', () => {
       { item_seq: 4, svalue: '' },
       { item_seq: 5, svalue: 'ok' },
     ])
-    expect(map).toEqual({ '5': 'ok' })
+    expect(map).toEqual({ 5: 'ok' })
   })
 
   it('空输入不抛错', () => {
