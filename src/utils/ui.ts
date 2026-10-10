@@ -6,10 +6,6 @@ export function toast(title: string, icon: 'none' | 'success' | 'error' = 'none'
   uni.showToast({ title, icon, duration: 2000 })
 }
 
-export function toastSuccess(title: string): void {
-  toast(title, 'success')
-}
-
 /** 确认弹窗，PC 与移动端由 uni.showModal 统一呈现 */
 export function confirmDialog(content: string, title = '提示'): Promise<boolean> {
   return new Promise<boolean>((resolve) => {

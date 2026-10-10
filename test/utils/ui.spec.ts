@@ -10,7 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { confirmDialog, scrollToSelector, toast, toastSuccess } from '@/utils/ui'
+import { confirmDialog, scrollToSelector, toast } from '@/utils/ui'
 
 interface UniStub {
   showToast: ReturnType<typeof vi.fn>
@@ -54,12 +54,6 @@ describe('toast', () => {
     toast('出错了', 'error')
 
     expect(uniStub.showToast).toHaveBeenCalledWith({ title: '出错了', icon: 'error', duration: 2000 })
-  })
-
-  it('toastSuccess 用 success 图标', () => {
-    toastSuccess('提交成功')
-
-    expect(uniStub.showToast).toHaveBeenCalledWith({ title: '提交成功', icon: 'success', duration: 2000 })
   })
 })
 

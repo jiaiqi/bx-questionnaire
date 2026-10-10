@@ -50,8 +50,6 @@ export interface BxWriteItem {
   [key: string]: unknown
 }
 
-export type BxWriteParams = BxWriteItem[]
-
 /** 写操作的子响应 */
 export interface BxWriteResponse<T = unknown> {
   code?: string

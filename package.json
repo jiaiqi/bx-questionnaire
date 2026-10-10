@@ -20,6 +20,7 @@
     "scan:dist": "node scripts/scan-dist.mjs",
     "check:mp": "node scripts/check-mp.mjs",
     "check:cond": "node scripts/check-conditional.mjs",
+    "check:dead": "node scripts/find-dead-exports.mjs",
     "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
