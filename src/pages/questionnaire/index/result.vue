@@ -7,10 +7,11 @@
 
 import { onLoad } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
+import { recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
-import BxNavBar from '@/components/base/BxNavBar.vue'
 
+import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { calcScore, describeAnswer, describeSelected } from '@/domain/questionnaire'
 
@@ -18,6 +19,11 @@ const { loading, activity, fields, backfill, errorMessage, load } = useQuestionn
 
 const activityNo = ref('')
 const batchNo = ref('')
+
+/** 服务端权威结果：得分 / 状态 / 每题作答值（拿不到时回退本地计算） */
+const serverScore = ref<number | null>(null)
+const serverState = ref('')
+const serverAnswers = ref<Record<string, string>>({})
 
 onLoad((query) => {
   activityNo.value = String(query?.activity_no ?? '')
@@ -34,9 +40,66 @@ async function init(): Promise<void> {
     mode: 'plain',
     fillBatchNo: batchNo.value || undefined,
   })
+  await loadServerResult()
 }
 
-const score = computed(() => calcScore(fields.value, backfill.value))
+/**
+ * 拉取服务端结果
+ *
+ * 结果页以服务端为准：`record_reply_select` 给出 score 与 state，
+ * `record_reply_merge_select` 按 fill_batch_no 给出每题作答值（svalue）。
+ * 任一环节失败都不影响页面 —— 回退到本地 calcScore 与回填值。
+ */
+async function loadServerResult(): Promise<void> {
+  if (!batchNo.value) {
+    return
+  }
+
+  try {
+    const [reply, merge] = await Promise.all([
+      recordReplySelect({
+        activityNo: activityNo.value,
+        fillBatchNo: batchNo.value,
+        rownumber: 1,
+      }),
+      recordReplyMergeSelect({
+        activityNo: activityNo.value,
+        fillBatchNo: batchNo.value,
+      }),
+    ])
+
+    const record = reply.data?.[0]
+    if (record) {
+      const rawScore = record.score
+      serverScore.value = rawScore === null || rawScore === undefined || rawScore === ''
+        ? null
+        : Number(rawScore)
+      serverState.value = String(record.state ?? '')
+    }
+
+    const map: Record<string, string> = {}
+    for (const row of merge.data ?? []) {
+      const itemNo = String((row as Record<string, unknown>).item_no ?? '')
+      const value = (row as Record<string, unknown>).svalue
+      if (itemNo && value !== null && value !== undefined && String(value) !== '') {
+        map[itemNo] = String(value)
+      }
+    }
+    serverAnswers.value = map
+  }
+  catch {
+    // 结果页容错：服务端数据不可用时保持本地计算结果
+  }
+}
+
+const localScore = computed(() => calcScore(fields.value, backfill.value))
+/** 服务端有 score 时以它为准，总分仍用本地题目分值合计 */
+const score = computed(() => {
+  if (serverScore.value !== null) {
+    return { ...localScore.value, score: serverScore.value }
+  }
+  return localScore.value
+})
 const hasScore = computed(() => score.value.total > 0)
 const passingMark = computed(() => Number(activity.value?.passing_mark ?? 0))
 const passed = computed(() => {
@@ -53,7 +116,8 @@ const rows = computed(() =>
       key: field.key,
       index: field.index,
       label: field.label,
-      mine: describeSelected(field, backfill.value) || '未作答',
+      mine: serverAnswers.value[String(field.raw.item_no ?? '')]
+        ?? (describeSelected(field, backfill.value) || '未作答'),
       expected: describeAnswer(field),
     })),
 )

@@ -17,6 +17,7 @@ const submitEnvelope = {
   state: 'SUCCESS',
   resultCode: 'SUCCESS',
   resultMessage: '操作成功',
+  data: null,
   response: [
     {
       state: null,
@@ -32,6 +33,7 @@ const draftEnvelope = {
   state: 'SUCCESS',
   resultCode: 'SUCCESS',
   resultMessage: '操作成功',
+  data: null,
   response: [
     {
       state: null,
@@ -53,7 +55,7 @@ describe('平台响应契约', () => {
   })
 
   it('response 缺省时不抛错', () => {
-    expect(extractResponsePayload({ state: 'SUCCESS' })).toBeNull()
+    expect(extractResponsePayload({ state: 'SUCCESS', resultCode: 'SUCCESS', data: null })).toBeNull()
   })
 
   it('response[i].state 为 null 视为成功（平台部分服务不回填）', () => {

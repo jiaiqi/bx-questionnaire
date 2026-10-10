@@ -58,13 +58,14 @@ export interface BxWriteResponse<T = unknown> {
   state?: string | null
   resultCode?: string
   resultMessage?: string
+  /** 平台实测：草稿保存等场景会返回 response: null */
   response?: {
     effect_data?: T[]
     bx_auth_ticket?: string
     expire_time?: string | number
     login_user_info?: BxLoginUserInfo
     [key: string]: unknown
-  }
+  } | null
   [key: string]: unknown
 }
 
