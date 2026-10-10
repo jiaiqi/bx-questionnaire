@@ -125,6 +125,11 @@ describe('recordReplyMergeSelect', () => {
     ])
     expect(conditionCols()).not.toContain('activity_no')
   })
+
+  it('不带 order：实测传 order 会直接 FAILURE（与 record_reply_select 的静默空结果不同）', () => {
+    recordReplyMergeSelect({ fillBatchNo: 'B1' })
+    expect(lastSelectArg().order).toBeUndefined()
+  })
 })
 
 describe('recordReplySelect', () => {
