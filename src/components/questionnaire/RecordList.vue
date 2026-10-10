@@ -11,6 +11,7 @@ import type { DaqRecordReplyRow } from '@/api/daq/types'
 import { ref } from 'vue'
 
 import { recordReplySelect } from '@/api/daq/record'
+import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
@@ -30,6 +31,8 @@ const finished = ref(false)
 const loaded = ref(false)
 /** 加载失败：与 finished 区分开，失败后必须允许重试 */
 const failed = ref(false)
+/** 首次加载失败的原因，用于页面级错误态 */
+const errorMessage = ref('')
 const pageNo = ref(1)
 // 与老工程 history.vue 的 rownumber 一致，减少翻页请求次数
 const rownumber = 20
@@ -68,8 +71,14 @@ async function fetchPage(reset = false): Promise<void> {
   catch (error) {
     // 不置 finished：一次网络抖动不该让列表永久停在「没有更多了」；
     // pageNo 也不递增，重试请求的仍是同一页。
+    const message = error instanceof BxError ? error.message : '记录加载失败'
+    errorMessage.value = message
     failed.value = true
-    toast(error instanceof BxError ? error.message : '记录加载失败')
+    // 首次失败由页面级错误态呈现；只有触底加载失败才补一次轻提示，
+    // 否则同一个错误会被提示两遍。
+    if (rows.value.length > 0) {
+      toast(message)
+    }
   }
   finally {
     loading.value = false
@@ -108,6 +117,18 @@ void fetchPage(true)
   <view class="records">
     <view v-if="rows.length === 0 && loading" class="records__state">
       <text class="records__state-text">正在加载记录…</text>
+    </view>
+
+    <view v-else-if="rows.length === 0 && failed" class="records__state">
+      <BxEmpty
+        :text="errorMessage || '记录加载失败'"
+        tip="网络恢复后可以重新加载"
+      />
+      <view class="records__retry">
+        <BxButton type="ghost" size="small" @click="refresh">
+          重新加载
+        </BxButton>
+      </view>
     </view>
 
     <BxEmpty
@@ -166,6 +187,10 @@ void fetchPage(true)
 .records__state {
   padding: 64px 0;
   text-align: center;
+}
+
+.records__retry {
+  margin-top: 16px;
 }
 
 .records__state-text {
