@@ -136,14 +136,14 @@ describe('request · 错误策略', () => {
    * 后测试全绿 —— 而那会让「HTTP 4xx 但带业务信封」被误报成服务异常，
    * 丢掉服务端真正给出的 resultMessage。
    */
-  it('HTTP 4xx 但带业务信封时，仍以信封的 resultMessage 为准', async () => {
+  it('响应 4xx 但带业务信封时，仍以信封的 resultMessage 为准', async () => {
     respondWith({ state: 'FAILURE', resultCode: '0011', resultMessage: '需要登录访问', data: null }, 500)
     await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
       message: '需要登录访问',
     })
   })
 
-  it('HTTP 4xx 且无信封时报「服务异常」并带上状态码', async () => {
+  it('响应 4xx 且无信封时报「服务异常」并带上状态码', async () => {
     respondWith(null, 500)
     await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
       code: '500',
@@ -151,7 +151,7 @@ describe('request · 错误策略', () => {
     })
   })
 
-  it('HTTP 2xx 但无信封时报「服务无响应」', async () => {
+  it('响应 2xx 但无信封时报「服务无响应」', async () => {
     respondWith(null, 200)
     await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
       code: 'EMPTY_RESPONSE',
