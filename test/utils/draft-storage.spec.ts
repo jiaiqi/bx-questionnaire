@@ -57,6 +57,29 @@ describe('draftAnswersKey', () => {
   })
 })
 
+describe('storage.getString', () => {
+  it('存的是字符串时原样返回', () => {
+    storage.set('k-str', 'abc')
+    expect(storage.getString('k-str')).toBe('abc')
+  })
+
+  /**
+   * 变异测试发现这处没被覆盖：把 `typeof value === 'string'` 改成 `!==` 后测试全绿。
+   * 那会让非字符串值（如对象）被当成字符串返回，调用方拿到的就不是 string。
+   */
+  it('存的不是字符串时退回 fallback，不会把对象当字符串返回', () => {
+    storage.set('k-obj', { a: 1 })
+    expect(storage.getString('k-obj')).toBe('')
+    expect(storage.getString('k-obj', '默认')).toBe('默认')
+
+    storage.set('k-num', 42)
+    expect(storage.getString('k-num')).toBe('')
+
+    storage.set('k-null', null)
+    expect(storage.getString('k-null')).toBe('')
+  })
+})
+
 describe('session.clearFillBatchNo', () => {
   it('只清批次号，不动票据与用户信息', () => {
     const session = useSessionStore()

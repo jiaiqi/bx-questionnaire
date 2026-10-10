@@ -129,6 +129,35 @@ describe('request · 错误策略', () => {
       message: '活动编号不存在',
     })
   })
+
+  /**
+   * 三条共同锁定「HTTP 状态」与「有无信封」的组合判断（toBxError 的开头几行）。
+   * 变异测试发现这处分界此前没被覆盖：把 `status >= 400 && !envelope` 改成 `||`
+   * 后测试全绿 —— 而那会让「HTTP 4xx 但带业务信封」被误报成服务异常，
+   * 丢掉服务端真正给出的 resultMessage。
+   */
+  it('HTTP 4xx 但带业务信封时，仍以信封的 resultMessage 为准', async () => {
+    respondWith({ state: 'FAILURE', resultCode: '0011', resultMessage: '需要登录访问', data: null }, 500)
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      message: '需要登录访问',
+    })
+  })
+
+  it('HTTP 4xx 且无信封时报「服务异常」并带上状态码', async () => {
+    respondWith(null, 500)
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: '500',
+      message: '服务异常（HTTP 500）',
+    })
+  })
+
+  it('HTTP 2xx 但无信封时报「服务无响应」', async () => {
+    respondWith(null, 200)
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: 'EMPTY_RESPONSE',
+      message: '服务无响应',
+    })
+  })
 })
 
 describe('request · operate 逐项校验', () => {

@@ -29,6 +29,11 @@ const TARGETS = [
   { file: 'src/domain/questionnaire/draft.ts', test: 'test/domain/draft.spec.ts' },
   { file: 'src/domain/questionnaire/mapper.ts', test: 'test/domain/mapper.spec.ts' },
   { file: 'src/utils/query.ts', test: 'test/utils/query.spec.ts' },
+  // 请求层与接口层：写入路径的核心，此前未纳入变异检查
+  { file: 'src/utils/request/index.ts', test: 'test/utils/request.spec.ts' },
+  { file: 'src/utils/storage.ts', test: 'test/utils/draft-storage.spec.ts' },
+  { file: 'src/api/daq/record.ts', test: 'test/api/daq-contract.spec.ts' },
+  { file: 'src/api/daq/activity.ts', test: 'test/api/daq-contract.spec.ts' },
 ]
 
 function runTest(testFile) {
