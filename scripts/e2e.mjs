@@ -525,9 +525,41 @@ async function main() {
   console.log(`  记录卡片数：${recordCount.result.value}`)
   checks.push({ name: '作答记录页渲染出记录卡片', pass: recordCount.result.value > 0 })
 
-  const undoneIdx = await findCardIndex('未完成')
-  console.log(`  「未完成」卡片下标：${undoneIdx}`)
-  const undoneNav = await clickCard(undoneIdx)
+  /**
+   * 找指定状态的记录卡片，找不到就先滚动加载更多
+   *
+   * 记录按创建时间倒序，而**每次跑 e2e 的「暂存草稿」都会新增一条「未完成」记录** ——
+   * 「完成」记录会被逐渐挤到后面的分页里。原来这里找不到就静默跳过，
+   * 表现为「e2e 全绿，但实际少验证了两件事」，越跑验证得越少。
+   *
+   * 所以：先滚动触发加载更多；实在找不到就把「前提不成立」本身记成一条**失败**检查，
+   * 而不是悄悄略过。跳过必须是响亮的。
+   */
+  const findCardIndexWithLoadMore = async (state, maxScrolls = 6) => {
+    for (let i = 0; i <= maxScrolls; i++) {
+      const idx = await findCardIndex(state)
+      if (idx >= 0) {
+        return { idx, scrolls: i }
+      }
+      if (i === maxScrolls) {
+        break
+      }
+      await send('Runtime.evaluate', {
+        expression: '(() => { window.scrollTo(0, document.body.scrollHeight); return document.body.scrollHeight })()',
+        returnByValue: true,
+      })
+      await sleep(2500)
+    }
+    return { idx: -1, scrolls: maxScrolls }
+  }
+
+  const undoneFound = await findCardIndexWithLoadMore('未完成')
+  console.log(`  「未完成」卡片下标：${undoneFound.idx}（滚动 ${undoneFound.scrolls} 次后）`)
+  checks.push({
+    name: '记录页能找到「未完成」记录（续答检查的前提）',
+    pass: undoneFound.idx >= 0,
+  })
+  const undoneNav = undoneFound.idx >= 0 ? await clickCard(undoneFound.idx) : null
   if (undoneNav) {
     console.log(`    跳转：${undoneNav.hash.slice(0, 110)}`)
     checks.push({ name: '点「未完成」记录走续答（formType=form）', pass: undoneNav.hash.includes('formType=form') })
@@ -542,10 +574,14 @@ async function main() {
     url: `${BASE}/#/pages/questionnaire/history/history?activity_no=${ACTIVITY_NO}`,
   })
   await sleep(10000)
-  const doneIdx = await findCardIndex('完成')
-  console.log(`  「完成」卡片下标：${doneIdx}`)
-  if (doneIdx >= 0) {
-    const doneNav = await clickCard(doneIdx)
+  const doneFound = await findCardIndexWithLoadMore('完成')
+  console.log(`  「完成」卡片下标：${doneFound.idx}（滚动 ${doneFound.scrolls} 次后）`)
+  checks.push({
+    name: '记录页能找到「完成」记录（查看模式检查的前提）',
+    pass: doneFound.idx >= 0,
+  })
+  if (doneFound.idx >= 0) {
+    const doneNav = await clickCard(doneFound.idx)
     if (doneNav) {
       console.log(`    跳转：${doneNav.hash.slice(0, 110)}`)
       checks.push({ name: '点「完成」记录走查看（formType=detail）', pass: doneNav.hash.includes('formType=detail') })
