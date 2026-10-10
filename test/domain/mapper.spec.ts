@@ -1,9 +1,17 @@
 // @vitest-environment node
 
+import type { QuestionField } from '@/domain/questionnaire/types'
+
 import { describe, expect, it } from 'vitest'
 
-import { applyBackfill, describeServerValue, resolveWidget, serverAnswersToAnswerMap, toFieldOptions, toMergeAnswerMap, toQuestionFields } from '@/domain/questionnaire/mapper'
+import { applyBackfill, resolveWidget, serverAnswersToAnswerMap, toFieldOptions, toMergeAnswerMap, toQuestionFields } from '@/domain/questionnaire/mapper'
+import { describeSelected } from '@/domain/questionnaire/scoring'
 import { activity5, activity8 } from '../fixtures/questionnaire'
+
+/** 服务端 svalue → 展示文案的完整链路：先转 AnswerMap，再取文案 */
+function renderServerValue(field: QuestionField, raw: string): string {
+  return describeSelected(field, serverAnswersToAnswerMap([field], { [String(field.index)]: raw }))
+}
 
 describe('mapper · 题型映射', () => {
   it('单选 → radio，数字 → number，文本 → text', () => {
@@ -142,18 +150,18 @@ describe('mapper · 变异测试补漏', () => {
     expect(applyBackfill(backfillFields, {} as never)).toEqual({})
   })
 
-  it('describeServerValue：选项题还原文案、数字题去小数尾、空值返回空串', () => {
+  it('服务端作答还原：选项题还原文案、数字题去小数尾、空值返回空串', () => {
     const [optionField] = toQuestionFields([activity8.item_data![0]!])
     // 单选服务端返回的是选项序号 "1"，要还原成选项文案而不是显示 "1"
-    expect(describeServerValue(optionField!, '1')).toBe('1')
-    expect(describeServerValue(optionField!, '')).toBe('')
-    expect(describeServerValue(optionField!, '   ')).toBe('')
+    expect(renderServerValue(optionField!, '1')).toBe('1')
+    expect(renderServerValue(optionField!, '')).toBe('')
+    expect(renderServerValue(optionField!, '   ')).toBe('')
 
     const [numberField] = toQuestionFields([activity8.item_data![1]!])
-    expect(describeServerValue(numberField!, '2026.00000')).toBe('2026')
+    expect(renderServerValue(numberField!, '2026.00000')).toBe('2026')
 
     // 匹配不上的原值要保留，便于排查而不是显示空白
-    expect(describeServerValue(optionField!, '999')).toBe('999')
+    expect(renderServerValue(optionField!, '999')).toBe('999')
   })
 
   it('serverAnswersToAnswerMap：空白视为未作答，选项题映射回 option_no', () => {
@@ -173,24 +181,24 @@ describe('mapper · 变异测试补漏', () => {
    * 无法区分「走选项匹配」与「原样返回」。这里用 label ≠ 服务端值的选项，
    * 让差异暴露出来。
    */
-  it('describeServerValue：选项文案与服务端值不同时必须还原文案', () => {
+  it('服务端作答还原：选项文案与服务端值不同时必须还原文案', () => {
     const [field] = toQuestionFields([{
       item_no: 'q',
       item_type: '单选',
       option_data: [{ option_no: 'o1', option_value: '甲', option_view_no: 'A' }],
     }])
     // 服务端返回序号 A，展示应是文案「甲」（label 取自 option_value）
-    expect(describeServerValue(field!, 'A')).toBe('甲')
-    expect(describeServerValue(field!, 'o1')).toBe('甲')
+    expect(renderServerValue(field!, 'A')).toBe('甲')
+    expect(renderServerValue(field!, 'o1')).toBe('甲')
     // matchServerOptions 只认 viewNo / no / label，不认其它写法 —— 原值保留
-    expect(describeServerValue(field!, 'v1')).toBe('v1')
+    expect(renderServerValue(field!, 'v1')).toBe('v1')
     // 匹配不上时保留原值
-    expect(describeServerValue(field!, 'Z')).toBe('Z')
+    expect(renderServerValue(field!, 'Z')).toBe('Z')
   })
 
-  it('describeServerValue 与 serverAnswersToAnswerMap：文本题原样返回', () => {
+  it('服务端作答还原：文本题原样返回', () => {
     const [field] = toQuestionFields([{ item_no: 't', item_type: '文本' }])
-    expect(describeServerValue(field!, '一些建议')).toBe('一些建议')
+    expect(renderServerValue(field!, '一些建议')).toBe('一些建议')
     expect(serverAnswersToAnswerMap([field!], { t: '一些建议' })).toEqual({ t: '一些建议' })
   })
 

@@ -10,6 +10,8 @@
 import type { AnswerMap, FieldOption, QuestionField, QuestionWidget } from './types'
 import type { DaqItemRow, DaqOptionRow } from '@/api/daq/types'
 
+import { toArray } from './types'
+
 const SECTION_TYPE = '分节符'
 
 /** 未提供 item_seq 时的排序兜底值 */
@@ -269,35 +271,11 @@ function matchServerOptions(field: QuestionField, raw: string): FieldOption[] {
 }
 
 /**
- * 服务端作答值 → 展示文案
- *
- * `record_reply_merge_select` 的 `svalue` 对选项题返回的是**选项序号**
- * （实测单选返回 "1"、"2"），直接渲染会让用户看到「我的作答：1」。
- * 这里还原为选项文案；文本题原样返回；数字题去掉平台带的小数尾巴。
- * 匹配不上时保留原值，便于排查而不是显示成空白。
- */
-export function describeServerValue(field: QuestionField, raw: string): string {
-  const text = String(raw ?? '').trim()
-  if (!text) {
-    return ''
-  }
-  if (field.widget === 'radio' || field.widget === 'checkbox') {
-    const matched = matchServerOptions(field, text)
-    return matched.length > 0 ? matched.map(option => option.label).join('、') : text
-  }
-  if (field.widget === 'number') {
-    return normalizeNumberText(text)
-  }
-  return text
-}
-
-/**
  * 服务端作答 → AnswerMap（供 `calcScore` 使用）
  *
- * 结果页的统计此前基于本地回填（`init_view_select` 的 user_data），
- * 而逐题「我的作答」基于服务端 merge。当 `type=use` 失败但 merge 成功时
- * （例如已登录但不是活动创建人），两处数据源不同会导致
- * 「逐题显示有作答、统计却全是 0」。统一以服务端为准。
+ * 结果页的逐题「我的作答」曾基于服务端 merge。现在改为**先合并两路来源**
+ * （见 `mergeAnswerSources`）：`user_data` 优先，merge 兜底 —— 因为 merge 对多选会丢值。
+ * 这里保留的是「服务端 merge → 作答模型」的转换本身。
  */
 export function serverAnswersToAnswerMap(
   fields: QuestionField[],
@@ -323,9 +301,9 @@ export function serverAnswersToAnswerMap(
 
     if (field.widget === 'radio' || field.widget === 'checkbox') {
       const matched = matchServerOptions(field, text)
-      if (matched.length > 0) {
-        map[field.key] = matched.map(option => option.no)
-      }
+      // 匹配不上时保留原值：由 `describeSelected` 原样展示。
+      // 直接跳过会被下游当成「未作答」，而用户其实作答了 —— 那是谎报。
+      map[field.key] = matched.length > 0 ? matched.map(option => option.no) : text
       continue
     }
 
@@ -333,4 +311,37 @@ export function serverAnswersToAnswerMap(
   }
 
   return map
+}
+
+/**
+ * 合并两路作答来源，**`user_data` 优先**
+ *
+ * 结果页的逐题展示与判分都走这里，因为两个来源的完整度不同：
+ *
+ * - `user_data`（`init_view_select` 带 `fill_batch_no`）**完整**，多选会给出全部选中项；
+ * - `merge_select.svalue` 对多选**只保留一个值**。
+ *
+ * 实测（活动 20261010100256000001，批次 d9102bc941064d198405380e53431554，
+ * 第 2 题多选正确答案为 `1、2`）：
+ *
+ * | 来源 | 取到的作答 | 判分 | 服务端 score |
+ * | --- | --- | --- | --- |
+ * | `user_data` | `["1","2"]` | 20 | 20 |
+ * | `merge.svalue` | `"2"` | 10 | 20 |
+ *
+ * 也就是说优先用 merge 会得出「用户实际答对、页面判为答错」，并让逐题得分加不出顶部
+ * 总分（10 ≠ 20）—— 页面自相矛盾。所以 user_data 逐题覆盖 merge，merge 只在
+ * user_data 缺该题时兜底（例如活动已结束、`type=use` 拿不到 user_data）。
+ */
+export function mergeAnswerSources(
+  fromServer: AnswerMap,
+  fromUserData: AnswerMap,
+): AnswerMap {
+  const merged: AnswerMap = { ...fromServer }
+  for (const [key, value] of Object.entries(fromUserData)) {
+    if (toArray(value).length > 0) {
+      merged[key] = value
+    }
+  }
+  return merged
 }

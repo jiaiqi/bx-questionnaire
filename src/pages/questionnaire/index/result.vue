@@ -17,8 +17,8 @@ import {
   calcScore,
   describeAnswer,
   describeSelected,
-  describeServerValue,
   formatQuestionTitle,
+  mergeAnswerSources,
   serverAnswersToAnswerMap,
   toMergeAnswerMap,
 } from '@/domain/questionnaire'
@@ -124,13 +124,25 @@ async function loadServerResult(): Promise<void> {
 /** 服务端 merge 的作答（含选项序号还原），用于与服务端统计保持一致 */
 const serverAnswerMap = computed(() => serverAnswersToAnswerMap(fields.value, serverAnswers.value))
 /**
- * 统计口径与服务端逐题作答保持一致：
- * 服务端作答可用时用服务端，否则才回退本地回填 —— 避免出现
- * 「逐题显示有作答、统计却全是 0」这种自相矛盾的页面。
+ * 逐题作答（展示与判分共用同一个来源）
+ *
+ * `user_data` 优先、merge 兜底 —— 实测 merge 对多选**只保留一个值**：
+ * 批次 d9102bc9 第 2 题正确答案是 `1、2`，user_data 给 `["1","2"]`（判分 20，与服务端一致），
+ * merge 只给 `"2"`（判分 10）。若优先用 merge，页面会「用户答对却显示回答错误」，
+ * 且逐题得分加不出顶部总分。
  */
-const localScore = computed(() =>
-  calcScore(fields.value, serverAnswersLoaded.value ? serverAnswerMap.value : backfill.value),
+const answerMap = computed(() => mergeAnswerSources(serverAnswerMap.value, backfill.value))
+/**
+ * 是否拿到了「用户作答」数据（任一来源）
+ *
+ * 决定未作答文案是「未作答」还是「暂无法获取」：两者不能混为一谈 ——
+ * 前者是服务端明确说这道题没作答，后者是我们根本没拿到数据，谎报成未作答会误导用户。
+ */
+const answersLoaded = computed(() =>
+  serverAnswersLoaded.value || Object.keys(backfill.value).length > 0,
 )
+/** 统计口径与逐题展示一致，避免出现「逐题显示有作答、统计却全是 0」这种自相矛盾的页面 */
+const localScore = computed(() => calcScore(fields.value, answerMap.value))
 /** 服务端有 score 时以它为准，总分仍用本地题目分值合计 */
 const score = computed(() => {
   if (serverScore.value !== null) {
@@ -147,29 +159,72 @@ const passed = computed(() => {
   return score.value.score >= passingMark.value
 })
 
+/**
+ * 逐题判分结果，按题目 key 索引
+ *
+ * `calcScore` 只把「有正确答案」的题放进 detail —— 文本/数字这类没有选项答案的题
+ * 不在其中，所以 **detail 缺失 ≠ 答错**，两者必须分开呈现。
+ */
+const detailMap = computed(() => new Map(score.value.detail.map(item => [item.key, item])))
+
 const rows = computed(() =>
   fields.value
     .filter(field => field.widget !== 'section')
-    .map(field => ({
-      key: field.key,
-      title: formatQuestionTitle(field.index, field.label),
-      // 老工程按 item_no 取值，parkDev 实测返回 item_seq（映射里两个键都写了），逐个兜底
-      // 服务端 svalue 对选项题是序号，需还原成选项文案，否则用户看到「我的作答：1」
-      mine: describeServerValue(
-        field,
-        serverAnswers.value[String(field.raw.item_no ?? '')]
-        ?? serverAnswers.value[String(field.index)]
-        ?? '',
-      )
-      // 服务端作答值拿不到时，才回退本地回填；本地也没有则区分「确实未作答」与「数据不可用」
-      || (describeSelected(field, backfill.value)
-        || (serverAnswersLoaded.value ? '未作答' : '暂无法获取')),
-      expected: describeAnswer(field),
-    })),
+    .map((field) => {
+      const detail = detailMap.value.get(field.key)
+      // 有 detail 才判对错；correct 为 null 表示该题无正确答案（不计分）
+      const judged = detail !== undefined && detail.correct !== null
+      const correct = judged && detail.correct === true
+      const unanswered = judged && detail.selected.length === 0
+
+      return {
+        key: field.key,
+        title: formatQuestionTitle(field.index, field.label),
+        // 展示与判分同源：选项题还原成选项文案，文本/数字题直接用原值
+        mine: describeSelected(field, answerMap.value)
+          || (answersLoaded.value ? '未作答' : '暂无法获取'),
+        expected: describeAnswer(field),
+        // 逐题结论：correct / wrong / unanswered / unjudged（无正确答案，不计分）
+        verdict: !judged ? 'unjudged' : unanswered ? 'unanswered' : correct ? 'correct' : 'wrong',
+        verdictText: !judged
+          ? '不计分'
+          : unanswered ? '未作答' : correct ? '回答正确' : '回答错误',
+        // 本题得分只在答对时给。实测 parkDev：逐题分值加总 == 服务端总分（20 == 20），
+        // 所以逐题分数与顶部总分不会互相矛盾。
+        earned: correct ? field.points : 0,
+        points: field.points,
+        // 解析的列名是 `answer_analysis`，不是 explanation；未配置时取到空串则不渲染
+        analysis: String(field.raw.answer_analysis ?? '').trim(),
+      }
+    }),
 )
 
+/** 活动已结束就不该给「重新测试」入口 —— 点进去也答不了 */
+const canRetry = computed(() => activity.value?.status !== '已结束')
+
+/**
+ * 返回问卷封面
+ *
+ * 原实现跳 `/pages/questionnaire/cover/index` 却**不带 activity_no**，而封面页要求该参数
+ * 必填 —— 用户看到的是「缺少活动编号，无法加载问卷」死胡同（已实测确认）。
+ * 带上活动号才是真实可用的页面。
+ */
 function goHome(): void {
-  uni.reLaunch({ url: '/pages/questionnaire/cover/index' })
+  uni.reLaunch({
+    url: `/pages/questionnaire/cover/index?activity_no=${activityNo.value}`,
+  })
+}
+
+/**
+ * 重新测试
+ *
+ * 与老工程 `restart()` 同一跳转目标；答题页把 formType 默认成 form，所以可以省略。
+ * 这里显式写上，避免依赖默认值。
+ */
+function restart(): void {
+  uni.redirectTo({
+    url: `/pages/questionnaire/index/index?activity_no=${activityNo.value}&formType=form&status=进行中`,
+  })
 }
 </script>
 
@@ -227,6 +282,13 @@ function goHome(): void {
           <view v-for="row in rows" :key="row.key" class="r-item">
             <view class="r-item__head">
               <text class="r-item__label">{{ row.title }}</text>
+              <text
+                v-if="row.verdict !== 'unjudged'"
+                class="r-badge"
+                :class="`r-badge--${row.verdict}`"
+              >
+                {{ row.verdictText }}
+              </text>
             </view>
             <view class="r-item__line">
               <text class="r-item__key">我的作答</text>
@@ -236,6 +298,16 @@ function goHome(): void {
               <text class="r-item__key">正确答案</text>
               <text class="r-item__value r-item__value--right">{{ row.expected }}</text>
             </view>
+            <view v-if="row.verdict !== 'unjudged'" class="r-item__line">
+              <text class="r-item__key">本题得分</text>
+              <text class="r-item__value" :class="{ 'r-item__value--right': row.earned > 0 }">
+                {{ row.earned }} / {{ row.points }} 分
+              </text>
+            </view>
+            <view v-if="row.analysis" class="r-item__line">
+              <text class="r-item__key">解析</text>
+              <text class="r-item__value">{{ row.analysis }}</text>
+            </view>
           </view>
         </view>
 
@@ -244,8 +316,11 @@ function goHome(): void {
         </view>
 
         <view class="r-page__actions">
+          <BxButton v-if="canRetry" block @click="restart">
+            重新测试
+          </BxButton>
           <BxButton type="ghost" block @click="goHome">
-            返回问卷首页
+            返回问卷封面
           </BxButton>
         </view>
       </template>
@@ -393,6 +468,30 @@ function goHome(): void {
   color: var(--bx-text);
 }
 
+.r-badge {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  margin-left: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-radius: 999px;
+}
+
+.r-badge--correct {
+  color: var(--bx-success);
+  background-color: rgba(0, 180, 42, 0.1);
+}
+
+.r-badge--wrong {
+  color: var(--bx-danger);
+  background-color: rgba(245, 63, 63, 0.1);
+}
+
+.r-badge--unanswered {
+  color: var(--bx-text-3);
+  background-color: var(--bx-line-2);
+}
+
 .r-item__line {
   display: flex;
   margin-top: 6px;
@@ -418,5 +517,10 @@ function goHome(): void {
 
 .r-page__actions {
   margin-top: 20px;
+}
+
+/* 两个按钮之间留间距；不依赖子组件根元素能否被作用域样式命中 */
+.r-page__actions > :not(:first-child) {
+  margin-top: 10px;
 }
 </style>

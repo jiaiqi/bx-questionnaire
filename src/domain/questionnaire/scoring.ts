@@ -106,10 +106,12 @@ export function describeSelected(field: QuestionField, answers: AnswerMap): stri
     return ''
   }
   if (field.widget === 'radio' || field.widget === 'checkbox') {
-    return field.options
+    const labels = field.options
       .filter(option => selected.includes(option.no))
       .map(option => option.label)
-      .join('、')
+    // 服务端值匹配不上任何选项时保留原值：显示成空白会被下游当成「未作答」，
+    // 而用户其实作答了 —— 宁可露出原值便于排查，也不要谎报。
+    return labels.length > 0 ? labels.join('、') : selected.join('、')
   }
   return selected.join('、')
 }
