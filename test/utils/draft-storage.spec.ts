@@ -80,6 +80,25 @@ describe('storage.getString', () => {
   })
 })
 
+describe('session.isLogin', () => {
+  /**
+   * 变异测试补漏：`ticket.value !== ''` 改成 `===` 后测试全绿。
+   * isLogin 决定结果页/我的测评页是否去请求用户维度数据，判反了等于
+   * 「已登录当未登录、未登录当已登录」，两边的表现都是错的。
+   */
+  it('有票据即已登录，空票据即未登录', () => {
+    const session = useSessionStore()
+
+    expect(session.isLogin).toBe(false)
+
+    session.setTicket('T-1')
+    expect(session.isLogin).toBe(true)
+
+    session.clear()
+    expect(session.isLogin).toBe(false)
+  })
+})
+
 describe('session.clearFillBatchNo', () => {
   it('只清批次号，不动票据与用户信息', () => {
     const session = useSessionStore()

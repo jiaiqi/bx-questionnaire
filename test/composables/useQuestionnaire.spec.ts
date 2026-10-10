@@ -12,6 +12,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { BxError } from '@/utils/request'
 
 const mocks = vi.hoisted(() => ({
   initViewSelect: vi.fn(),
@@ -96,5 +97,62 @@ describe('useQuestionnaire · 加载竞态', () => {
     expect(q.activity.value?.title).toBe('正常')
     expect(q.loading.value).toBe(false)
     expect(q.errorMessage.value).toBe('')
+  })
+
+  /**
+   * 变异测试补漏：`if (token !== loadToken) return false` 改成 `===` 后测试全绿。
+   * 那会让**旧请求**的失败信息写进 errorMessage，用户看到的是已经作废的那次加载
+   * 报的错（甚至在新请求已成功之后），比「不提示」更误导。
+   */
+  it('旧请求失败时不写错误信息，避免作废的失败覆盖当前状态', async () => {
+    const slow = deferred()
+    mocks.initViewSelect
+      .mockImplementationOnce(async () => {
+        await slow.promise
+        throw new BxError('旧请求失败', 'FAILURE')
+      })
+      .mockResolvedValueOnce(envelopeWithTitle('新数据'))
+
+    const q = useQuestionnaire()
+    const first = q.load('A1') // 先发，慢
+    const second = q.load('A2') // 后发，快
+    await second
+    expect(q.errorMessage.value).toBe('')
+
+    slow.release()
+    await expect(first).resolves.toBe(false)
+    // 作废的旧请求不得把自己的错误写进来
+    expect(q.errorMessage.value).toBe('')
+  })
+
+  /**
+   * 变异测试补漏：`options.autoUpdateState !== false && message.includes('活动已结束')`
+   * 改成 `||` 后测试全绿 —— 那会让**任何**加载失败都把活动状态改成「已结束」。
+   * 活动状态是服务端数据，误改会真的结束掉一个正常活动。
+   */
+  it('仅「活动已结束」才自动置状态，其他失败不置', async () => {
+    mocks.initViewSelect.mockRejectedValueOnce(new BxError('活动编号不存在', 'FAILURE'))
+
+    const q = useQuestionnaire()
+    await expect(q.load('A1')).resolves.toBe(false)
+    expect(q.errorMessage.value).toBe('活动编号不存在')
+    expect(mocks.activityCfgUpdate).not.toHaveBeenCalled()
+  })
+
+  it('提示「活动已结束」时自动把活动状态改为已结束', async () => {
+    mocks.initViewSelect.mockRejectedValueOnce(new BxError('活动已结束', 'FAILURE'))
+    mocks.activityCfgUpdate.mockResolvedValue({})
+
+    const q = useQuestionnaire()
+    await expect(q.load('A1')).resolves.toBe(false)
+    expect(mocks.activityCfgUpdate).toHaveBeenCalledWith('A1', '已结束')
+  })
+
+  it('autoUpdateState 为 false 时不置状态', async () => {
+    mocks.initViewSelect.mockRejectedValueOnce(new BxError('活动已结束', 'FAILURE'))
+
+    const q = useQuestionnaire()
+    await expect(q.load('A1', { autoUpdateState: false })).resolves.toBe(false)
+    expect(mocks.activityCfgUpdate).not.toHaveBeenCalled()
   })
 })

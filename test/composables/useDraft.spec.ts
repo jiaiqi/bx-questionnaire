@@ -97,6 +97,44 @@ describe('useDraft · 批次号', () => {
     expect(mocks.resultSave.mock.calls[0]?.[0]).toMatchObject({ fillBatchNo: 'B0' })
   })
 
+  /**
+   * 变异测试补漏：把 `!currentBatchNo && params.fillBatchNo` 改成 `||` 后测试全绿。
+   * 那会让「本地已锁定批次号 + 调用方又传一个」时用传入值覆盖本地 ——
+   * 与「服务端回传后以本地为准」的语义相反，作答又会被割裂到多条草稿。
+   * 上面的用例只覆盖了「本地为空 + 调用方带来批次号」，没覆盖这个方向。
+   */
+  it('本地已锁定批次号时，调用方再传也不覆盖（服务端优先）', async () => {
+    mocks.resultSave.mockResolvedValue(okWithBatch('B1'))
+
+    const draft = useDraft()
+    // 第一次保存锁定 B1
+    await draft.save({ activityNo: 'A1', field: fieldOf('k1'), answers: { k1: 'x' } })
+    // 第二次带了不同的批次号，不得覆盖已锁定的 B1
+    await draft.save({
+      activityNo: 'A1',
+      fillBatchNo: 'B-other',
+      field: fieldOf('k2'),
+      answers: { k2: 'y' },
+    })
+
+    expect(mocks.resultSave.mock.calls[1]?.[0]).toMatchObject({ fillBatchNo: 'B1' })
+  })
+
+  it('整卷保存同样不覆盖已锁定的批次号', async () => {
+    mocks.resultSave.mockResolvedValue(okWithBatch('B1'))
+
+    const draft = useDraft()
+    await draft.save({ activityNo: 'A1', field: fieldOf('k1'), answers: { k1: 'x' } })
+    await draft.saveAll({
+      activityNo: 'A1',
+      fillBatchNo: 'B-other',
+      fields: [fieldOf('k2')],
+      answers: { k2: 'y' },
+    })
+
+    expect(mocks.resultSave.mock.calls[1]?.[0]).toMatchObject({ fillBatchNo: 'B1' })
+  })
+
   it('批次号回传给调用方，供后续保存与提交使用', async () => {
     mocks.resultSave.mockResolvedValue(okWithBatch('B9'))
 
