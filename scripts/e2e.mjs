@@ -299,9 +299,42 @@ async function main() {
     pass: draftItems.length === 4,
   })
 
+  // ── 场景一续：刷新后本地草稿应恢复 ──────────────────────────────
+  // 用户填到一半刷新页面是常见操作，答案必须还在。走的是 restoreLocalDraft
+  // → fromLocalDraft 那条路（服务端无登录态时拿不到 user_data，只能靠本地草稿）。
+  //
+  // 注意要轮询到「稳定」而不是读一次：reload 后页面仍在初始化，
+  // 早期读到的是中间态（曾出现同一次 reload 前后两次读结果不同，
+  // 一次 4 一次 0，看起来像草稿被清空，实为时序）。
+  console.log('\n  刷新页面验证草稿恢复：')
+  await send('Page.reload')
+  let stable = { answered: '', inputs: [] }
+  for (let i = 0; i < 24; i++) {
+    await sleep(700)
+    const s = await readState()
+    // 连续两次读到相同的非零进度才算稳定
+    if (s.answered === stable.answered && s.answered !== '0') break
+    stable = s
+  }
+  const afterReload = await readState()
+  console.log(`  刷新后：已答 ${afterReload.answered}`)
+  console.log(`  输入框值：${JSON.stringify(afterReload.inputs)}`)
+  checks.push({ name: '刷新后答案从本地草稿恢复（已答 4）', pass: afterReload.answered === '4' })
+  checks.push({
+    name: '刷新后填空题内容仍在',
+    pass: afterReload.inputs.includes('端到端测试建议'),
+  })
+  checks.push({
+    name: '刷新后数字题内容仍在',
+    pass: afterReload.inputs.includes('2026'),
+  })
+
   if (DO_SUBMIT) {
     console.log('\n提交问卷：')
     const submitBefore = writeRequests.length
+    // 点击前再读一次：若此刻进度已经不是 4，说明草稿恢复后在某个时点被清掉了
+    const beforeClick = await readState()
+    console.log(`  点击前进度：已答 ${beforeClick.answered}，输入框 ${JSON.stringify(beforeClick.inputs)}`)
     await clickByText('提交问卷', '提交问卷按钮')
 
     // 提交前有二次确认（confirmDialog → uni.showModal）：
@@ -387,6 +420,31 @@ async function main() {
   else {
     console.log('\n（未加 --submit，跳过提交，避免产生真实记录）')
   }
+
+  // ── 场景五：草稿批次不匹配时不得恢复 ────────────────────────────
+  // fromLocalDraft 的第二条过滤规则。若失效，点击历史记录里另一条未完成记录
+  // 会把本机草稿套到那条记录上，提交后数据错乱 —— 是数据正确性问题，不是观感问题。
+  //
+  // 必须放在提交流程**之后**：本场景会导航到另一个批次，草稿因此不再恢复，
+  // 若插在提交之前，后面的提交就会读到空的 answers（曾据此误判为「草稿被清空」）。
+  console.log('\n\n=== 场景五：草稿批次不匹配时不得恢复 ===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/index/index?activity_no=${ACTIVITY_NO}&formType=form&status=进行中&fill_batch_no=ffffffffffffffffffffffffffffffff`,
+  })
+  await sleep(9000)
+  const otherBatch = await readState()
+  console.log(`  换批次后：已答 ${otherBatch.answered}`)
+  console.log(`  输入框值：${JSON.stringify(otherBatch.inputs)}`)
+  checks.push({
+    name: '批次不同时不恢复本地草稿（已答 0）',
+    pass: otherBatch.answered === '0',
+  })
+  checks.push({
+    name: '批次不同时填空题内容未被套用',
+    pass: !otherBatch.inputs.includes('端到端测试建议'),
+  })
 
   // ── 场景二：必填校验 ────────────────────────────────────────────
   // 空卷直接提交必须被拦住。这条路径用户一定会遇到，但此前从未验证过。
