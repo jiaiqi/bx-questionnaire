@@ -37,7 +37,7 @@ export interface BxSelectParams {
   condition?: BxCondition[]
   relation_condition?: unknown[]
   order?: BxOrder[]
-  page?: { pageNo: number; rownumber: number }
+  page?: { pageNo: number, rownumber: number }
   colsel_v2?: string
   [key: string]: unknown
 }

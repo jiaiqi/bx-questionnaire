@@ -10,8 +10,8 @@
  * - `srvdaq_record_share_add`            微信分享记录
  */
 
-import type { BxCondition, BxOrder } from '@/utils/request/types'
 import type { DaqActivitySugRow, DaqRecordMergeRow, DaqRecordReplyRow } from './types'
+import type { BxCondition, BxOrder } from '@/utils/request/types'
 
 import { bxSelect, bxWrite } from '@/utils/request'
 
@@ -123,7 +123,7 @@ export function recordReplySelect(query: RecordReplyQuery = {}) {
 }
 
 /** 评估维度汇总 */
-export function recordReplyMergeSelect(params: { activityNo: string; fillBatchNo?: string }) {
+export function recordReplyMergeSelect(params: { activityNo: string, fillBatchNo?: string }) {
   const condition: BxCondition[] = [
     { colName: 'activity_no', ruleType: 'eq', value: params.activityNo },
   ]

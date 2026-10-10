@@ -1,8 +1,8 @@
-import { createSSRApp } from 'vue'
-import 'uno.css'
-
 import * as Pinia from 'pinia'
+import { createSSRApp } from 'vue'
+
 import App from './App.vue'
+import 'uno.css'
 
 export function createApp() {
   const app = createSSRApp(App)

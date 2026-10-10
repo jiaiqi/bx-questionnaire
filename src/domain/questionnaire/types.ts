@@ -7,25 +7,25 @@
 import type { DaqItemRow } from '@/api/daq/types'
 
 /** 渲染控件类型：由平台 `item_type` + `item_type_attr` 映射而来 */
-export type QuestionWidget =
+export type QuestionWidget
   /** 单行文本 */
-  | 'text'
+  = | 'text'
   /** 多行文本 */
-  | 'textarea'
-  | 'number'
-  | 'radio'
-  | 'checkbox'
-  | 'date'
-  | 'time'
-  | 'datetime'
-  | 'image'
+    | 'textarea'
+    | 'number'
+    | 'radio'
+    | 'checkbox'
+    | 'date'
+    | 'time'
+    | 'datetime'
+    | 'image'
   /** 行政区划级联 */
-  | 'address'
+    | 'address'
   /** 引用型选择器 */
-  | 'ref'
+    | 'ref'
   /** 分节符，不参与作答与提交 */
-  | 'section'
-  | 'unknown'
+    | 'section'
+    | 'unknown'
 
 export interface FieldOption {
   /** 选项主键 `option_no`：草稿保存与选中判定用 */

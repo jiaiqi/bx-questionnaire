@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { activity5, activity8 } from '../fixtures/questionnaire'
 import { applyBackfill, resolveWidget, toFieldOptions, toQuestionFields } from '@/domain/questionnaire/mapper'
+import { activity5, activity8 } from '../fixtures/questionnaire'
 
 describe('mapper · 题型映射', () => {
   it('单选 → radio，数字 → number，文本 → text', () => {

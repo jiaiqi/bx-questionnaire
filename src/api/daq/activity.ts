@@ -7,19 +7,19 @@
  * - `srvdaq_activity_cfg_update`  活动结束置状态
  */
 
-import type { BxCondition } from '@/utils/request/types'
 import type { DaqActivityRow } from './types'
+import type { BxCondition } from '@/utils/request/types'
 
 import { bxSelect, bxWrite } from '@/utils/request'
 
 /** init_view_select 的取值模式（复刻老工程三分支） */
-export type InitViewMode =
+export type InitViewMode
   /** 不带 type 条件：实测对「已结束」活动也能取到数据 */
-  | 'plain'
+  = | 'plain'
   /** type = use：进行中的活动 */
-  | 'use'
+    | 'use'
   /** biz_type = cfg：未开始的活动 */
-  | 'cfg'
+    | 'cfg'
 
 export interface InitViewQuery {
   activityNo: string

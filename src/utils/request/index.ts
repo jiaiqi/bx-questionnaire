@@ -9,9 +9,9 @@
 
 import type { BxAction, BxEnvelope, BxSelectParams, BxWriteItem } from './types'
 
+import { SHARED_KEYS, storage } from '@/utils/storage'
 import { buildServiceUrl, ENV } from './env'
 import { BX_CODE, BxError } from './types'
-import { SHARED_KEYS, storage } from '@/utils/storage'
 
 export interface BxRequestOptions {
   /** 应用名，默认取 ENV.app（问卷相关表在 daq 应用下） */

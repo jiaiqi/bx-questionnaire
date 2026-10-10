@@ -7,8 +7,8 @@
  * 3. 回填同时接受 `option_value` 与 `option_no` 两种值形态。
  */
 
-import type { DaqItemRow, DaqOptionRow } from '@/api/daq/types'
 import type { AnswerMap, FieldOption, QuestionField, QuestionWidget } from './types'
+import type { DaqItemRow, DaqOptionRow } from '@/api/daq/types'
 
 const SECTION_TYPE = '分节符'
 
@@ -21,7 +21,7 @@ function readAttr(raw: DaqItemRow, key: string): string {
 }
 
 /** 解析平台题型 → 渲染控件 */
-export function resolveWidget(raw: DaqItemRow): { widget: QuestionWidget; multi: boolean } {
+export function resolveWidget(raw: DaqItemRow): { widget: QuestionWidget, multi: boolean } {
   const itemType = raw.item_type ?? ''
 
   switch (itemType) {
@@ -104,8 +104,8 @@ export function toQuestionFields(items: DaqItemRow[] | null | undefined): Questi
   }
 
   const sorted = [...items].sort((a, b) => {
-    const seqA = a.item_seq === null || a.item_seq === undefined ? SEQ_FALLBACK : a.item_seq
-    const seqB = b.item_seq === null || b.item_seq === undefined ? SEQ_FALLBACK : b.item_seq
+    const seqA = a.item_seq ?? SEQ_FALLBACK
+    const seqB = b.item_seq ?? SEQ_FALLBACK
     return seqA - seqB
   })
 
@@ -119,7 +119,7 @@ export function toQuestionFields(items: DaqItemRow[] | null | undefined): Questi
 
     return {
       key: raw.item_no,
-      seq: raw.item_seq === null || raw.item_seq === undefined ? SEQ_FALLBACK : raw.item_seq,
+      seq: raw.item_seq ?? SEQ_FALLBACK,
       index: isSection ? 0 : index,
       label: raw.item_title ?? '',
       widget,

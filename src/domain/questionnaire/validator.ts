@@ -52,7 +52,7 @@ export function findFirstIssue(fields: QuestionField[], answers: AnswerMap): Val
 export function countAnswered(
   fields: QuestionField[],
   answers: AnswerMap,
-): { answered: number; total: number; percent: number } {
+): { answered: number, total: number, percent: number } {
   const answerable = fields.filter(field => field.widget !== 'section')
   const answered = answerable.filter(field => isFieldAnswered(field, answers)).length
   const total = answerable.length

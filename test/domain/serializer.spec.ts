@@ -2,9 +2,9 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { activity8, buildRealistic19, realistic19Answers } from '../fixtures/questionnaire'
 import { toQuestionFields } from '@/domain/questionnaire/mapper'
 import { toDraftPayload, toDraftPayloads, toSubmitPayload } from '@/domain/questionnaire/serializer'
+import { activity8, buildRealistic19, realistic19Answers } from '../fixtures/questionnaire'
 
 describe('serializer · 提交体', () => {
   it('回归：19 题问卷（含 2 道文本题）全部进入提交体，文本值不丢', () => {
