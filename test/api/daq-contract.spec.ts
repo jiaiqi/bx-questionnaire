@@ -168,15 +168,22 @@ describe('activitySugSelect', () => {
 
 describe('recordShareAdd', () => {
   it('业务号是 biz_no，不是 activity_no', () => {
-    recordShareAdd({ bizNo: 'A1' })
+    recordShareAdd({ bizNo: 'A1', shareType: '好友' })
     const [action, items] = lastWriteArg()
     expect(action).toBe('add')
     expect(items[0]?.data[0]).toMatchObject({
       biz_no: 'A1',
       biz_type: 'daq',
-      share_type: '朋友圈',
+      share_type: '好友',
     })
     expect(items[0]?.data[0]).not.toHaveProperty('activity_no')
+  })
+
+  it('分享渠道不提供默认值：避免把好友分享静默记成朋友圈', () => {
+    // @ts-expect-error shareType 为必填，此处刻意不传，验证不会臆造出「朋友圈」
+    recordShareAdd({ bizNo: 'A1' })
+    const data = lastWriteArg()[1][0]?.data[0]
+    expect(data?.share_type).toBeUndefined()
   })
 })
 

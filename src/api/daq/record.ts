@@ -180,8 +180,14 @@ export function activitySugSelect(params: { activityNo: string, fillBatchNo?: st
  *
  * 字段名取自老工程 `saveShareRecord`：业务号是 **biz_no**（不是 activity_no），
  * 另有 biz_type / share_url / from_user / share_type。
- * 老工程那个方法自己没被调用过，但 record_share_select 有 819 行数据，
- * 说明该表确实在用，因此保留此封装并把字段名对齐。
+ *
+ * **注意：本工程同样没有接线。** 老工程那个方法自己就没被调用过，本工程沿用
+ * 同样的行为 —— 分享（`onShareAppMessage` / `onShareTimeline`）只做了分享本身，
+ * 没有写埋点，因此该封装目前没有生产调用点。
+ *
+ * 之所以保留：`record_share_select` 有 819 行数据，说明这张表和该服务确实在用
+ * （数据来自其它入口），字段名也已对齐老工程，后续要接埋点可直接用。
+ * 若确认不需要，删除时应连同测试一起删。
  */
 export interface ShareRecordParams {
   /** 业务号，问卷场景即活动号 */
@@ -192,8 +198,11 @@ export interface ShareRecordParams {
   shareUrl?: string
   /** 分享人 user_no */
   fromUser?: string
-  /** 分享渠道，老工程默认「朋友圈」 */
-  shareType?: string
+  /**
+   * 分享渠道。**必填，且刻意不给默认值**：分享给好友与分享到朋友圈是两个渠道，
+   * 若默认成「朋友圈」，忘记传参的调用会把好友分享也记成朋友圈，数据静默失真。
+   */
+  shareType: string
 }
 
 /** 分享记录埋点 */
@@ -206,7 +215,7 @@ export function recordShareAdd(params: ShareRecordParams) {
         biz_type: params.bizType ?? 'daq',
         share_url: params.shareUrl ?? '',
         from_user: params.fromUser ?? '',
-        share_type: params.shareType ?? '朋友圈',
+        share_type: params.shareType,
       }],
     },
   ])
