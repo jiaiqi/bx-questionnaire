@@ -2,8 +2,7 @@
  * 问卷活动与配置接口
  *
  * 服务清单（接口契约迁移期间不变）：
- * - `srvdaq_init_view_select`     拉问卷配置（题目 + 选项）
- * - `srvdaq_activity_cfg_select`  拉活动配置（不含题目）
+ * - `srvdaq_init_view_select`     拉问卷配置（题目 + 选项 + 活动元信息）
  * - `srvdaq_activity_cfg_update`  活动结束置状态
  */
 
@@ -65,21 +64,6 @@ export function initViewSelect(query: InitViewQuery) {
     colNames: ['*'],
     order: [{ colName: 'item_seq', ruleType: 'asc' }],
     condition,
-  })
-}
-
-/**
- * 拉活动配置（不含题目）
- *
- * 注意：parkDev 环境下该服务对当前票据返回 0011「无权限访问」，
- * 因此活动元信息应优先取自 `init_view_select` 的返回行（该行含完整活动字段）。
- * 本函数保留，用于兼容其他环境的权限配置。
- */
-export function activityCfgSelect(activityNo: string) {
-  return bxSelect<DaqActivityRow>({
-    serviceName: 'srvdaq_activity_cfg_select',
-    colNames: ['*'],
-    condition: [{ colName: 'activity_no', ruleType: 'eq', value: activityNo }],
   })
 }
 
