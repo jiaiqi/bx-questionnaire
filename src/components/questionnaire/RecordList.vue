@@ -55,7 +55,8 @@ async function fetchPage(reset = false): Promise<void> {
   try {
     const envelope = await recordReplySelect({
       activityNo: props.activityNo,
-      userNo: session.userInfo?.user_no ?? undefined,
+      // 用 || 而非 ??：空字符串也要视为「无用户」，否则会传 user_no eq '' 导致查不到任何记录
+      userNo: session.userInfo?.user_no || undefined,
       pageNo: pageNo.value,
       rownumber,
     })
@@ -128,7 +129,7 @@ void fetchPage(true)
     <BxEmpty
       v-else-if="rows.length === 0 && loaded"
       text="暂无作答记录"
-      tip="完成一次问卷后即可在这里查看"
+      tip="完成一次问卷后即可在这里查看；列表仅显示当前登录账号的记录"
     />
 
     <view v-else class="records__list">

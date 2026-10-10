@@ -119,7 +119,7 @@ void load()
       <BxEmpty
         v-else-if="items.length === 0"
         text="暂无已完成的测评"
-        tip="完成一次问卷后，这里会显示得分与查看入口"
+        tip="完成一次问卷后，这里会显示得分与查看入口；列表仅显示当前登录账号的记录"
       />
 
       <view v-else class="cp-list">

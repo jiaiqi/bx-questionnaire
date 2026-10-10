@@ -154,6 +154,21 @@ describe('recordReplySelect', () => {
     expect(conditionCols()).toEqual(['fill_batch_no'])
     expect(lastSelectArg().page).toEqual({ pageNo: 2, rownumber: 50 })
   })
+
+  /**
+   * user_no 是「按用户维度查询」的条件，而平台对这类查询额外要求调用者的会话身份，
+   * 无会话时会静默返回空结果。因此空值必须视为「不过滤」，否则会传 user_no eq ''
+   * 把本该显示全部记录的场景变成一条都查不到。
+   */
+  it('userNo 为空字符串时不拼 user_no 条件', () => {
+    recordReplySelect({ activityNo: 'A1', userNo: '' })
+    expect(conditionCols()).toEqual(['activity_no'])
+  })
+
+  it('userNo 为 undefined 时不拼 user_no 条件', () => {
+    recordReplySelect({ activityNo: 'A1', userNo: undefined })
+    expect(conditionCols()).toEqual(['activity_no'])
+  })
 })
 
 describe('activitySugSelect', () => {
