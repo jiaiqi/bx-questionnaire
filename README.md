@@ -142,16 +142,24 @@ pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具�
 - `srvdaq_record_reply_merge_select` **没有 `activity_no` / `item_no` 列**，题目维度用 `item_seq`，作答值在 `svalue`
 - `srvdaq_record_reply_select` **不接受 `order`**：传任何排序字段（asc / desc 皆然）都会静默返回 0 条，而不是报错
 - `srvdaq_record_reply_select` **必须带 `condition`**，空数组会直接 FAILURE
-- 服务按**票据**鉴权，与浏览器会话 cookie 无关（实测 `document.cookie` 为 0 条）。
+- 服务按**票据**鉴权，但**按用户维度查询**（`condition` 带 `user_no`）时，
+  平台还要求**调用者的会话身份**，无会话时**静默返回空结果**（`state=SUCCESS`、`data` 为空），
+  **不报错** —— 同一条件在 Node 直连返回 11 条、浏览器（无平台会话）返回 0 条。
   各服务的差异来自自身的**权限与业务校验**，不是「跨域」：
-  - `srvdaq_record_reply_select`：无需登录，成功
+  - `srvdaq_record_reply_select`：只按 `activity_no` 查时无需登录，成功；
+    带 `user_no` 过滤时需会话身份，否则静默返回空
   - `srvdaq_init_view_select`（无 `type`）：成功；带 `type=use` 时报
     「非活动创建人」——这是**业务校验**（调用者须为活动创建人），不是鉴权失败
   - `srvdaq_record_reply_merge_select`：需要登录态，请求层已自动带票据
   - `srvdaq_item_cfg_select`：报「无权限访问」，是票据身份**缺少该服务的权限**
 
-  > 排查提示：手写 `uni.request` 探测时**必须自己带票据头**（业务请求层会自动加）。
+  > 排查提示一：手写 `uni.request` 探测时**必须自己带票据头**（业务请求层会自动加）。
   > 漏带会得到 `0011 需要登录访问`，极易误判成「服务需要会话」。
+  >
+  > 排查提示二：本机用 `localhost` 访问时，该域下**没有**网关域的会话 cookie，
+  > 因此无法模拟真实用户的登录态 —— `couple`（我的测评）与 `history` 在带
+  > `user_no` 过滤时会显示空列表，属环境限制，不是缺陷。做结论前请**同条件多路径对照**
+  > （不同调用方式、Node 与浏览器）。
 
 ## 相关文档
 
