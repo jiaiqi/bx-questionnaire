@@ -13,6 +13,12 @@ import { readFileSync, writeFileSync } from 'node:fs'
  * `<` / `>` 的规则要求前面**不是标识符字符** —— 否则会命中泛型语法
  * （如 `reactive<AnswerMap>({})`、`bxSelect<Row>({...})`），
  * 产生「语法都变了」的假变异，白白算成测试盲区。
+ *
+ * 数值常量与 `if (x)` 条件反转是后补的：原来只有逻辑/比较运算符，于是
+ * `src/utils/ui.ts`（`duration: 2000`、`if (element)`）与 `src/api/config/area.ts`
+ * （`pageNo: 1, rownumber: 500`、`if (parentNo)`）的变异数都是 0 —— 纳入了目标
+ * 却一个变异都产生不出来，看起来「覆盖了」其实是空的。**指标好看但含义是假的，
+ * 等于没测。**
  */
 const MUTATORS = [
   ['逻辑与 → 或', /(if \([^\n]*?)&&/],
@@ -24,6 +30,8 @@ const MUTATORS = [
   ['大于 → 小于等于', /(?<![<>!=A-Za-z0-9_$])>(?!=)/],
   ['小于 → 大于等于', /(?<![<>!=A-Za-z0-9_$])<(?!=)/],
   ['取反符删除', /if \(!/],
+  // 数值常量 +1：只命中独立数字，不碰标识符里的数字（如 `bx2`）与小数
+  ['数值常量 +1', /(?<![A-Za-z0-9_$.])(\d+)(?![0-9.])/],
 ]
 
 /**
@@ -62,6 +70,8 @@ const TARGETS = [
   { file: 'src/utils/request/env.ts', test: 'test/utils/request.spec.ts' },
   { file: 'src/api/file/attachment.ts', test: 'test/api/attachment.spec.ts' },
   { file: 'src/directives/aria-label.ts', test: 'test/directives/aria-label.spec.ts' },
+  { file: 'src/utils/ui.ts', test: 'test/utils/ui.spec.ts' },
+  { file: 'src/api/config/area.ts', test: 'test/api/area.spec.ts' },
 ]
 
 function runTest(testFile) {
@@ -106,6 +116,7 @@ for (const { file, test } of TARGETS) {
         if (name === '大于 → 小于等于') return '<='
         if (name === '小于 → 大于等于') return '>='
         if (name === '取反符删除') return 'if ('
+        if (name === '数值常量 +1') return String(Number(m) + 1)
         return m
       })
       if (mutated === line) continue
