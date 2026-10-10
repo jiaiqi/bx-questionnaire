@@ -88,8 +88,11 @@ const AUDIT = `(() => {
     })
   }
 
-  // 可点击但键盘到不了的元素（tabIndex < 0）—— 键盘用户会完全够不到
-  const unreachable = interactive.filter(i => !i.disabled && i.tabIndex < 0)
+  // 可点击但键盘到不了的元素（tabIndex < 0）—— 键盘用户会完全够不到。
+  // 排除**分组容器**（radiogroup / group / presentation / none）：它们只是语义
+  // 包装，本来就不该可聚焦，要求它们有 tabindex 是检查过严。
+  const GROUP_ROLES = ['radiogroup', 'group', 'presentation', 'none', 'list', 'listbox']
+  const unreachable = interactive.filter(i => !i.disabled && i.tabIndex < 0 && !GROUP_ROLES.includes(i.role))
 
   const imgsNoAlt = []
   for (const el of root.querySelectorAll('img')) {

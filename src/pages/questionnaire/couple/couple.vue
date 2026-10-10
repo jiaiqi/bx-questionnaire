@@ -95,6 +95,25 @@ function openRecord(item: AssessmentItem): void {
   })
 }
 
+/**
+ * 键盘激活
+ *
+ * 「查看结果」「查看作答」是可点击的 <text>，天然不可聚焦 —— 键盘用户打不开。
+ * 与 BxButton / BxOptionList / 记录卡片同一类问题，扫描时一并修掉。
+ */
+function onActionKeydown(event: KeyboardEvent, kind: 'result' | 'record', item: AssessmentItem): void {
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+    return
+  }
+  event.preventDefault()
+  if (kind === 'result') {
+    openResult(item)
+  }
+  else {
+    openRecord(item)
+  }
+}
+
 void load()
 </script>
 
@@ -135,8 +154,24 @@ void load()
           </view>
 
           <view class="cp-card__actions">
-            <text class="cp-card__action" @click="openResult(item)">查看结果</text>
-            <text class="cp-card__action cp-card__action--ghost" @click="openRecord(item)">查看作答</text>
+            <text
+              class="cp-card__action"
+              role="button"
+              tabindex="0"
+              @click="openResult(item)"
+              @keydown="onActionKeydown($event, 'result', item)"
+            >
+              查看结果
+            </text>
+            <text
+              class="cp-card__action cp-card__action--ghost"
+              role="button"
+              tabindex="0"
+              @click="openRecord(item)"
+              @keydown="onActionKeydown($event, 'record', item)"
+            >
+              查看作答
+            </text>
           </view>
         </view>
       </view>
@@ -232,6 +267,13 @@ void load()
   color: var(--bx-blue);
   border: 1px solid var(--bx-blue);
   border-radius: 999px;
+  cursor: pointer;
+}
+
+/* 焦点可见性：uni-app 内置样式把 outline 设成 none */
+.cp-card__action:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: 2px;
 }
 
 .cp-card__action--ghost {

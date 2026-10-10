@@ -20,12 +20,34 @@ function goBack(): void {
   }
   uni.reLaunch({ url: '/pages/questionnaire/cover/index' })
 }
+
+/**
+ * 键盘激活
+ *
+ * 返回键用 <view> 渲染，天然不可聚焦 —— 键盘用户无法返回上一页。
+ * 与 BxButton / BxOptionList 是同一类问题，扫描时一并修掉。
+ */
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+    return
+  }
+  event.preventDefault()
+  goBack()
+}
 </script>
 
 <template>
   <view class="bx-navbar" :class="{ 'bx-navbar--border': props.border }">
     <view class="bx-navbar__side">
-      <view v-if="props.showBack" class="bx-navbar__back" @click="goBack">
+      <view
+        v-if="props.showBack"
+        class="bx-navbar__back"
+        role="button"
+        aria-label="返回"
+        tabindex="0"
+        @click="goBack"
+        @keydown="onKeydown"
+      >
         <text class="bx-navbar__arrow">‹</text>
       </view>
     </view>
@@ -69,6 +91,14 @@ function goBack(): void {
   justify-content: center;
   width: 36px;
   height: 36px;
+  cursor: pointer;
+  border-radius: var(--bx-radius);
+}
+
+/* 焦点可见性：uni-app 内置样式把 outline 设成 none */
+.bx-navbar__back:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: -2px;
 }
 
 .bx-navbar__arrow {

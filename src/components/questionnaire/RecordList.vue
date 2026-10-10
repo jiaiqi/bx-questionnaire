@@ -103,6 +103,32 @@ function openDetail(row: DaqRecordReplyRow): void {
   })
 }
 
+/**
+ * 键盘激活
+ *
+ * 记录卡片与「加载更多」都是可点击的 <view> / <text>，天然不可聚焦 ——
+ * 键盘用户看不到也打不开这些记录。与 BxButton / BxOptionList 同一类问题。
+ */
+function isActivateKey(event: KeyboardEvent): boolean {
+  return event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar'
+}
+
+function onCardKeydown(event: KeyboardEvent, row: DaqRecordReplyRow): void {
+  if (!isActivateKey(event)) {
+    return
+  }
+  event.preventDefault()
+  openDetail(row)
+}
+
+function onMoreKeydown(event: KeyboardEvent): void {
+  if (!isActivateKey(event)) {
+    return
+  }
+  event.preventDefault()
+  void loadMore()
+}
+
 defineExpose({ refresh, loadMore })
 
 void fetchPage(true)
@@ -137,9 +163,13 @@ void fetchPage(true)
         v-for="row in rows"
         :key="String(row.fill_batch_no)"
         class="record"
+        role="button"
+        :aria-label="`查看作答记录 ${row.title || row.activity_no} ${row.state || ''}`"
+        tabindex="0"
         hover-class="record--hover"
         :hover-stay-time="60"
         @click="openDetail(row)"
+        @keydown="onCardKeydown($event, row)"
       >
         <view class="record__head">
           <text class="record__title">{{ row.title || row.activity_no }}</text>
@@ -171,8 +201,26 @@ void fetchPage(true)
       <view class="records__more">
         <text v-if="loading" class="records__more-text">正在加载…</text>
         <text v-else-if="finished" class="records__more-text">没有更多了</text>
-        <text v-else-if="failed" class="records__more-text" @click="loadMore">加载失败，点击重试</text>
-        <text v-else class="records__more-text" @click="loadMore">点击加载更多</text>
+        <text
+          v-else-if="failed"
+          class="records__more-text"
+          role="button"
+          tabindex="0"
+          @click="loadMore"
+          @keydown="onMoreKeydown"
+        >
+          加载失败，点击重试
+        </text>
+        <text
+          v-else
+          class="records__more-text"
+          role="button"
+          tabindex="0"
+          @click="loadMore"
+          @keydown="onMoreKeydown"
+        >
+          点击加载更多
+        </text>
       </view>
     </view>
   </view>
@@ -204,6 +252,13 @@ void fetchPage(true)
 .record {
   padding: 14px 16px;
   background-color: var(--bx-surface);
+  cursor: pointer;
+}
+
+/* 焦点可见性：uni-app 内置样式把 outline 设成 none */
+.record:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: -2px;
 }
 
 .record:not(:first-child) {
@@ -281,5 +336,12 @@ void fetchPage(true)
 .records__more-text {
   font-size: 13px;
   color: var(--bx-text-3);
+  cursor: pointer;
+}
+
+.records__more-text:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 </style>
