@@ -199,7 +199,13 @@ async function main() {
     if (m.method === 'Network.requestWillBeSent') {
       const url = m.params.request.url
       if (url.includes('activity_result_save') || url.includes('activity_result_submit')) {
-        writeRequests.push({ url, at: Date.now() })
+        writeRequests.push({
+          url,
+          at: Date.now(),
+          requestId: m.params.requestId,
+          // 写操作体是 JSON 数组 [{serviceName, data:[...]}]，可能就在 postData 里
+          postData: m.params.request.postData ?? null,
+        })
       }
     }
   })
@@ -232,7 +238,6 @@ async function main() {
   await clickSelector(`#${ITEMS.checkbox} .bx-option:nth-of-type(2)`, '多选题第 2 项')
   const afterCheckbox = await readState()
   checks.push({ name: '多选后进度 +1', pass: afterCheckbox.answered === '2' })
-
   // 文本题
   await typeInto(`#${ITEMS.text} input`, '端到端测试建议', '填空题')
   const afterText = await readState()
@@ -257,7 +262,10 @@ async function main() {
   const newReqs = writeRequests.slice(reqBefore)
   console.log(`  提示文本尾部：${afterDraft.text.slice(-140)}`)
   console.log(`  新增写请求 ${newReqs.length} 个：`)
-  for (const r of newReqs) console.log(`    ${r.url.split('/').slice(-3).join('/')}`)
+  for (const r of newReqs) {
+    console.log(`    ${r.url.split('/').slice(-3).join('/')}`)
+    if (r.postData) console.log(`      请求体：${r.postData.slice(0, 500)}`)
+  }
 
   checks.push({
     name: '点击暂存草稿后真的发出保存请求',
@@ -266,6 +274,29 @@ async function main() {
   checks.push({
     name: '暂存后进度未丢失',
     pass: afterDraft.answered === draftBefore.answered,
+  })
+
+  // 草稿体结构断言（默认跑也会执行，无需 --submit）：
+  // 多选题必须带出两个 option_no。服务端最终只存第一个值（平台限制，见文档），
+  // 所以不能靠服务端数据反推，只能直接校验请求体。
+  // 同一逻辑请求会发两次，只有一个带 postData，要挑有请求体的那个。
+  const draftBody = newReqs.find(r => r.url.includes('activity_result_save') && r.postData)?.postData ?? ''
+  let draftParsed = null
+  try { draftParsed = JSON.parse(draftBody) }
+  catch { /* 解析失败按缺失处理 */ }
+  const draftItems = draftParsed?.[0]?.data?.[0]?.item_data ?? []
+  const draftCheckbox = draftItems.find(i => i.item_no === ITEMS.checkbox.replace(/^q-/, ''))
+  checks.push({
+    name: '草稿体包含多选题',
+    pass: !!draftCheckbox,
+  })
+  checks.push({
+    name: '草稿体多选题带 2 个 option_no（多选多值未被截断）',
+    pass: Array.isArray(draftCheckbox?.option_data) && draftCheckbox.option_data.length === 2,
+  })
+  checks.push({
+    name: '草稿体四题齐全',
+    pass: draftItems.length === 4,
   })
 
   if (DO_SUBMIT) {
@@ -305,11 +336,52 @@ async function main() {
     const submitReqs = writeRequests.slice(submitBefore)
     console.log(`  提交后文本：${afterSubmit.text.slice(0, 200)}`)
     console.log(`  新增写请求 ${submitReqs.length} 个：`)
-    for (const r of submitReqs) console.log(`    ${r.url.split('/').slice(-3).join('/')}`)
+    for (const r of submitReqs) {
+      console.log(`    ${r.url.split('/').slice(-3).join('/')}`)
+      if (r.postData) console.log(`      请求体：${r.postData.slice(0, 600)}`)
+    }
     checks.push({ name: '提交后离开作答页', pass: !afterSubmit.text.includes('提交问卷') })
     checks.push({
       name: '提交真的发出 submit 请求',
       pass: submitReqs.some(r => r.url.includes('activity_result_submit')),
+    })
+
+    // 提交体结构断言：多选题必须带出**两个** option_data。
+    // 服务端最终只存第一个值（平台限制，见文档），所以不能靠服务端数据反推，
+    // 只能直接校验请求体 —— 否则序列化被改坏也不会有任何测试报警。
+    // 同一逻辑请求会发两次（uni.request 内部重试/预检），其中只有一个带 postData，
+    // 所以要挑「有请求体」的那个，不能直接取第一个。
+    const submitBody = submitReqs.find(r => r.url.includes('activity_result_submit') && r.postData)?.postData ?? ''
+    let parsed = null
+    try { parsed = JSON.parse(submitBody) }
+    catch { /* 解析失败下面按缺失处理 */ }
+    if (!parsed) {
+      console.log(`  [诊断] submit postData 长度=${submitBody.length}，前 120 字：${submitBody.slice(0, 120)}`)
+    }
+    const items = parsed?.[0]?.data?.[0]?.item_data ?? []
+    // 请求体里的 item_no 是题目列名（纯数字 ID），不带页面上的 q- 前缀
+    const checkboxNo = ITEMS.checkbox.replace(/^q-/, '')
+    const checkboxItem = items.find(i => i.item_no === checkboxNo)
+    if (!checkboxItem) {
+      console.log(`  [诊断] 请求体 item_no 列表：${JSON.stringify(items.map(i => i.item_no))}`)
+      console.log(`  [诊断] 期望找到：${checkboxNo}`)
+    }
+    checks.push({
+      name: '提交体包含多选题',
+      pass: !!checkboxItem,
+    })
+    checks.push({
+      name: '提交体多选题带 2 个 option_data（多选多值未被截断）',
+      pass: Array.isArray(checkboxItem?.option_data) && checkboxItem.option_data.length === 2,
+    })
+    checks.push({
+      name: '提交体多选题 option_flag 与 option_data 数量一致',
+      pass: Array.isArray(checkboxItem?.option_flag)
+        && checkboxItem.option_flag.length === checkboxItem.option_data.length,
+    })
+    checks.push({
+      name: '提交体携带 fill_batch_no（复用草稿批次而非新建）',
+      pass: !!parsed?.[0]?.data?.[0]?.fill_batch_no,
     })
   }
   else {
