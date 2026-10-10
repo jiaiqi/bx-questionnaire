@@ -290,4 +290,53 @@ describe('mapper · 变异测试补漏', () => {
     expect(toMergeAnswerMap(undefined)).toEqual({})
     expect(toMergeAnswerMap([])).toEqual({})
   })
+
+  /**
+   * SEQ_FALLBACK 兜底值：缺 item_seq 的题目要排到最后，且这个兜底值会直接
+   * 写进 `seq` 字段。把 999 改成 1000 时排序结果不变（两者都大于任何真实
+   * item_seq），只有断言具体值才能发现 —— 所以这里同时断言「排最后」与
+   * 「seq 等于兜底值」。
+   */
+  it('缺 item_seq 时用兜底值 999，并排在所有有 seq 的题目之后', () => {
+    const result = toQuestionFields([
+      { item_no: 'a', item_seq: 5, item_title: '第五题', item_type: '文本' },
+      { item_no: 'b', item_title: '没有 seq', item_type: '文本' },
+      { item_no: 'c', item_seq: 1, item_title: '第一题', item_type: '文本' },
+    ])
+    // 排序：1 → 5 → 兜底
+    expect(result.map(f => f.key)).toEqual(['c', 'a', 'b'])
+    expect(result[2]!.seq).toBe(999)
+  })
+
+  it('缺 item_seq 的多道题都拿到同一个兜底值，且保持平台返回顺序', () => {
+    const result = toQuestionFields([
+      { item_no: 'x', item_title: '无 seq 甲', item_type: '文本' },
+      { item_no: 'y', item_title: '无 seq 乙', item_type: '文本' },
+    ])
+    expect(result.map(f => f.seq)).toEqual([999, 999])
+    expect(result.map(f => f.key)).toEqual(['x', 'y'])
+  })
+
+  /**
+   * readPoints 的 NaN 兜底：`? points : 0` 改成 `: 1` 后，分值缺失或非数字的
+   * 题目会被算成 1 分 —— 满分与得分双双虚高，而结果页是按分值算百分比的。
+   */
+  it('分值缺失或非数字时按 0 分，不虚增 1 分', () => {
+    const result = toQuestionFields([
+      { item_no: 'p1', item_seq: 1, item_type: '文本' },
+      { item_no: 'p2', item_seq: 2, item_type: '文本', points: null },
+      { item_no: 'p3', item_seq: 3, item_type: '文本', points: '不是数字' },
+      { item_no: 'p4', item_seq: 4, item_type: '文本', points: '' },
+    ])
+    expect(result.map(f => f.points)).toEqual([0, 0, 0, 0])
+  })
+
+  it('分值正常解析，含数字字符串与 0 分', () => {
+    const result = toQuestionFields([
+      { item_no: 'p1', item_seq: 1, item_type: '文本', points: 10 },
+      { item_no: 'p2', item_seq: 2, item_type: '文本', points: '5' },
+      { item_no: 'p3', item_seq: 3, item_type: '文本', points: 0 },
+    ])
+    expect(result.map(f => f.points)).toEqual([10, 5, 0])
+  })
 })

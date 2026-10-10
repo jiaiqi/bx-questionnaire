@@ -6,10 +6,10 @@
  * 通过 stub `uni.request` 验证 URL / header / 错误码策略，不依赖真实网关。
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { bxSelect, bxWrite, setSessionExpiredHandler } from '@/utils/request'
-import { ENV, resolveTicket } from '@/utils/request/env'
+import { bxSelect, bxWrite, extractResponsePayload, setSessionExpiredHandler } from '@/utils/request'
+import { ENV, resolveGateway, resolveTicket } from '@/utils/request/env'
 
 interface RequestOptions {
   url: string
@@ -278,5 +278,116 @@ describe('resolveTicket（票据优先级）', () => {
     const header = requestMock.mock.calls.at(-1)?.[0].header
     expect(header?.bx_auth_ticket).toBe('header-ticket')
     expect(header?.['bx-auth-ticket']).toBe('header-ticket')
+  })
+})
+
+/**
+ * extractResponsePayload 是写路径回填批次号的关键：提交后服务端把
+ * `fill_batch_no` 放在 `response[0].response` 里。`?.[0]` 改成 `?.[1]`
+ * 后取值恒为 undefined，提交拿不到批次号 —— 但只有单元素响应的用例能发现。
+ */
+describe('extractResponsePayload（批量响应取值）', () => {
+  it('取 response[0].response 这一层，返回服务端回填的数据', () => {
+    const envelope = {
+      state: 'SUCCESS',
+      response: [{ serviceName: 'srvdaq_activity_result_submit', response: { fill_batch_no: 'abc123' } }],
+    }
+    expect(extractResponsePayload<{ fill_batch_no: string }>(envelope as never))
+      .toEqual({ fill_batch_no: 'abc123' })
+  })
+
+  it('单元素数组必须取第 0 项 —— 取第 1 项会恒为 undefined', () => {
+    const envelope = { state: 'SUCCESS', response: [{ response: { fill_batch_no: 'only-one' } }] }
+    expect(extractResponsePayload(envelope as never)).toEqual({ fill_batch_no: 'only-one' })
+  })
+
+  it('response 为空数组时返回 null', () => {
+    expect(extractResponsePayload({ state: 'SUCCESS', response: [] } as never)).toBeNull()
+  })
+
+  it('response 缺失时返回 null', () => {
+    expect(extractResponsePayload({ state: 'SUCCESS' } as never)).toBeNull()
+    expect(extractResponsePayload({ state: 'SUCCESS', response: null } as never)).toBeNull()
+  })
+
+  it('子项没有 response 字段时返回 null，不抛异常', () => {
+    expect(extractResponsePayload({ state: 'SUCCESS', response: [{}] } as never)).toBeNull()
+  })
+
+  it('子项 response 为 null 时返回 null', () => {
+    expect(extractResponsePayload({ state: 'SUCCESS', response: [{ response: null }] } as never)).toBeNull()
+  })
+
+  it('多元素时只取第一个（平台 operate 逐项校验另行处理）', () => {
+    const envelope = {
+      state: 'SUCCESS',
+      response: [{ response: { first: true } }, { response: { second: true } }],
+    }
+    expect(extractResponsePayload(envelope as never)).toEqual({ first: true })
+  })
+})
+
+/**
+ * resolveGateway 的去斜杠与宿主注入优先级。
+ *
+ * `.env.test` 里的网关不带末尾斜杠，所以 `gateway.endsWith('/')` 恒为 false，
+ * else 分支从未被走到 —— `slice(0, -1)` 改成 `slice(1, -1)` 时测试全绿，
+ * 而那会把 `http://x.com/` 砍成 `ttp://x.com`，网关地址丢掉首字符。
+ * 必须显式构造「带末尾斜杠」的输入。
+ */
+describe('resolveGateway（去斜杠与宿主注入）', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    delete (globalThis as Record<string, unknown>).window
+  })
+
+  it('网关带末尾斜杠时去掉它，且不误伤首字符', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://example.com/bxapi/')
+    expect(resolveGateway()).toBe('http://example.com/bxapi')
+  })
+
+  it('多个末尾斜杠只去掉一个（保留其余部分不做递归清理）', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://example.com/bxapi//')
+    expect(resolveGateway()).toBe('http://example.com/bxapi/')
+  })
+
+  it('网关不带末尾斜杠时原样返回', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://example.com/bxapi')
+    expect(resolveGateway()).toBe('http://example.com/bxapi')
+  })
+
+  it('首尾空白被裁掉', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', '  http://example.com/bxapi  ')
+    expect(resolveGateway()).toBe('http://example.com/bxapi')
+  })
+
+  it('空网关抛错，不退化成默认值（避免生产静默连内网）', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', '')
+    expect(() => resolveGateway()).toThrow('未配置网关地址')
+  })
+
+  it('宿主注入的网关优先于构建期环境变量（老门户 iframe 场景）', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://from-env.com/bxapi')
+    ;(globalThis as Record<string, unknown>).window = {
+      top: { pathConfig: { gateway: 'http://from-host.com/bxapi/' } },
+    }
+    expect(resolveGateway()).toBe('http://from-host.com/bxapi')
+  })
+
+  it('宿主注入为空时回退到构建期环境变量', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://from-env.com/bxapi')
+    ;(globalThis as Record<string, unknown>).window = { top: { pathConfig: { gateway: '' } } }
+    expect(resolveGateway()).toBe('http://from-env.com/bxapi')
+  })
+
+  it('读取宿主配置抛异常时（跨域 iframe）回退到构建期环境变量', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://from-env.com/bxapi')
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      get() {
+        throw new Error('跨域')
+      },
+    })
+    expect(resolveGateway()).toBe('http://from-env.com/bxapi')
   })
 })

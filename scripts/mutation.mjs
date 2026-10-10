@@ -51,6 +51,31 @@ const EQUIVALENT = [
     reason: '`res.statusCode ?? 0` 的兜底值只影响后续的 `status >= 400` 与 `status === 429` 判断；'
       + '0 与 1 都不满足这两个条件，落到同一个「服务无响应」分支，行为完全一致',
   },
+  {
+    file: 'src/domain/questionnaire/format.ts',
+    line: 38,
+    reason: '`value.length >= 16` 与 `>= 17` 等价：两条分支都返回 `value.slice(0, 16)`，'
+      + 'length 为 16 时截断结果就是原值，length 为 17 时两条件都成立 —— 边界值不影响结果',
+  },
+  {
+    file: 'src/composables/useDraft.ts',
+    line: 43,
+    reason: '`savedAt = ref(0)` 的初始值不参与任何判断，只作为「尚未保存」的占位；'
+      + '保存成功后被赋成 `Date.now()`，0 与 1 在赋值前都不可观测',
+  },
+  {
+    file: 'src/composables/useQuestionnaire.ts',
+    line: 41,
+    reason: '`loadToken` 只与自身递增后的值比较（`++loadToken` 后存进 token，再拿 token 与 loadToken 比），'
+      + '初始值是 0 还是 1 不改变任何一次比较的结果',
+  },
+  {
+    file: 'src/utils/request/env.ts',
+    line: 47,
+    reason: '`VITE_BX_TIMEOUT ?? 20000` 的兜底值在测试环境不可观测：`.env.test` 显式设了 '
+      + '`VITE_BX_TIMEOUT=20000`，`??` 右侧永远不生效。生产缺该变量时才会差 1ms，'
+      + '而那是构建期常量，单测无法在不改 .env.test 的前提下覆盖',
+  },
 ]
 
 const TARGETS = [

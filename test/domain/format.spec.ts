@@ -63,4 +63,26 @@ describe('formatDateTime', () => {
     expect(out).not.toContain('Invalid')
     expect(out).not.toContain('NaN')
   })
+
+  /**
+   * 长度边界：`value.length >= 16` 改成 `>= 17` 时，只有恰好 16 位的值会露出
+   * 差别 —— 而 16 位正是「YYYY-MM-DD HH:mm」的完整长度，是最高频的输入。
+   * 此时两条分支结果相同（都返回原值），所以要用 17 位才能区分：原实现裁到 16，
+   * 变异后会把第 17 位也留下。
+   */
+  it('恰好 16 位（YYYY-MM-DD HH:mm）原样返回', () => {
+    expect(formatDateTime('2026-10-10 10:03')).toBe('2026-10-10 10:03')
+  })
+
+  it('17 位时裁到 16 位，多出的秒位被去掉', () => {
+    expect(formatDateTime('2026-10-10 10:03:1')).toBe('2026-10-10 10:03')
+  })
+
+  it('完整秒级时间裁到分钟', () => {
+    expect(formatDateTime('2026-10-10 10:03:10')).toBe('2026-10-10 10:03')
+  })
+
+  it('带毫秒的长时间同样只保留到分钟', () => {
+    expect(formatDateTime('2026-10-10 10:03:10.123')).toBe('2026-10-10 10:03')
+  })
 })

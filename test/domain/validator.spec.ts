@@ -61,4 +61,39 @@ describe('validator', () => {
     expect(countAnswered(fields, { q1: 'o1', q2: '意见' })).toEqual({ answered: 2, total: 3, percent: 67 })
     expect(countAnswered(fields, { q1: 'o1', q2: '意见', q3: '42' })).toEqual({ answered: 3, total: 3, percent: 100 })
   })
+
+  /**
+   * 题号为 1 的边界：`field.index > 0` 改成 `> 1` 时，只有 index === 1 的题目
+   * 会从「第 1 题为必填项」退化成通用提示 —— 上面那条用例测的是 index === 2，
+   * 两条分支都命中同一侧，所以变异存活。
+   */
+  it('题号为 1 时同样带上题号，不因边界判断退化', () => {
+    const onlyFirst = toQuestionFields([
+      { item_no: 'q1', item_seq: 1, item_title: '第一题', item_type: '文本', is_require: '是' },
+    ])
+    const issues = validateRequired(onlyFirst, {})
+    expect(issues[0]!.index).toBe(1)
+    expect(issues[0]!.message).toBe('第 1 题为必填项')
+  })
+
+  /**
+   * total 为 0 的边界：`total === 0` 改成 `=== 1` 后，空问卷会算出
+   * `Math.round((0 / 0) * 100)` = NaN —— 进度条拿到 NaN 会渲染成空白或
+   * 「NaN%」。必须显式覆盖空字段集。
+   */
+  it('没有任何题目时进度为 0 而不是 NaN', () => {
+    const result = countAnswered([], {})
+    expect(result).toEqual({ answered: 0, total: 0, percent: 0 })
+    expect(Number.isNaN(result.percent)).toBe(false)
+  })
+
+  it('全部为分节符时进度同样为 0 而不是 NaN（分节符不计入 total）', () => {
+    const sections = toQuestionFields([
+      { item_no: 's1', item_seq: 1, item_title: '第一部分', item_type: '分节符' },
+      { item_no: 's2', item_seq: 2, item_title: '第二部分', item_type: '分节符' },
+    ])
+    const result = countAnswered(sections, {})
+    expect(result).toEqual({ answered: 0, total: 0, percent: 0 })
+    expect(Number.isNaN(result.percent)).toBe(false)
+  })
 })
