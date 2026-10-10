@@ -36,18 +36,44 @@ function toggle(optionNo: string): void {
   // 单选再次点击不取消，避免产生空作答
   emit('update:modelValue', optionNo)
 }
+
+/**
+ * 键盘激活
+ *
+ * 选项用 <view> 渲染，天然不可聚焦（与 BxButton 同一类问题）。问卷的**核心
+ * 操作就是选选项**，键盘用户够不到就等于无法答题。
+ *
+ * 用 Enter / Space 激活，符合 radio 与 checkbox 的键盘约定。Space 要
+ * preventDefault，否则页面会滚动。
+ */
+function onKeydown(event: KeyboardEvent, optionNo: string): void {
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+    return
+  }
+  event.preventDefault()
+  toggle(optionNo)
+}
 </script>
 
 <template>
-  <view class="bx-options">
+  <view
+    class="bx-options"
+    :role="props.field.multi ? 'group' : 'radiogroup'"
+    :aria-label="props.field.label"
+  >
     <view
       v-for="option in props.field.options"
       :key="option.no"
       class="bx-option"
       :class="{ 'bx-option--on': isSelected(option.no), 'bx-option--disabled': props.disabled }"
+      :role="props.field.multi ? 'checkbox' : 'radio'"
+      :aria-checked="isSelected(option.no) ? 'true' : 'false'"
+      :aria-disabled="props.disabled ? 'true' : 'false'"
+      :tabindex="props.disabled ? -1 : 0"
       hover-class="bx-option--hover"
       :hover-stay-time="60"
       @click="toggle(option.no)"
+      @keydown="onKeydown($event, option.no)"
     >
       <view class="bx-option__mark" :class="props.field.multi ? 'bx-option__mark--box' : 'bx-option__mark--dot'">
         <view v-if="isSelected(option.no)" class="bx-option__inner" />
@@ -75,6 +101,22 @@ function toggle(optionNo: string): void {
   margin-bottom: 2px;
   border: 1px solid transparent;
   border-radius: var(--bx-radius);
+  /* 可点击元素要有手型光标 */
+  cursor: pointer;
+}
+
+.bx-option--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/*
+ * 焦点可见性：uni-app 内置样式把 outline 设成 none。用 :focus-visible 补回来，
+ * 只在键盘聚焦时显示。`.bx-option` 本身就在 <uni-view> 上，不需要 :deep()。
+ */
+.bx-option:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: 1px;
 }
 
 .bx-option--hover {
@@ -84,10 +126,6 @@ function toggle(optionNo: string): void {
 .bx-option--on {
   background-color: var(--bx-blue-soft);
   border-color: var(--bx-blue);
-}
-
-.bx-option--disabled {
-  opacity: 0.6;
 }
 
 .bx-option__mark {
