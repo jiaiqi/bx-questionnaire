@@ -218,6 +218,62 @@ if (size > 2 * 1024 * 1024) {
   fail(`主包 ${(size / 1024 / 1024).toFixed(2)} MB 超过微信 2MB 限制`)
 }
 
+// ⑦ 环境相关断言（判定标准随构建模式而变）
+//
+//    与 scripts/scan-dist.mjs 同样的道理：两种模式的**正确含义不同**，不是宽松。
+//
+//      --mode test       联调产物。Vite 的加载顺序是
+//                        `.env.test.local` > `.env.test` > `.env.local` > `.env`，
+//                        所以 `.env.local` 的联调票据**必然**被打进产物 —— 预期行为。
+//                        此时要求「0 票据」是错的断言。必须连开发网关，
+//                        否则真机联调会打到不存在的环境。
+//      --mode production 生产产物。`.env.production` 刻意保留一行空的
+//                        `VITE_BX_TICKET=`，作用是阻断 `.env.local` 的票据进入生产包。
+//                        所以必须 0 票据字面量，且不得指向内网开发网关 —— 硬红线。
+const MODE = process.argv[2] || 'test'
+if (!['test', 'production'].includes(MODE)) {
+  console.error(`未知模式：${MODE}（只接受 test / production）`)
+  process.exit(2)
+}
+let devGateway = 0
+let prodGateway = 0
+let ticketLiteral = 0
+function walkJsText(dir) {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name)
+    if (statSync(p).isDirectory()) {
+      walkJsText(p)
+      continue
+    }
+    if (!name.endsWith('.js'))
+      continue
+    const c = readFileSync(p, 'utf8')
+    if (c.includes('192.168.0.214'))
+      devGateway++
+    if (c.includes('gxqcxkj.com'))
+      prodGateway++
+    if (/xabxdzkj-[0-9a-f]{8}-/.test(c))
+      ticketLiteral++
+  }
+}
+walkJsText(ROOT)
+notes.push(`模式 ${MODE}：开发网关 ${devGateway} / 生产网关 ${prodGateway} / 票据 ${ticketLiteral}`)
+
+if (MODE === 'production') {
+  if (ticketLiteral > 0)
+    fail(`生产产物出现票据字面量（${ticketLiteral} 处）—— 严重泄漏`)
+  if (devGateway > 0)
+    fail(`生产产物指向内网开发网关（${devGateway} 处）`)
+  if (prodGateway === 0)
+    fail('生产产物没有生产网关 —— 构建模式可能不对')
+}
+else {
+  if (devGateway === 0)
+    fail('联调产物没有开发网关 —— 真机联调会打到不存在的环境')
+  if (prodGateway > 0)
+    fail(`联调产物指向生产网关（${prodGateway} 处）—— 会污染生产数据`)
+}
+
 console.log(`小程序产物：${notes.join('，')}`)
 if (failures.length === 0) {
   console.log('== 校验通过 ==')
