@@ -28,7 +28,6 @@ export interface DraftSaveParams {
 
 interface PendingTask {
   activityNo: string
-  fillBatchNo?: string
   item: DraftItem
   onBatchNo?: (batchNo: string) => void
 }
@@ -41,6 +40,16 @@ export function useDraft() {
 
   const queue: PendingTask[] = []
 
+  /**
+   * 当前批次号
+   *
+   * 必须由队列执行时读取，**不能**在入队时把调用方传入的值快照进任务里：
+   * 首次保存尚未返回时用户继续作答，后续任务入队时拿到的仍是空批次号，
+   * 于是又被当作「首次保存」，平台会分配第二个批次号，
+   * 导致同一次作答被割裂到多个批次（快速连答时必然触发）。
+   */
+  let currentBatchNo = ''
+
   async function flush(): Promise<void> {
     saving.value = true
     failed.value = false
@@ -51,11 +60,12 @@ export function useDraft() {
         const task = queue.shift()!
         const envelope = await resultSave({
           activityNo: task.activityNo,
-          fillBatchNo: task.fillBatchNo,
+          fillBatchNo: currentBatchNo || undefined,
           itemData: [task.item],
         })
         const payload = extractResponsePayload<{ fill_batch_no?: string }>(envelope)
         if (payload?.fill_batch_no) {
+          currentBatchNo = payload.fill_batch_no
           task.onBatchNo?.(payload.fill_batch_no)
         }
       }
@@ -78,9 +88,13 @@ export function useDraft() {
       return
     }
 
+    // 续答场景调用方会带来既有批次号；一旦服务端回传，以服务端为准
+    if (!currentBatchNo && params.fillBatchNo) {
+      currentBatchNo = params.fillBatchNo
+    }
+
     queue.push({
       activityNo: params.activityNo,
-      fillBatchNo: params.fillBatchNo,
       item,
       onBatchNo: params.onBatchNo,
     })
@@ -105,17 +119,23 @@ export function useDraft() {
       return
     }
 
+    // 与 save 保持同一套批次号来源，避免两条路径各写各的
+    if (!currentBatchNo && params.fillBatchNo) {
+      currentBatchNo = params.fillBatchNo
+    }
+
     saving.value = true
     failed.value = false
     savedTip.value = '正在保存草稿…'
     try {
       const envelope = await resultSave({
         activityNo: params.activityNo,
-        fillBatchNo: params.fillBatchNo,
+        fillBatchNo: currentBatchNo || undefined,
         itemData: items,
       })
       const payload = extractResponsePayload<{ fill_batch_no?: string }>(envelope)
       if (payload?.fill_batch_no) {
+        currentBatchNo = payload.fill_batch_no
         params.onBatchNo?.(payload.fill_batch_no)
       }
       savedTip.value = '草稿已自动保存'
