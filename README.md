@@ -10,7 +10,7 @@
 | 状态 | Pinia |
 | 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
 | 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
-| 测试 | Vitest（190 项） |
+| 测试 | Vitest（192 项） |
 | 校验 | vue-tsc + ESLint |
 
 `pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
