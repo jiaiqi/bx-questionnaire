@@ -13,7 +13,7 @@ import BxEmpty from '@/components/base/BxEmpty.vue'
 
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
-import { calcScore, describeAnswer, describeSelected, toMergeAnswerMap } from '@/domain/questionnaire'
+import { calcScore, describeAnswer, describeSelected, formatQuestionTitle, toMergeAnswerMap } from '@/domain/questionnaire'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 
@@ -108,7 +108,7 @@ const rows = computed(() =>
     .map(field => ({
       key: field.key,
       index: field.index,
-      label: field.label,
+      title: formatQuestionTitle(field.index, field.label),
       // 老工程按 item_no 取值，parkDev 实测返回 item_seq（映射里两个键都写了），逐个兜底
       mine: serverAnswers.value[String(field.raw.item_no ?? '')]
         ?? serverAnswers.value[String(field.index)]
@@ -176,7 +176,7 @@ function goHome(): void {
           <view v-for="row in rows" :key="row.key" class="r-item">
             <view class="r-item__head">
               <text class="r-item__index">{{ row.index }}.</text>
-              <text class="r-item__label">{{ row.label }}</text>
+              <text class="r-item__label">{{ row.title }}</text>
             </view>
             <view class="r-item__line">
               <text class="r-item__key">我的作答</text>

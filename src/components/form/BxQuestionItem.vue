@@ -3,6 +3,8 @@ import type { QuestionField } from '@/domain/questionnaire'
 
 import { computed } from 'vue'
 
+import { formatQuestionTitle } from '@/domain/questionnaire'
+
 interface Props {
   field: QuestionField
   /** 错误提示，非空时展示红框 */
@@ -13,20 +15,8 @@ const props = withDefaults(defineProps<Props>(), {
   error: '',
 })
 
-/**
- * 题目文案
- *
- * 后端 `item_title` 通常自带序号（如「1. 单选题：你更喜欢哪种沟通方式？」），
- * 再拼一次 field.index 会渲染成「1. 1. 单选题：…」。老工程直接使用 item_title，
- * 这里对已带序号的标题原样使用，仅在确实没有序号时才补上。
- */
-const title = computed(() => {
-  const label = String(props.field.label ?? '').trim()
-  if (!label) {
-    return `${props.field.index}.`
-  }
-  return /^\d+\s*[.、)）]/.test(label) ? label : `${props.field.index}. ${label}`
-})
+/** 题目文案；序号处理见 formatQuestionTitle（结果页共用同一函数，避免再次漏改） */
+const title = computed(() => formatQuestionTitle(props.field.index, props.field.label))
 </script>
 
 <template>
