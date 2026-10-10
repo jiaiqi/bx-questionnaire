@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { QuestionField } from '@/domain/questionnaire'
 
+import { computed } from 'vue'
+
 interface Props {
   field: QuestionField
   /** 错误提示，非空时展示红框 */
@@ -10,13 +12,27 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   error: '',
 })
+
+/**
+ * 题目文案
+ *
+ * 后端 `item_title` 通常自带序号（如「1. 单选题：你更喜欢哪种沟通方式？」），
+ * 再拼一次 field.index 会渲染成「1. 1. 单选题：…」。老工程直接使用 item_title，
+ * 这里对已带序号的标题原样使用，仅在确实没有序号时才补上。
+ */
+const title = computed(() => {
+  const label = String(props.field.label ?? '').trim()
+  if (!label) {
+    return `${props.field.index}.`
+  }
+  return /^\d+\s*[.、)）]/.test(label) ? label : `${props.field.index}. ${label}`
+})
 </script>
 
 <template>
   <view :id="`q-${props.field.key}`" class="bx-question" :class="{ 'bx-question--error': !!props.error }">
     <view class="bx-question__head">
-      <text class="bx-question__index">{{ props.field.index }}.</text>
-      <text class="bx-question__title">{{ props.field.label }}</text>
+      <text class="bx-question__title">{{ title }}</text>
       <text v-if="props.field.required" class="bx-question__required">*</text>
     </view>
 
@@ -44,15 +60,6 @@ const props = withDefaults(defineProps<Props>(), {
 .bx-question__head {
   display: flex;
   align-items: flex-start;
-}
-
-.bx-question__index {
-  flex-shrink: 0;
-  margin-right: 4px;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.6;
-  color: var(--bx-text);
 }
 
 .bx-question__title {
