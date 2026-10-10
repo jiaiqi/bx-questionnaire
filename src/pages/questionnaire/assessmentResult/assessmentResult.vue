@@ -10,13 +10,14 @@ import { ref } from 'vue'
 
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import SuggestionPanel from '@/components/questionnaire/SuggestionPanel.vue'
+import { readQuery } from '@/utils/query'
 
 const activityNo = ref('')
 const fillBatchNo = ref('')
 
 onLoad((query) => {
-  activityNo.value = decodeURIComponent(String(query?.activity_no ?? ''))
-  fillBatchNo.value = decodeURIComponent(String(query?.fill_batch_no ?? ''))
+  activityNo.value = readQuery(query, 'activity_no')
+  fillBatchNo.value = readQuery(query, 'fill_batch_no')
 })
 </script>
 

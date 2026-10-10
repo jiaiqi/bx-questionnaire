@@ -14,6 +14,7 @@ import { computed, ref } from 'vue'
 import BxButton from '@/components/base/BxButton.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { readQuery } from '@/utils/query'
 import { storage, STORAGE_KEYS } from '@/utils/storage'
 import { toast } from '@/utils/ui'
 
@@ -28,7 +29,7 @@ const title = computed(() => activity.value?.title || '填写信息')
 const intro = computed(() => activity.value?.start_remark || '')
 
 onLoad((query) => {
-  activityNo.value = String(query?.activity_no ?? '')
+  activityNo.value = readQuery(query, 'activity_no')
 
   const cached = storage.get<Record<string, string>>(STORAGE_KEYS.ENTRY_PARAMS, {})
   company.value = cached.company ?? ''

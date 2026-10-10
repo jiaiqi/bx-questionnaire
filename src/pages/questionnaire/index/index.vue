@@ -11,6 +11,7 @@ import { ref } from 'vue'
 
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import QuestionnaireRunner from '@/components/questionnaire/QuestionnaireRunner.vue'
+import { readQuery } from '@/utils/query'
 
 const activityNo = ref('')
 const formType = ref('form')
@@ -20,9 +21,9 @@ const fillBatchNo = ref('')
 const runner = ref<{ activityTitle?: string } | null>(null)
 
 onLoad((query) => {
-  activityNo.value = String(query?.activity_no ?? '')
-  formType.value = String(query?.formType ?? 'form')
-  fillBatchNo.value = String(query?.fill_batch_no ?? '')
+  activityNo.value = readQuery(query, 'activity_no')
+  formType.value = readQuery(query, 'formType', 'form')
+  fillBatchNo.value = readQuery(query, 'fill_batch_no')
 })
 
 /** 分享路径与老工程一致：好友点开可直接作答 */

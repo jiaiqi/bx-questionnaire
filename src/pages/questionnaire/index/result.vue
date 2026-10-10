@@ -14,6 +14,7 @@ import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { calcScore, describeAnswer, describeSelected, formatQuestionTitle, toMergeAnswerMap } from '@/domain/questionnaire'
+import { readQuery } from '@/utils/query'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 
@@ -26,8 +27,8 @@ const serverState = ref('')
 const serverAnswers = ref<Record<string, string>>({})
 
 onLoad((query) => {
-  activityNo.value = String(query?.activity_no ?? '')
-  batchNo.value = String(query?.fill_batch_no ?? '')
+  activityNo.value = readQuery(query, 'activity_no')
+  batchNo.value = readQuery(query, 'fill_batch_no')
   void init()
 })
 

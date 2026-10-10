@@ -10,15 +10,16 @@ import { ref } from 'vue'
 
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import QuestionnaireRunner from '@/components/questionnaire/QuestionnaireRunner.vue'
+import { readQuery } from '@/utils/query'
 
 const activityNo = ref('')
 const formType = ref('form')
 const fillBatchNo = ref('')
 
 onLoad((query) => {
-  activityNo.value = String(query?.activity_no ?? '')
-  formType.value = String(query?.formType ?? 'form')
-  fillBatchNo.value = String(query?.fill_batch_no ?? '')
+  activityNo.value = readQuery(query, 'activity_no')
+  formType.value = readQuery(query, 'formType', 'form')
+  fillBatchNo.value = readQuery(query, 'fill_batch_no')
 })
 </script>
 

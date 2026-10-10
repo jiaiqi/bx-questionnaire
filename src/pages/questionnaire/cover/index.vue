@@ -12,6 +12,7 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { readQuery } from '@/utils/query'
 
 const { loading, activity, fields, errorMessage, load } = useQuestionnaire()
 
@@ -23,7 +24,7 @@ const count = computed(() => fields.value.filter(field => field.widget !== 'sect
 const ended = computed(() => activity.value?.status === '已结束')
 
 onLoad((query) => {
-  activityNo.value = String(query?.activity_no ?? '')
+  activityNo.value = readQuery(query, 'activity_no')
   void init()
 })
 

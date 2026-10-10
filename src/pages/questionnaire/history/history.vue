@@ -10,16 +10,15 @@ import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 
 import RecordHistory from '@/components/questionnaire/RecordHistory.vue'
+import { readQuery } from '@/utils/query'
 
 const activityNo = ref('')
 const title = ref('作答记录')
 const pageRef = ref<InstanceType<typeof RecordHistory>>()
 
 onLoad((query) => {
-  activityNo.value = String(query?.activity_no ?? '')
-  if (query?.title) {
-    title.value = decodeURIComponent(String(query.title))
-  }
+  activityNo.value = readQuery(query, 'activity_no')
+  title.value = readQuery(query, 'title', '作答记录')
 })
 
 onReachBottom(() => {
