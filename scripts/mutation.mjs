@@ -45,6 +45,12 @@ const EQUIVALENT = [
     reason: 'top 为 null 时 top.pathConfig 抛错被外层 catch 吞掉；'
       + 'top 存在但无 pathConfig 时返回 undefined，调用方同样按 falsy 处理',
   },
+  {
+    file: 'src/utils/request/index.ts',
+    line: 89,
+    reason: '`res.statusCode ?? 0` 的兜底值只影响后续的 `status >= 400` 与 `status === 429` 判断；'
+      + '0 与 1 都不满足这两个条件，落到同一个「服务无响应」分支，行为完全一致',
+  },
 ]
 
 const TARGETS = [

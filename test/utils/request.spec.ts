@@ -107,10 +107,77 @@ describe('request · 错误策略', () => {
     setSessionExpiredHandler(null)
   })
 
-  it('429 限流不重试，错误码为 429', async () => {
+  /**
+   * 必须同时断言 message：变异测试把 `status === 429` 改成 `430` 后，
+   * 请求会落到下面的 `status >= 400 && !envelope` 分支，code 仍是 '429'
+   * （`String(status)`），只断言 code 的测试全绿 —— 但提示语会从
+   * 「请求过于频繁」变成「服务异常（HTTP 429）」，把限流误报成服务故障。
+   */
+  it('429 限流不重试，错误码为 429 且提示限流而非服务异常', async () => {
     respondWith(null, 429)
-    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({ code: '429' })
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: '429',
+      message: '请求过于频繁，请稍后再试',
+    })
     expect(requestMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('429 带业务信封时同样按限流处理（不被信封的 resultMessage 覆盖）', async () => {
+    respondWith({ state: 'FAILURE', resultCode: '429', resultMessage: '网关限流', data: null }, 429)
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: '429',
+      message: '请求过于频繁，请稍后再试',
+    })
+  })
+
+  /**
+   * `status >= 400` 在 `failed` 计算里的那一份（第三个条件）。
+   * 前两个条件（state === 'FAILURE'、FAILURE_CODES.has(code)）都为假时，
+   * 只有 HTTP 状态能把这次调用判成失败 —— 必须单独覆盖，否则
+   * 改成 `>= 401` 也不会有测试变红（用 500 测不出，500 同时满足两者）。
+   */
+  it('HTTP 400 但业务信封自称成功时仍判失败（状态码兜底不可少）', async () => {
+    respondWith({ state: 'SUCCESS', resultCode: '0000', resultMessage: '', data: null }, 400)
+    // code 取自信封的 resultCode（'0000'），不是 HTTP 状态 —— 关键是它**抛错了**
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: '0000',
+      message: '请求失败',
+    })
+  })
+
+  it('HTTP 200 且业务信封自称成功时正常返回，不被状态码判断误伤', async () => {
+    respondWith({ state: 'SUCCESS', resultCode: '0000', resultMessage: '', data: { ok: true } }, 200)
+    const res = await bxSelect<{ ok: boolean }>({ serviceName: 'srvdaq_init_view_select' })
+    expect(res.data).toEqual({ ok: true })
+  })
+
+  it('HTTP 400 且无信封时按服务异常处理（边界值，非 4xx 一律不拦）', async () => {
+    respondWith(null, 400)
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: '400',
+      message: '服务异常（HTTP 400）',
+    })
+  })
+
+  it('HTTP 400 但带业务信封时仍以信封为准（边界值）', async () => {
+    respondWith({ state: 'FAILURE', resultCode: '0111', resultMessage: '参数错误', data: null }, 400)
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      message: '参数错误',
+    })
+  })
+
+  /**
+   * `res.statusCode ?? 0` 的兜底：statusCode 缺失时不能变成 truthy 值，
+   * 否则会误判成「HTTP 4xx」把正常的无信封响应说成服务异常。
+   */
+  it('statusCode 缺失时按 0 处理，报「服务无响应」而不是服务异常', async () => {
+    requestMock.mockImplementation((options) => {
+      options.success({ statusCode: undefined as unknown as number, data: null })
+    })
+    await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+      code: 'EMPTY_RESPONSE',
+      message: '服务无响应',
+    })
   })
 
   it('网络失败转成 NETWORK 错误', async () => {
