@@ -11,6 +11,7 @@ import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
 import { computed } from 'vue'
 import BxAddressPicker from './BxAddressPicker.vue'
 import BxDatePicker from './BxDatePicker.vue'
+import BxImageField from './BxImageField.vue'
 import BxOptionList from './BxOptionList.vue'
 import BxQuestionItem from './BxQuestionItem.vue'
 import BxRefSelector from './BxRefSelector.vue'
@@ -52,6 +53,8 @@ const kind = computed(() => {
       return 'address'
     case 'ref':
       return 'ref'
+    case 'image':
+      return 'image'
     default:
       return 'unsupported'
   }
@@ -86,6 +89,12 @@ const kind = computed(() => {
     />
     <BxRefSelector
       v-else-if="kind === 'ref'"
+      v-model="value"
+      :field="props.field"
+      :disabled="props.disabled"
+    />
+    <BxImageField
+      v-else-if="kind === 'image'"
       v-model="value"
       :field="props.field"
       :disabled="props.disabled"
