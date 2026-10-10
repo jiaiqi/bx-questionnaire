@@ -36,8 +36,10 @@ const serverAnswers = ref<Record<string, string>>({})
 /**
  * 维度汇总是否成功返回
  *
- * `record_reply_merge_select` 需要会话（浏览器端返回 0011「需要登录访问」），
- * 而同一页面的 `record_reply_select` 只需票据。两者都失败时页面必须能区分：
+ * `record_reply_merge_select` 需要登录态（**不带票据**时返回 0011「需要登录访问」，
+ * 业务请求层会自动带票据，因此正常可用）；而 `record_reply_select` 本身无需登录，
+ * 但**按用户维度查询**（condition 带 `user_no`）时平台还要求调用者的平台会话身份，
+ * 无会话会静默返回空结果。两者都失败时页面必须能区分：
  * 「服务端明确说这道题没作答」与「服务端根本没给作答数据」不是一回事，
  * 前者显示「未作答」，后者不能谎报成未作答。
  */
@@ -56,7 +58,8 @@ async function init(): Promise<void> {
   }
 
   // 必须用 type=use 且带上 fill_batch_no，服务端才会返回 user_data 作答回填 ——
-  // 这是「我的作答」唯一可用的服务端数据源（merge 服务需要会话，匿名访问拿不到）。
+  // 这是「我的作答」唯一可用的服务端数据源（merge 服务只返回汇总行，
+  // 没有 option_data / points 列，无法用于逐题判对错）。
   // 已结束活动上 type=use 会 FAILURE，此时退回 plain；结果页是只读页面，
   // 必须关掉 autoUpdateState，不能因为「活动已结束」就去改活动状态。
   const ok = await load(activityNo.value, {

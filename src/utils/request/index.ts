@@ -74,9 +74,15 @@ function request(options: BxRequestOptions): Promise<RawResult> {
       data: body,
       header: buildHeaders(),
       timeout: options.timeout ?? ENV.timeout,
-      // 保留凭证：微信登录后网关按会话鉴权。
-      // 已实测：改为 false 并不能让 srvdaq_record_reply_select / srvdaq_record_reply_merge_select 在未登录时可用
-      // （分别返回「系统繁忙」与「需要登录访问」），说明这两个服务要求会话，与 cookie 无关，故保持 true。
+      // 保留凭证：网关对「按用户维度查询」（condition 带 user_no）会按调用者的
+      // **平台会话**鉴权，真实用户已登录平台（带会话 cookie）时才查得到自己的记录。
+      //
+      // 实测对照（同一条件）：record_reply_select 带 user_no=jq 时，
+      // Node 直连返回 11 条，浏览器（localhost，无网关域会话）返回 0 条 ——
+      // state=SUCCESS 但 data 为空，**不报错**。
+      //
+      // 注意：早先「改为 false 也无法让服务可用，说明与 cookie 无关」的推断**不成立** ——
+      // 那是在无会话环境下测的，恰恰说明需要会话。故保持 true。
       withCredentials: true,
       success: (res) => {
         resolve({
