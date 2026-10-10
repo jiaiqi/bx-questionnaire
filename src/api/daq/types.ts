@@ -93,18 +93,31 @@ export interface DaqActivityRow {
 }
 
 /** 答题记录行（srvdaq_record_reply_select） */
+/**
+ * 答题记录行（srvdaq_record_reply_select）
+ *
+ * **每次作答一行**，不是每题一行 —— 实测按 fill_batch_no 查询只返回 1 行，
+ * 其中含该次作答的汇总信息（标题、得分、状态、起止时间）。
+ * 逐题明细请用 `srvdaq_record_reply_merge_select`。
+ *
+ * 字段以实测返回为准（colNames:['*']）：原类型里的 item_no / svalue 并不存在，
+ * 而实际返回的 title / nickname / user_type 之前没有声明。
+ */
 export interface DaqRecordReplyRow {
   activity_no?: string
   fill_batch_no?: string
-  item_no?: string
-  /** 作答值 */
-  svalue?: string | null
+  /** 活动标题 */
+  title?: string | null
+  /** 本次作答得分（服务端计算，老工程 seeScore 取的就是这个） */
   score?: string | number | null
   state?: string | null
   start_time?: string | null
   end_time?: string | null
   user_no?: string | null
   user_name?: string | null
+  /** 以下三项由后端按渠道自动填充，前端无需写入 */
+  nickname?: string | null
+  user_type?: string | null
   [k: string]: unknown
 }
 

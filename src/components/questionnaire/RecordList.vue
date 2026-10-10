@@ -140,14 +140,14 @@ void fetchPage(true)
     <view v-else class="records__list">
       <view
         v-for="row in rows"
-        :key="String(row.fill_batch_no) + String(row.item_no ?? '')"
+        :key="String(row.fill_batch_no)"
         class="record"
         hover-class="record--hover"
         :hover-stay-time="60"
         @click="openDetail(row)"
       >
         <view class="record__head">
-          <text class="record__title">{{ row.activity_no }}</text>
+          <text class="record__title">{{ row.title || row.activity_no }}</text>
           <text
             class="record__state"
             :class="row.state === '未完成' ? 'record__state--pending' : 'record__state--done'"
