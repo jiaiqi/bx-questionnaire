@@ -72,6 +72,9 @@ function request(options: BxRequestOptions): Promise<RawResult> {
       data: body,
       header: buildHeaders(),
       timeout: options.timeout ?? ENV.timeout,
+      // 保留凭证：微信登录后网关按会话鉴权。
+      // 已实测：改为 false 并不能让 srvdaq_record_reply_select / srvdaq_record_reply_merge_select 在未登录时可用
+      // （分别返回「系统繁忙」与「需要登录访问」），说明这两个服务要求会话，与 cookie 无关，故保持 true。
       withCredentials: true,
       success: (res) => {
         resolve({
