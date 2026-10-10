@@ -2,8 +2,15 @@
 /**
  * 评估建议面板
  *
- * `assessmentResult/assessmentResult` 与 `survey/result` 共用；
- * 数据来自 `srvdaq_activity_sug_select`（按活动 + 批次号取分数区间建议）。
+ * `assessmentResult/assessmentResult` 与 `survey/result` 共用。
+ *
+ * 数据来自 `srvdaq_activity_sug_select`，按 `activity_no` + `fill_batch_no` 查询。
+ * 对照老工程（assessmentResult.vue）：后端**已按活动与批次筛好**适用区间，
+ * 前端不再按分数二次过滤，直接把返回行渲染出来即可 ——
+ * 老工程就是 `this.assessmentReport = res.data.data` + `{{ item.sug_desc }}`。
+ *
+ * 字段名是 `sug_desc`（老工程两处渲染都用它），不是 sug_content；
+ * 老工程也没有使用 min_score / max_score。
  */
 
 import type { DaqActivitySugRow } from '@/api/daq/types'
@@ -17,13 +24,10 @@ import { BxError } from '@/utils/request'
 interface Props {
   activityNo: string
   fillBatchNo?: string
-  /** 当前得分，用于标记命中的建议区间 */
-  score?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   fillBatchNo: '',
-  score: null,
 })
 
 const loading = ref(false)
@@ -31,16 +35,7 @@ const loaded = ref(false)
 const errorMessage = ref('')
 const suggestions = ref<DaqActivitySugRow[]>([])
 
-const visible = computed(() => suggestions.value.filter(item => !!item.sug_content))
-
-function inRange(item: DaqActivitySugRow): boolean {
-  if (props.score === null || props.score === undefined) {
-    return false
-  }
-  const min = Number(item.min_score ?? Number.NEGATIVE_INFINITY)
-  const max = Number(item.max_score ?? Number.POSITIVE_INFINITY)
-  return props.score >= min && props.score <= max
-}
+const visible = computed(() => suggestions.value.filter(item => !!item.sug_desc))
 
 async function load(): Promise<void> {
   if (!props.activityNo) {
@@ -86,23 +81,16 @@ void load()
     <BxEmpty
       v-else-if="loaded && visible.length === 0"
       text="暂无评估建议"
-      tip="该问卷可能未配置分数区间建议"
+      tip="该问卷可能未配置建议内容"
     />
 
     <view v-else class="sug__list">
       <view
-        v-for="item in visible"
-        :key="`${String(item.min_score)}-${String(item.max_score)}`"
+        v-for="(item, index) in visible"
+        :key="index"
         class="sug-card"
-        :class="{ 'sug-card--active': inRange(item) }"
       >
-        <view class="sug-card__head">
-          <text class="sug-card__range">
-            {{ item.min_score ?? '—' }} ~ {{ item.max_score ?? '—' }} 分
-          </text>
-          <text v-if="inRange(item)" class="sug-card__badge">本次得分</text>
-        </view>
-        <text class="sug-card__content">{{ item.sug_content }}</text>
+        <text class="sug-card__content">{{ item.sug_desc }}</text>
       </view>
     </view>
   </view>
@@ -134,33 +122,8 @@ void load()
   margin-top: 8px;
 }
 
-.sug-card--active {
-  background-color: var(--bx-blue-soft);
-}
-
-.sug-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.sug-card__range {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--bx-blue);
-}
-
-.sug-card__badge {
-  padding: 2px 8px;
-  font-size: 12px;
-  color: #fff;
-  background-color: var(--bx-blue);
-  border-radius: 4px;
-}
-
 .sug-card__content {
   display: block;
-  margin-top: 10px;
   font-size: 14px;
   line-height: 1.7;
   color: var(--bx-text-2);

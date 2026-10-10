@@ -126,10 +126,17 @@ export interface DaqRecordMergeRow {
 }
 
 /** 评估建议行（srvdaq_activity_sug_select） */
+/**
+ * 评估建议行（srvdaq_activity_sug_select）
+ *
+ * 老工程两处渲染都用 `sug_desc`（assessmentResult.vue 与 index/result.vue），
+ * 且没有使用 min_score / max_score —— 后端已按 activity_no + fill_batch_no 筛好适用区间，
+ * 前端直接渲染返回行即可。
+ */
 export interface DaqActivitySugRow {
   activity_no?: string
-  min_score?: string | number | null
-  max_score?: string | number | null
-  sug_content?: string | null
+  fill_batch_no?: string
+  /** 建议正文 */
+  sug_desc?: string | null
   [k: string]: unknown
 }
