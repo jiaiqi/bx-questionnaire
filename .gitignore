@@ -25,3 +25,7 @@ src/pages.json
 src/manifest.json
 src/auto-imports.d.ts
 src/components.d.ts
+
+# 插件在项目根生成的类型声明
+components.d.ts
+uni-pages.d.ts

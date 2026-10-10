@@ -16,7 +16,7 @@ interface RequestOptions {
   data: string
   header: Record<string, string>
   timeout: number
-  success: (res: { statusCode: number; data: unknown }) => void
+  success: (res: { statusCode: number, data: unknown }) => void
   fail: (err: { errMsg?: string }) => void
 }
 
@@ -146,7 +146,8 @@ describe('request · operate 逐项校验', () => {
     })
 
     await expect(bxWrite('operate', [{ serviceName: 'srvdaq_activity_result_save', data: [] }]))
-      .rejects.toMatchObject({ message: '保存失败' })
+      .rejects
+      .toMatchObject({ message: '保存失败' })
   })
 
   it('子项 state 为 null 视为成功（平台部分服务不回填）', async () => {

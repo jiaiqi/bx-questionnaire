@@ -9,5 +9,8 @@ export default uniHelper({
     'src/manifest.json',
     'src/auto-imports.d.ts',
     'src/components.d.ts',
+    // 开发辅助脚本（Node 直跑，输出到终端，不参与应用构建）
+    'scripts/**',
+    'dist/**',
   ],
 })
