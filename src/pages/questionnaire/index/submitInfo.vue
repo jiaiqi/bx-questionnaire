@@ -83,6 +83,7 @@ function onNext(): void {
           </view>
           <input
             v-model="company"
+            v-aria-label="'所属单位'"
             class="si-field__input"
             placeholder="请输入所属单位"
             placeholder-class="si-field__placeholder"
@@ -96,6 +97,7 @@ function onNext(): void {
           </view>
           <input
             v-model="userName"
+            v-aria-label="'姓名'"
             class="si-field__input"
             placeholder="请输入姓名"
             placeholder-class="si-field__placeholder"
@@ -109,6 +111,7 @@ function onNext(): void {
           </view>
           <input
             v-model="userPhone"
+            v-aria-label="'联系电话'"
             class="si-field__input"
             type="number"
             placeholder="请输入手机号码"
@@ -205,6 +208,25 @@ function onNext(): void {
 
 .si-field__placeholder {
   color: var(--bx-text-3);
+}
+
+/*
+ * 焦点可见性：uni-app 内置样式把 outline 设成 none，键盘用户看不到焦点。
+ * 用 :focus-visible 补回来（只在键盘聚焦时显示，鼠标点击不显示）。
+ *
+ * 选择器写法有两个坑，都踩过：
+ *
+ * 1. uni-app 的 postcss 插件会把选择器里的 `input` **改写**成 `uni-input`。
+ *    写成 `:deep(.si-field__input input:focus-visible)` 实际编译出
+ *    `[data-v-x] .si-field__input uni-input:focus-visible` —— 命中的是外层
+ *    自定义元素，而真正被聚焦的是内层原生 input，永远不会触发。
+ * 2. 真实结构是 UNI-INPUT > DIV.uni-input-wrapper > INPUT.uni-input-input，
+ *    所以要落到 uni-app 内部的 `.uni-input-input` 上。
+ */
+:deep(.si-field__input .uni-input-input:focus-visible) {
+  border-color: var(--bx-blue);
+  outline: 2px solid var(--bx-blue);
+  outline-offset: 1px;
 }
 
 .si-actions {
