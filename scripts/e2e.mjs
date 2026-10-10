@@ -123,7 +123,7 @@ async function readState() {
       const batch = (t.match(/批次\\s*([0-9a-f]{8,})/i) || [])[1] || ''
       // 输入框的真实 value：用来判断 insertText 到底有没有落到组件上
       const inputs = [...document.querySelectorAll('input, textarea')].map(e => e.value)
-      return { answered, batch, inputs, text: t.replace(/\\n+/g, ' / ').slice(0, 400) }
+      return { answered, batch, inputs, hash: location.hash, text: t.replace(/\\n+/g, ' / ').slice(0, 400) }
     })()`,
     returnByValue: true,
   })
@@ -687,6 +687,92 @@ async function main() {
     name: '详情模式输入框为只读',
     pass: readonlyProbe.result.value.allDisabled,
   })
+
+  // ── 场景七：调研页（survey/survey）──────────────────────────────
+  // 与 index/index 共用 QuestionnaireRunner，唯一差异是 result-path 指向
+  // survey/result。这条差异此前只在冒烟里渲染过，没验证过交互与跳转目标。
+  console.log('\n\n=== 场景七：调研页作答与结果页跳转 ===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/survey/survey?activity_no=${ACTIVITY_NO}&formType=form`,
+  })
+  await sleep(10000)
+
+  // 清本地草稿：调研页与作答页共用同一份草稿，不清的话初始进度取决于此前答过什么。
+  // 注意 localStorage 是分 origin 的，必须在目标页面上清，清完 reload 让 store 重读。
+  await send('Runtime.evaluate', { expression: 'localStorage.clear()' })
+  await send('Page.reload')
+  await sleep(9000)
+
+  // 轮询等页面真正渲染出来：survey 页首次编译可能超过 10 秒，
+  // 固定 sleep 会把「还没编译完」误判成「初始进度不对」（第 74 轮踩过同款）
+  let surveyState = await readState()
+  for (let i = 0; i < 20 && surveyState.answered === '?'; i++) {
+    await sleep(700)
+    surveyState = await readState()
+  }
+  console.log(`  文本：${surveyState.text.slice(0, 200)}`)
+  console.log(`  初始进度：已答 ${surveyState.answered}`)
+  checks.push({
+    name: '调研页渲染出题目',
+    pass: surveyState.text.includes('共') && surveyState.text.includes('题'),
+  })
+  checks.push({ name: '调研页初始进度为 0（草稿已清）', pass: surveyState.answered === '0' })
+
+  // 作答一题，确认与作答页共用同一套交互
+  await clickSelector(`#${ITEMS.radio} .bx-option:nth-of-type(1)`, '调研页单选题第 1 项')
+  const surveyAfter = await readState()
+  console.log(`  作答一题后：已答 ${surveyAfter.answered}`)
+  checks.push({ name: '调研页可作答（进度 +1）', pass: surveyAfter.answered === '1' })
+
+  // 暂存草稿，确认写请求走的是同一套
+  const surveyDraftBefore = writeRequests.length
+  await clickByText('暂存草稿', '调研页暂存草稿')
+  await sleep(3500)
+  const surveyDrafts = writeRequests.slice(surveyDraftBefore)
+  checks.push({
+    name: '调研页暂存草稿发出保存请求',
+    pass: surveyDrafts.some(r => r.url.includes('activity_result_save')),
+  })
+
+  // 提交后必须落到 survey/result，而不是 index/result
+  if (DO_SUBMIT) {
+    // 补齐剩余必填题
+    await clickSelector(`#${ITEMS.checkbox} .bx-option:nth-of-type(1)`, '调研页多选题第 1 项')
+    await typeInto(`#${ITEMS.text} input`, '调研端到端建议', '调研页填空题')
+    await typeInto(`#${ITEMS.number} input`, '2026', '调研页数字题')
+    await sleep(800)
+    const surveyFilled = await readState()
+    console.log(`  补齐后：已答 ${surveyFilled.answered}`)
+    checks.push({ name: '调研页四题可全部作答', pass: surveyFilled.answered === '4' })
+
+    const surveySubmitBefore = writeRequests.length
+    await clickByText('提交问卷', '调研页提交按钮')
+    await sleep(1200)
+    const surveyModal = await send('Runtime.evaluate', {
+      expression: `(() => {
+        const t = document.body.innerText || ''
+        return { shown: t.includes('确认提交') || t.includes('无法修改') }
+      })()`,
+      returnByValue: true,
+    })
+    if (surveyModal.result.value.shown) {
+      await clickByText('确定', '调研页确认提交')
+      await sleep(7000)
+    }
+    const surveyAfterSubmit = await readState()
+    console.log(`  提交后：${surveyAfterSubmit.text.slice(0, 200)}`)
+    checks.push({
+      name: '调研页提交发出 submit 请求',
+      pass: writeRequests.slice(surveySubmitBefore).some(r => r.url.includes('activity_result_submit')),
+    })
+    // 关键差异点：结果页必须是 survey/result
+    checks.push({
+      name: '调研页提交后跳到 survey/result（而非 index/result）',
+      pass: surveyAfterSubmit.hash.includes('survey/result'),
+    })
+  }
 
   ws.close()
   chrome.kill()
