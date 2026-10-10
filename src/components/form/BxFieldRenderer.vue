@@ -13,6 +13,7 @@ import BxAddressPicker from './BxAddressPicker.vue'
 import BxDatePicker from './BxDatePicker.vue'
 import BxOptionList from './BxOptionList.vue'
 import BxQuestionItem from './BxQuestionItem.vue'
+import BxRefSelector from './BxRefSelector.vue'
 import BxTextField from './BxTextField.vue'
 
 interface Props {
@@ -49,6 +50,8 @@ const kind = computed(() => {
       return 'date'
     case 'address':
       return 'address'
+    case 'ref':
+      return 'ref'
     default:
       return 'unsupported'
   }
@@ -77,6 +80,12 @@ const kind = computed(() => {
     />
     <BxAddressPicker
       v-else-if="kind === 'address'"
+      v-model="value"
+      :field="props.field"
+      :disabled="props.disabled"
+    />
+    <BxRefSelector
+      v-else-if="kind === 'ref'"
       v-model="value"
       :field="props.field"
       :disabled="props.disabled"
