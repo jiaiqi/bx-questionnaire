@@ -158,11 +158,23 @@ class Cdp {
  * 视口：用户明确要求同时适配 PC 与移动端，小程序还要竖屏/横屏两套布局。
  * 横向溢出是最典型的适配缺陷 —— 窄屏下卡片、表格、长文本很容易撑破视口，
  * 表现为整页可以左右拖，移动端尤其明显。
+ *
+ * 「公众号 H5」单列一档：它是**微信内置浏览器**（iOS 上 WKWebView、安卓上 XWeb），
+ * 内核与 Chrome 近似但不相同，且微信会给 UA 加 `MicroMessenger` 标记。真机无法
+ * 本地覆盖，但可以用 `Emulation.setUserAgentOverride` 把 UA 换成微信的，验证页面
+ * 在有微信标记时仍然正常渲染 —— 至少能排除「代码里按 UA 分支却写错了」这类问题。
+ *
+ * `expectWx` 显式声明该视口**期望**是否带微信标记。不要从 name 里推断 ——
+ * 首版写成 `name.includes('微信')`，给 PC 错配 UA 做反向验证时提示语成了
+ * 「期望不带 MicroMessenger，实际 wx=false」，自相矛盾且看不出问题在哪。
  */
+const WX_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128) NetType/WIFI Language/zh_CN'
+
 const VIEWPORTS = [
-  { name: 'PC', width: 1440, height: 900, mobile: false },
-  { name: '移动竖屏', width: 375, height: 812, mobile: true },
-  { name: '移动横屏', width: 812, height: 375, mobile: true },
+  { name: 'PC', width: 1440, height: 900, mobile: false, expectWx: false },
+  { name: '移动竖屏', width: 375, height: 812, mobile: true, expectWx: false },
+  { name: '移动横屏', width: 812, height: 375, mobile: true, expectWx: false },
+  { name: '公众号H5(微信内置)', width: 375, height: 812, mobile: true, ua: WX_UA, expectWx: true },
 ]
 
 async function connect() {
@@ -202,6 +214,11 @@ async function main() {
       deviceScaleFactor: 1,
       mobile: vp.mobile,
     })
+    // UA 必须逐视口设置并复位：不设时会沿用上一个视口的 UA，
+    // 后面新增的视口会静默继承微信标记（反之亦然），测出来的就不是预期环境。
+    await cdp.send('Emulation.setUserAgentOverride', {
+      userAgent: vp.ua ?? '',
+    })
 
     for (const page of PAGES) {
       // 先回空白页：uni-app 的 onLoad 只在页面首次创建时执行，同路径不同 query
@@ -227,7 +244,12 @@ async function main() {
             const text = (root.innerText || '').trim()
             // 横向溢出：整页宽度超过视口即为撑破
             const overflow = Math.max(0, document.documentElement.scrollWidth - window.innerWidth)
-            return { hit, textLen: text.length, head: text.slice(0, 120), overflow }
+            // 顺带回读 UA，确认 setUserAgentOverride 真的生效（否则微信视口是假的）
+            const ua = navigator.userAgent
+            return {
+              hit, textLen: text.length, head: text.slice(0, 120), overflow,
+              wx: ua.includes('MicroMessenger'),
+            }
           })()`,
           returnByValue: true,
         })
@@ -267,6 +289,10 @@ async function main() {
         // 可选：断言首屏文本包含某段内容（用于验证空态/错误态文案）
         expectText: page.expectText,
         textOk: page.expectText ? r.head.includes(page.expectText) : true,
+        // 微信视口必须真的带上 MicroMessenger，否则测的不是微信环境
+        uaOk: r.wx === vp.expectWx,
+        uaIsWx: r.wx,
+        uaExpectWx: vp.expectWx,
       })
     }
   }
@@ -290,13 +316,14 @@ async function main() {
       console.log(`\n── ${r.viewport}（${r.viewportSize}）──`)
     }
     const overflowBad = r.overflow > 1
-    const ok = r.rendered && r.exceptions.length === 0 && r.consoleErrors.length === 0 && r.textOk && !overflowBad
+    const ok = r.rendered && r.exceptions.length === 0 && r.consoleErrors.length === 0 && r.textOk && !overflowBad && r.uaOk
     if (!ok) bad++
-    console.log(`${ok ? '✓' : '✗'} ${r.name}（文本 ${r.textLen} 字${overflowBad ? `，横向溢出 ${r.overflow}px` : ''}）`)
+    console.log(`${ok ? '✓' : '✗'} ${r.name}（文本 ${r.textLen} 字${overflowBad ? `，横向溢出 ${r.overflow}px` : ''}${r.uaOk ? '' : '，UA 不符'}）`)
     if (!r.rendered) console.log(`    未渲染出内容，路由 ${r.route}`)
     if (r.missing.length) console.log(`    未命中 ${r.missing.join(', ')}`)
     if (r.head) console.log(`    首屏：${r.head.replace(/\n/g, ' / ')}`)
     if (r.expectText && !r.textOk) console.log(`    [文案不符] 期望包含「${r.expectText}」`)
+    if (!r.uaOk) console.log(`    [UA 不符] 期望${r.uaExpectWx ? '带' : '不带'} MicroMessenger，实际 ${r.uaIsWx ? '带' : '不带'}`)
     for (const e of r.exceptions) console.log(`    [未捕获异常] ${e.split('\n')[0]}`)
     for (const e of r.consoleErrors) console.log(`    [console.error] ${e.slice(0, 200)}`)
   }
