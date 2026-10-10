@@ -212,16 +212,23 @@ export function applyBackfill(
  * 用结构化参数而不是 api 层类型，避免 domain 反向依赖 api。
  */
 export function toMergeAnswerMap(
-  rows: Array<{ item_seq?: number | null, svalue?: string | null }> | null | undefined,
+  rows: Array<{ item_no?: string | null, item_seq?: number | null, svalue?: string | null }> | null | undefined,
 ): Record<string, string> {
   const map: Record<string, string> = {}
+
   for (const row of rows ?? []) {
-    const seq = row?.item_seq
     const value = row?.svalue
-    if (seq === null || seq === undefined || value === null || value === undefined || String(value) === '') {
+    if (value === null || value === undefined || String(value) === '') {
       continue
     }
-    map[String(seq)] = String(value)
+    // 老工程用 item_no 做键；parkDev 实测该服务返回 item_seq（无 item_no）。
+    // 两个都写进映射，调用方无论用哪个都能命中，避免再次出现"静默匹配不上"。
+    for (const key of [row?.item_no, row?.item_seq]) {
+      if (key !== null && key !== undefined && String(key) !== '') {
+        map[String(key)] = String(value)
+      }
+    }
   }
+
   return map
 }

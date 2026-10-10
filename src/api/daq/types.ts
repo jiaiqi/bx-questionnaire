@@ -117,11 +117,23 @@ export interface DaqRecordReplyRow {
  */
 export interface DaqRecordMergeRow {
   fill_batch_no?: string
+  /**
+   * 题目标识
+   *
+   * 老工程用 `item_no`（index/result.vue 的 `resultListMap[item.item_no]`），
+   * parkDev 实测返回的是 `item_seq` 且没有 `item_no` —— 两个字段都声明并兼容处理。
+   */
+  item_no?: string | null
   item_seq?: number | null
   item_type?: string | null
   item_title?: string | null
   /** 作答值；单选/多选为 option_value */
   svalue?: string | null
+  /** 以下字段来自服务列更完整的环境（老工程依赖它们判断对错），parkDev 未返回 */
+  option_data?: Array<{ option_value?: string, answer?: string, option_view_no?: string | number | null }> | null
+  points?: string | number | null
+  result?: string | null
+  score?: string | number | null
   [k: string]: unknown
 }
 

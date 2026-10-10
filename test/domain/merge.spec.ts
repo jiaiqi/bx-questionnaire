@@ -44,4 +44,17 @@ describe('toMergeAnswerMap', () => {
     expect(map['6']).toBe('2026')
     expect(typeof map['6']).toBe('string')
   })
+
+  it('同时兼容 item_no（老工程）与 item_seq（parkDev 实测）', () => {
+    const map = toMergeAnswerMap([
+      { item_no: 'I001', svalue: 'A' },
+      { item_seq: 2, svalue: 'B' },
+    ])
+    expect(map).toEqual({ I001: 'A', 2: 'B' })
+  })
+
+  it('同一行同时带两个键时都写入，调用方用哪个都能命中', () => {
+    const map = toMergeAnswerMap([{ item_no: 'I003', item_seq: 3, svalue: 'C' }])
+    expect(map).toEqual({ I003: 'C', 3: 'C' })
+  })
 })

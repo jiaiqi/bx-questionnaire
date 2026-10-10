@@ -109,7 +109,9 @@ const rows = computed(() =>
       key: field.key,
       index: field.index,
       label: field.label,
-      mine: serverAnswers.value[String(field.index)]
+      // 老工程按 item_no 取值，parkDev 实测返回 item_seq（映射里两个键都写了），逐个兜底
+      mine: serverAnswers.value[String(field.raw.item_no ?? '')]
+        ?? serverAnswers.value[String(field.index)]
         ?? (describeSelected(field, backfill.value) || '未作答'),
       expected: describeAnswer(field),
     })),
