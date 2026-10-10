@@ -314,6 +314,110 @@ async function main() {
     console.log('\n（未加 --submit，跳过提交，避免产生真实记录）')
   }
 
+  // ── 场景二：必填校验 ────────────────────────────────────────────
+  // 空卷直接提交必须被拦住。这条路径用户一定会遇到，但此前从未验证过。
+  //
+  // 必须先清本地存储：草稿是跨会话保留的，场景一答完的 4 题会被恢复出来，
+  // 「空卷」就变成了「已答 4」—— 首轮就是这么把校验逻辑冤枉成失效的。
+  //
+  // 注意 clear 必须在**目标 origin** 上执行：在 about:blank 上调用清的是空白页
+  // 自己的存储，对 localhost:5174 无效（首轮踩过）。清完要 reload，
+  // 因为 Pinia store 是在应用启动时读存储的。
+  console.log('\n\n=== 场景二：空卷提交应被必填校验拦住 ===')
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/index/index?activity_no=${ACTIVITY_NO}&formType=form&status=进行中`,
+  })
+  await sleep(4000)
+  const cleared = await send('Runtime.evaluate', {
+    expression: `(() => { localStorage.clear(); return Object.keys(localStorage).length })()`,
+    returnByValue: true,
+  })
+  console.log(`  清空本地存储后剩余 key 数：${cleared.result.value}`)
+  await send('Page.reload')
+  await sleep(9000)
+
+  const reqBeforeEmpty = writeRequests.length
+  const emptyState = await readState()
+  console.log(`  初始：已答 ${emptyState.answered}（应清空为 0）`)
+  checks.push({ name: '空卷初始进度为 0', pass: emptyState.answered === '0' })
+
+  await clickByText('提交问卷', '提交问卷按钮（空卷）')
+  await sleep(2500)
+
+  const afterEmptySubmit = await readState()
+  const emptyReqs = writeRequests.slice(reqBeforeEmpty)
+  console.log(`  提交后文本尾部：${afterEmptySubmit.text.slice(-200)}`)
+  console.log(`  新增写请求 ${emptyReqs.length} 个`)
+
+  checks.push({
+    name: '空卷提交被拦住（未发出 submit 请求）',
+    pass: !emptyReqs.some(r => r.url.includes('activity_result_submit')),
+  })
+  checks.push({
+    name: '空卷提交给出必填提示',
+    pass: /必填/.test(afterEmptySubmit.text),
+  })
+  checks.push({
+    name: '空卷提交后仍停留在作答页',
+    pass: afterEmptySubmit.text.includes('提交问卷'),
+  })
+  checks.push({
+    name: '空卷提交不弹二次确认框',
+    pass: !afterEmptySubmit.text.includes('无法修改'),
+  })
+
+  // 只答一题再提交：应仍被拦住（还有 3 题必填未答）
+  console.log('\n  只答第一题后再提交：')
+  await clickSelector(`#${ITEMS.radio} .bx-option`, '单选题第 1 项')
+  await sleep(600)
+  const oneAnswered = await readState()
+  console.log(`  进度：已答 ${oneAnswered.answered}`)
+  checks.push({ name: '只答一题时进度为 1', pass: oneAnswered.answered === '1' })
+
+  const reqBeforePartial = writeRequests.length
+  await clickByText('提交问卷', '提交问卷按钮（只答一题）')
+  await sleep(2500)
+  const afterPartial = await readState()
+  const partialReqs = writeRequests.slice(reqBeforePartial)
+  console.log(`  提交后文本尾部：${afterPartial.text.slice(-200)}`)
+  checks.push({
+    name: '只答一题仍被拦住并提示必填',
+    pass: /必填/.test(afterPartial.text) && afterPartial.text.includes('提交问卷'),
+  })
+  checks.push({
+    name: '只答一题未发出 submit 请求',
+    pass: !partialReqs.some(r => r.url.includes('activity_result_submit')),
+  })
+
+  // ── 场景三：无效活动号 ──────────────────────────────────────────
+  console.log('\n\n=== 场景三：无效活动号应给出错误态 ===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/index/index?activity_no=NOT_EXIST_0000&formType=form`,
+  })
+  await sleep(9000)
+  const invalidState = await readState()
+  console.log(`  文本：${invalidState.text.slice(0, 220)}`)
+  checks.push({
+    name: '无效活动号显示错误态而不是白屏',
+    pass: invalidState.text.length > 10 && !invalidState.text.includes('共 0 题'),
+  })
+
+  // 缺活动号
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/index/index?formType=form`,
+  })
+  await sleep(8000)
+  const noActivity = await readState()
+  console.log(`  缺活动号文本：${noActivity.text.slice(0, 160)}`)
+  checks.push({
+    name: '缺活动号给出明确提示',
+    pass: /缺少活动编号/.test(noActivity.text),
+  })
+
   ws.close()
   chrome.kill()
   try { rmSync(userDataDir, { recursive: true, force: true }) } catch { /* Windows */ }
