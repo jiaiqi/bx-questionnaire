@@ -10,7 +10,7 @@
 | 状态 | Pinia |
 | 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
 | 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
-| 测试 | Vitest（209 项） |
+| 测试 | Vitest（259 项） |
 | 校验 | vue-tsc + ESLint |
 
 `pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
@@ -45,10 +45,10 @@ pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
 常用校验：
 
 ```bash
-pnpm test            # 209 项测试
+pnpm test            # 259 项测试
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
-pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑
+pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑（当前 197 变异 / 存活 0）
 pnpm perf            # 首屏性能基线（需先在 --mode test 下构建并起产物服务）
 pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面 × PC/移动竖屏/移动横屏/公众号H5（需先 pnpm dev h5）
 pnpm a11y            # 可访问性审计：可读名称 / 图片 alt / 真实 Tab 键焦点可见性（需先 pnpm dev h5）
