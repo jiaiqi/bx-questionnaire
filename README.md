@@ -1,0 +1,153 @@
+# 问卷与健康测评（bx-questionnaire）
+
+园区问卷 / 健康测评的前端工程，迁移自旧工程 `questionnaire/`。后端接口**保持不变**，逻辑与 UI/UX 重新实现。
+
+## 技术栈
+
+| 项 | 选择 |
+| --- | --- |
+| 框架 | uni-app（Vue 3 + TypeScript + Vite） |
+| 状态 | Pinia |
+| 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
+| 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
+| 测试 | Vitest（49 项） |
+| 校验 | vue-tsc + ESLint |
+
+`pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
+页面路由由 `@uni-helper/vite-plugin-uni-pages` 扫描 `src/pages/**` 自动生成，**不要手改产物**。
+
+## 目录结构
+
+```
+├── src/
+│   ├── api/                 # 按应用分组的接口封装（daq / config）
+│   ├── components/          # base（基础组件）/ form（题型）/ questionnaire（业务组件）
+│   ├── composables/         # useQuestionnaire 等
+│   ├── domain/questionnaire # 纯逻辑：题型映射、序列化、校验、计分
+│   ├── pages/questionnaire/ # 10 个页面
+│   ├── stores/              # session 等
+│   └── utils/               # request（请求层）/ storage
+├── scripts/                 # 探测与联调脚本（不参与打包）
+├── test/                    # 单元测试 + 集成测试
+├── pages.config.ts          # 路由配置源
+├── manifest.config.ts       # 应用配置源
+└── vite.config.ts           # 含 H5 子路径 base
+```
+
+## 开发
+
+```bash
+pnpm install
+pnpm dev h5          # H5 开发服务（默认 http://localhost:5173/）
+pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
+```
+
+常用校验：
+
+```bash
+pnpm test            # 49 项测试
+pnpm type-check      # vue-tsc
+pnpm lint            # eslint（lint:fix 自动修复）
+pnpm build h5        # 产物 dist/build/h5
+pnpm build mp-weixin # 产物 dist/build/mp-weixin
+```
+
+## 环境变量
+
+见 `.env.example`。分层：
+
+| 文件 | 用途 |
+| --- | --- |
+| `.env` | 各环境共用的应用标识（`VITE_BX_APP` / `VITE_BX_APP_NO` / 微信 appid / 超时） |
+| `.env.development` | 开发网关 `http://192.168.0.214/bxapi`，`VITE_H5_BASE=/` |
+| `.env.production` | 生产网关 `https://www.gxqcxkj.com/bxapi`，`VITE_H5_BASE=/questionnaire/` |
+| `.env.test` | 测试网关（运行时已无兜底默认值，测试必须显式提供） |
+| `.env.local` | **仅本地**联调票据，已在 `.gitignore` 中，**绝不提交** |
+
+**网关没有内置默认值**：`VITE_BX_GATEWAY` 缺失时 `resolveGateway()` 直接抛错。
+这是刻意的 —— 避免生产环境静默请求内网开发网关。
+
+### 联调票据
+
+票据有效期约 1.5 小时（滑动续期），过期表现为 `resultCode=0011` + `请求服务[<service>]需要登录访问`。
+登录接口有频次限制（连续失败锁号 1 小时），所以**只换票、不做自动重登**：
+
+```bash
+BX_USER=<账号> BX_PWD=<密码> node scripts/bx-login.mjs --write
+```
+
+脚本会取 RSA 公钥、调 `srvuser_login`，并把票据写入 `.env.local`。
+
+## 部署
+
+### H5（公众号 / 浏览器）
+
+生产部署在子路径 `/questionnaire/`，且与网关 `/bxapi/` **同域**（这一点很重要，见下）。
+
+```bash
+pnpm build h5   # 产物 dist/build/h5，资源路径自带 /questionnaire/ 前缀
+```
+
+Nginx 参考：
+
+```nginx
+# 前端静态资源
+location /questionnaire/ {
+    alias /srv/bx-questionnaire/dist/build/h5/;
+    try_files $uri $uri/ /questionnaire/index.html;
+}
+
+# 网关反向代理，与前端同域以复用会话 cookie
+location /bxapi/ {
+    proxy_pass http://<内网网关>/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+资源前缀由 `vite.config.ts` 的 `base` 读取 `VITE_H5_BASE` 注入。
+**若部署路径变化，必须同步修改 `.env.production` 的 `VITE_H5_BASE`**，否则资源 404、整站白屏。
+
+路由使用 **hash 模式**，因此不需要服务端 rewrite 支持（`try_files` 只是保险）。
+
+### 微信小程序
+
+```bash
+pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具导入
+```
+
+`manifest.config.ts` 里 `mp-weixin.appid` 沿用旧工程，后端 `app_no` 不变。
+
+## 多端适配
+
+同一套代码覆盖四种形态：
+
+- 浏览器 PC / 移动端
+- 微信小程序（竖屏）
+- 微信小程序 PC 横屏窗口
+- 公众号 H5
+
+布局策略：`.bx-container` 固定最大宽度 `--bx-content-width`（860px）居中，窄屏自动铺满，
+左右内边距 16px（≥760px 时 24px）。
+
+## 接口约定
+
+- 网关形态：`{gateway}/{app}/{action}/{service}`，`select` 类需在 URL 追加 `?{serviceName}`
+- 响应信封：`{ state, resultCode, resultMessage, data, page, response }`
+- 写入（`operate`）请求体是**顶层数组**：`[{ serviceName, data: [...] }]`
+- 鉴权头同时带 `bx_auth_ticket` 与 `bx-auth-ticket`
+
+已知的接口行为差异（实测，详见 `docs` 内方案文档 §11）：
+
+- `srvdaq_record_reply_merge_select` **没有 `activity_no` / `item_no` 列**，题目维度用 `item_seq`，作答值在 `svalue`
+- `srvdaq_item_cfg_select` 的服务端条件过滤不生效，需全量拉取后在前端过滤
+- `srvdaq_record_reply_select` 必须带 `condition`，否则返回「系统繁忙」
+- 记录类服务按**会话**校验：本地开发跨域（`localhost:5173` → 内网）时拿不到数据，
+  结果页会回退本地计算；生产同域部署不受影响
+
+## 相关文档
+
+迁移方案与决策记录见 `bx-health` 仓库的 `docs/questionnaire-migration/`：
+
+- `方案文档.md` —— 方案、真实契约基线、决策记录
+- `prototype.html` —— 可交互原型
