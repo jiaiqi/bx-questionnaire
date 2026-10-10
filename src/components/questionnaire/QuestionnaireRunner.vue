@@ -52,6 +52,14 @@ const errors = ref<Record<string, string>>({})
 
 const title = computed(() => activity.value?.title || '问卷')
 const intro = computed(() => activity.value?.start_remark || '')
+
+/**
+ * 供宿主页面取用（例如小程序的分享标题）
+ *
+ * useQuestionnaire 每次调用都会新建状态，页面拿不到 Runner 内的 activity，
+ * 所以这里把标题暴露出去，页面通过模板 ref 读取。
+ */
+defineExpose({ activityTitle: title })
 /** 已结束的活动按只读展示；formType 为 view / detail 亦为查看模式 */
 const readOnly = computed(() =>
   activity.value?.status === '已结束' || props.formType === 'view' || props.formType === 'detail',

@@ -158,19 +158,39 @@ export function activitySugSelect(params: { activityNo: string, fillBatchNo?: st
   })
 }
 
+/**
+ * 分享记录参数
+ *
+ * 字段名取自老工程 `saveShareRecord`：业务号是 **biz_no**（不是 activity_no），
+ * 另有 biz_type / share_url / from_user / share_type。
+ * 老工程那个方法自己没被调用过，但 record_share_select 有 819 行数据，
+ * 说明该表确实在用，因此保留此封装并把字段名对齐。
+ */
 export interface ShareRecordParams {
-  activityNo: string
+  /** 业务号，问卷场景即活动号 */
+  bizNo: string
+  /** 业务应用，问卷为 daq */
+  bizType?: string
+  /** 分享出去的链接 */
+  shareUrl?: string
+  /** 分享人 user_no */
+  fromUser?: string
+  /** 分享渠道，老工程默认「朋友圈」 */
   shareType?: string
-  [key: string]: unknown
 }
 
 /** 分享记录埋点 */
 export function recordShareAdd(params: ShareRecordParams) {
-  const { activityNo, ...rest } = params
   return bxWrite('add', [
     {
       serviceName: 'srvdaq_record_share_add',
-      data: [{ activity_no: activityNo, ...rest }],
+      data: [{
+        biz_no: params.bizNo,
+        biz_type: params.bizType ?? 'daq',
+        share_url: params.shareUrl ?? '',
+        from_user: params.fromUser ?? '',
+        share_type: params.shareType ?? '朋友圈',
+      }],
     },
   ])
 }
