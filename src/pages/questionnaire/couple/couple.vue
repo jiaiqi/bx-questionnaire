@@ -13,11 +13,11 @@ import type { DaqRecordReplyRow } from '@/api/daq/types'
 import { computed, ref } from 'vue'
 
 import { recordReplySelect } from '@/api/daq/record'
+import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
-import { toast } from '@/utils/ui'
 
 interface AssessmentItem {
   activityNo: string
@@ -31,6 +31,8 @@ const session = useSessionStore()
 
 const loading = ref(true)
 const items = ref<AssessmentItem[]>([])
+/** 加载失败原因：失败必须与「暂无记录」区分开，不能用空态掩盖错误 */
+const errorMessage = ref('')
 
 const userNo = computed(() => session.userInfo?.user_no ?? '')
 
@@ -43,9 +45,16 @@ function formatTime(value?: string | null): string {
 
 async function load(): Promise<void> {
   loading.value = true
+  errorMessage.value = ''
   try {
+    // reply_select 在不带条件时直接 FAILURE，所以未登录要先拦住，别白跑一次请求
+    if (!userNo.value) {
+      errorMessage.value = '未获取到登录信息'
+      return
+    }
+
     const envelope = await recordReplySelect({
-      userNo: userNo.value || undefined,
+      userNo: userNo.value,
       state: '完成',
       rownumber: 100,
     })
@@ -72,7 +81,8 @@ async function load(): Promise<void> {
     }))
   }
   catch (error) {
-    toast(error instanceof BxError ? error.message : '测评记录加载失败')
+    // 不用 toast：失败由页面级错误态呈现，避免同一错误提示两遍
+    errorMessage.value = error instanceof BxError ? error.message : '测评记录加载失败'
   }
   finally {
     loading.value = false
@@ -101,6 +111,15 @@ void load()
     <view class="cp-page__body bx-container">
       <view v-if="loading" class="cp-page__state">
         <text class="cp-page__state-text">正在加载测评记录…</text>
+      </view>
+
+      <view v-else-if="errorMessage" class="cp-page__state">
+        <BxEmpty :text="errorMessage" tip="请确认登录状态后重试" />
+        <view class="cp-page__retry">
+          <BxButton type="ghost" size="small" @click="load">
+            重新加载
+          </BxButton>
+        </view>
       </view>
 
       <BxEmpty
@@ -145,6 +164,13 @@ void load()
 .cp-page__state {
   padding: 64px 0;
   text-align: center;
+}
+
+.cp-page__retry {
+  /* BxButton 基类是块级元素，不套 flex 会撑满整行 */
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 
 .cp-page__state-text {
