@@ -73,13 +73,20 @@ export function activityCfgSelect(activityNo: string) {
   })
 }
 
-/** 活动结束置状态 */
+/**
+ * 更新活动状态（用于把「已结束」的活动置为结束态）
+ *
+ * 契约取自老工程 updateState：
+ * - `condition` 放在 **operate 请求项的顶层**（不是 data 里）；
+ * - `data` 里**只传 status**，不要带 activity_no —— 主键由 condition 指定，
+ *   老工程也只传 status。
+ */
 export function activityCfgUpdate(activityNo: string, status: string) {
   return bxWrite('operate', [
     {
       serviceName: 'srvdaq_activity_cfg_update',
       condition: [{ colName: 'activity_no', ruleType: 'eq', value: activityNo }],
-      data: [{ activity_no: activityNo, status }],
+      data: [{ status }],
     },
   ])
 }
