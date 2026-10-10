@@ -39,6 +39,18 @@ export const useSessionStore = defineStore('session', () => {
     storage.set(STORAGE_KEYS.FILL_BATCH_NO, value)
   }
 
+  /**
+   * 只清批次号，不动登录态
+   *
+   * 对齐老工程 indexyax.vue 的 `beforeDestroy` 里 `setStorageSync('fill_batch_no', '')`：
+   * 离开答题页即作废当前批次，下次进入是新作答，不会续写到已完成的那条记录上。
+   * 注意不能用 `clear()` —— 它会把票据和用户信息一并清掉，等于登出。
+   */
+  function clearFillBatchNo(): void {
+    fillBatchNo.value = ''
+    storage.remove(STORAGE_KEYS.FILL_BATCH_NO)
+  }
+
   function clear(): void {
     ticket.value = ''
     userInfo.value = null
@@ -56,6 +68,7 @@ export const useSessionStore = defineStore('session', () => {
     setTicket,
     setUserInfo,
     setFillBatchNo,
+    clearFillBatchNo,
     clear,
   }
 })

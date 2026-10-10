@@ -23,7 +23,7 @@ import { useSubmit } from '@/composables/useSubmit'
 import { toArray, validateRequired } from '@/domain/questionnaire'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
-import { storage, STORAGE_KEYS } from '@/utils/storage'
+import { draftAnswersKey, storage, STORAGE_KEYS } from '@/utils/storage'
 import { confirmDialog, scrollToSelector, toast } from '@/utils/ui'
 
 interface Props {
@@ -84,9 +84,38 @@ async function init(): Promise<void> {
   if (Object.keys(backfill.value).length > 0) {
     replace(backfill.value)
   }
+  else {
+    // 服务端没有回填（匿名用户拿不到 user_data）时用本地草稿续答：
+    // 否则用户填到一半刷新页面，答案会全部丢失、只恢复批次号。
+    restoreLocalDraft()
+  }
 
   applyEntryPrefill()
   await restoreDraftBatch()
+}
+
+/**
+ * 从本地存储恢复草稿答案
+ *
+ * 只恢复「题目仍然存在」的键：活动配置可能已改，残留的旧键写进 answers 会让
+ * 进度统计把不存在的题算进去。
+ */
+function restoreLocalDraft(): void {
+  const saved = storage.get<Record<string, unknown>>(draftAnswersKey(props.activityNo), {})
+  if (!saved || typeof saved !== 'object') {
+    return
+  }
+
+  const valid: Record<string, AnswerValue> = {}
+  for (const field of fields.value) {
+    if (Object.hasOwn(saved, field.key)) {
+      valid[field.key] = saved[field.key] as AnswerValue
+    }
+  }
+
+  if (Object.keys(valid).length > 0) {
+    replace(valid)
+  }
 }
 
 /**
@@ -155,6 +184,38 @@ watch(
     void init()
   },
   { immediate: true },
+)
+
+/** 本地草稿写入的防抖句柄：逐字符输入不该每次都落盘 */
+let draftPersistTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 答案变化时同步一份到本地
+ *
+ * 服务端草稿虽然也存了，但它是「逐题一条记录」且需要网络；本地这份保证
+ * 刷新/闪退后至少能恢复已答内容。空答案不写入，避免把已有草稿清空。
+ */
+watch(
+  answers,
+  () => {
+    if (draftPersistTimer) {
+      clearTimeout(draftPersistTimer)
+    }
+    draftPersistTimer = setTimeout(() => {
+      draftPersistTimer = null
+      const snapshot: Record<string, AnswerValue> = {}
+      for (const field of fields.value) {
+        const value = answers[field.key]
+        if (value !== undefined && value !== null && toArray(value).length > 0) {
+          snapshot[field.key] = value
+        }
+      }
+      if (Object.keys(snapshot).length > 0) {
+        storage.set(draftAnswersKey(props.activityNo), snapshot)
+      }
+    }, 300)
+  },
+  { deep: true },
 )
 
 function onAnswerChange(field: QuestionField, value: AnswerValue): void {
@@ -233,9 +294,15 @@ async function onSubmit(): Promise<void> {
       return
     }
 
-    if (result.batchNo) {
-      session.setFillBatchNo(result.batchNo)
+    // 提交已落库：批次号与本地草稿一并作废，下次进入是新作答，
+    // 不会续写到这条已完成的记录上。老工程 H5 端的 beforeDestroy 不触发、
+    // 批次号会残留到 storage，再次进入就会写进已完成记录 —— 这里修掉了该缺陷。
+    if (draftPersistTimer) {
+      clearTimeout(draftPersistTimer)
+      draftPersistTimer = null
     }
+    storage.remove(draftAnswersKey(props.activityNo))
+    session.clearFillBatchNo()
     emit('submitted', { batchNo: result.batchNo })
 
     uni.redirectTo({

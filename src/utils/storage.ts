@@ -24,6 +24,16 @@ export const STORAGE_KEYS = {
   SUBMIT_INFO: `${PREFIX}submit_info`,
 } as const
 
+/**
+ * 本地草稿答案的存储 key
+ *
+ * 必须按 activity_no 隔离：同一个用户在多个问卷里各存一份草稿，
+ * 共用一个 key 会让后进入的问卷读到前一份的答案。
+ */
+export function draftAnswersKey(activityNo: string): string {
+  return `${STORAGE_KEYS.DRAFT_ANSWERS}:${activityNo}`
+}
+
 export const storage = {
   get<T>(key: string, fallback: T): T {
     try {
