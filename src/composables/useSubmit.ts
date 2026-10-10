@@ -18,6 +18,8 @@ export interface SubmitParams {
   fillBatchNo?: string
   fields: QuestionField[]
   answers: AnswerMap
+  /** 登记表单字段（company / user_name / user_phone），随提交写入结果表 */
+  extra?: Record<string, string>
 }
 
 export interface SubmitResult {
@@ -49,6 +51,7 @@ export function useSubmit() {
         activityNo: params.activityNo,
         fillBatchNo: params.fillBatchNo,
         itemData,
+        extra: params.extra,
       })
       const payload = extractResponsePayload<{ fill_batch_no?: string }>(envelope)
       return {

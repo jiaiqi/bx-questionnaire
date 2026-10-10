@@ -82,3 +82,21 @@ describe('useSubmit · 防重复提交', () => {
     expect(submitting.value).toBe(false)
   })
 })
+
+describe('useSubmit · 登记表单字段透传', () => {
+  it('extra 原样传给 resultSubmit', async () => {
+    mocks.resultSubmit.mockResolvedValue(okWithBatch('B1'))
+
+    const { submit } = useSubmit()
+    await submit({
+      activityNo: 'A1',
+      fields: [],
+      answers: {},
+      extra: { company: '某单位', user_name: '张三' },
+    })
+
+    expect(mocks.resultSubmit.mock.calls[0]?.[0]).toMatchObject({
+      extra: { company: '某单位', user_name: '张三' },
+    })
+  })
+})

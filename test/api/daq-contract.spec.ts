@@ -24,6 +24,7 @@ import {
   recordReplySelect,
   recordShareAdd,
   resultSave,
+  resultSubmit,
 } from '@/api/daq/record'
 
 const mocks = vi.hoisted(() => ({
@@ -176,5 +177,35 @@ describe('resultSave', () => {
   it('续答时带上 fill_batch_no', () => {
     resultSave({ activityNo: 'A1', fillBatchNo: 'B1', itemData: [] })
     expect(lastWriteArg()[1][0]?.data[0]).toMatchObject({ fill_batch_no: 'B1' })
+  })
+})
+
+describe('result_submit · 登记表单字段', () => {
+  it('extra 里的非空字段进入 data[0]，空值不带进去', async () => {
+    mocks.bxWrite.mockResolvedValue({})
+    await resultSubmit({
+      activityNo: 'A1',
+      fillBatchNo: 'B1',
+      itemData: [],
+      extra: { company: '某单位', user_name: '张三', user_phone: '' },
+    })
+
+    const items = mocks.bxWrite.mock.calls[0]?.[1] as Array<{ data: Array<Record<string, unknown>> }>
+    expect(items[0]!.data[0]).toMatchObject({
+      activity_no: 'A1',
+      fill_batch_no: 'B1',
+      company: '某单位',
+      user_name: '张三',
+    })
+    // 空值不能写进结果表
+    expect(items[0]!.data[0]).not.toHaveProperty('user_phone')
+  })
+
+  it('不传 extra 时请求体保持原样', async () => {
+    mocks.bxWrite.mockResolvedValue({})
+    await resultSubmit({ activityNo: 'A1', itemData: [] })
+
+    const items = mocks.bxWrite.mock.calls[0]?.[1] as Array<{ data: Array<Record<string, unknown>> }>
+    expect(Object.keys(items[0]!.data[0]!).sort()).toEqual(['activity_no', 'item_data'])
   })
 })

@@ -60,6 +60,14 @@ export interface ResultSubmitParams {
   activityNo: string
   fillBatchNo?: string
   itemData: SubmitItem[]
+  /**
+   * 登记表单字段（company / user_name / user_phone）
+   *
+   * 老工程把 submitInfo 展开进提交请求的 data[0]（indexyax.vue 的 `...self.submitInfo`），
+   * 用于填充结果表的 company / user_name / user_phone 三列。
+   * 实测这三列确实存在于结果表（user_phone 还配了前端部分脱敏），故必须一并提交。
+   */
+  extra?: Record<string, string>
 }
 
 /** 提交整卷 */
@@ -70,6 +78,12 @@ export function resultSubmit(params: ResultSubmitParams) {
   }
   if (params.fillBatchNo) {
     data.fill_batch_no = params.fillBatchNo
+  }
+  // 登记表单字段：只带非空值，避免把空字符串写进结果表
+  for (const [key, value] of Object.entries(params.extra ?? {})) {
+    if (value) {
+      data[key] = value
+    }
   }
 
   return bxWrite('operate', [

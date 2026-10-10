@@ -122,8 +122,9 @@ async function restoreDraftBatch(): Promise<void> {
 /**
  * 用登记信息预填同名文本题
  *
- * 老工程把登记表单序列化进 URL 参数却从未消费，这里改为真正生效：
- * 仅在题目尚未作答时，按题目标题关键词预填。
+ * 老工程把登记表单通过 URL 传给 indexyax 并展开进提交请求（...self.submitInfo），
+ * 用于填充结果表的 company / user_name / user_phone；这里额外做一层按题目标题关键词的预填，
+ * 仅在题目尚未作答时生效。
  */
 function applyEntryPrefill(): void {
   const entry = storage.get<Record<string, string>>(STORAGE_KEYS.ENTRY_PARAMS, {})
@@ -207,12 +208,24 @@ async function onSubmit(): Promise<void> {
   // 于是提交也触发一次「首次保存」，两者分属不同批次且批次号互相覆盖
   await waitDraftIdle()
 
+  // 登记表单字段随提交写入结果表：老工程用 ...self.submitInfo 做同样的事，
+  // 只带非空值，避免把空串写进 company / user_name / user_phone
+  const entry = storage.get<Record<string, string>>(STORAGE_KEYS.ENTRY_PARAMS, {})
+  const extra: Record<string, string> = {}
+  for (const key of ['company', 'user_name', 'user_phone'] as const) {
+    const value = entry[key]
+    if (value) {
+      extra[key] = value
+    }
+  }
+
   try {
     const result = await submit({
       activityNo: props.activityNo,
       fillBatchNo: session.fillBatchNo || undefined,
       fields: fields.value,
       answers,
+      extra,
     })
     if (!result.ok) {
       return
