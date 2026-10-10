@@ -27,7 +27,7 @@
 │   ├── pages/questionnaire/ # 10 个页面
 │   ├── stores/              # session 等
 │   └── utils/               # request（请求层）/ storage / query（页面参数解析）
-├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试，不参与打包）
+├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟，均不参与打包）
 ├── test/                    # 单元测试 + 集成测试
 ├── pages.config.ts          # 路由配置源
 ├── manifest.config.ts       # 应用配置源
@@ -49,6 +49,7 @@ pnpm test            # 190 项测试
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑
+pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面（需先 pnpm dev h5）
 pnpm build h5        # 产物 dist/build/h5
 pnpm build mp-weixin # 产物 dist/build/mp-weixin
 ```
