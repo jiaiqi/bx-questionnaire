@@ -71,6 +71,61 @@ if (styleMissing.length > 0) {
   fail(`源码有 <style> 但产物缺 wxss（样式会整页丢失）：${styleMissing.join('、')}`)
 }
 
+// ①c 源码 definePage 里声明的页面配置必须真的进到小程序 page json
+//
+//    这是「静默失效」的产物侧证明。`definePage` 写成**扁平键**能通过类型检查、也会
+//    写进 src/pages.json，但 uni-app 只读 `style` 嵌套 —— 小程序端 page json 完全拿不到，
+//    下拉刷新之类的页面配置就是不生效，且没有任何报错。实测踩过。
+//
+//    单测在源码侧盯扁平键；这里盯最终产物，是链路的最强一环。
+function readDefinePageArg(src) {
+  const idx = src.indexOf('definePage(')
+  if (idx === -1)
+    return null
+  let depth = 0
+  const open = src.indexOf('(', idx)
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '(')
+      depth++
+    else if (src[i] === ')') {
+      depth--
+      if (depth === 0)
+        return src.slice(open + 1, i)
+    }
+  }
+  return null
+}
+
+const PAGE_STYLE_KEYS = ['enablePullDownRefresh', 'disableScroll', 'navigationStyle']
+const styleNotPropagated = []
+for (const p of pages) {
+  const srcFile = join('src', `${p}.vue`)
+  if (!existsSync(srcFile))
+    continue
+  const arg = readDefinePageArg(readFileSync(srcFile, 'utf8'))
+  if (arg === null)
+    continue
+  for (const key of PAGE_STYLE_KEYS) {
+    const declared = new RegExp(`style\\s*:\\s*\\{[^}]*\\b${key}\\s*:\\s*(true|false|'[^']*'|"[^"]*")`).exec(arg)
+    if (!declared)
+      continue
+    const raw = declared[1]
+    const expected = raw === 'true' ? true : raw === 'false' ? false : raw.slice(1, -1)
+    const pageJson = join(ROOT, `${p}.json`)
+    if (!existsSync(pageJson)) {
+      styleNotPropagated.push(`${p}: 缺 page json`)
+      continue
+    }
+    const actual = JSON.parse(readFileSync(pageJson, 'utf8'))[key]
+    if (actual !== expected) {
+      styleNotPropagated.push(`${p}: 源码声明 ${key}=${JSON.stringify(expected)}，产物是 ${JSON.stringify(actual)}`)
+    }
+  }
+}
+if (styleNotPropagated.length > 0) {
+  fail(`definePage 声明的页面配置没有进到小程序 page json（扁平键会被 uni-app 忽略）：${styleNotPropagated.join('；')}`)
+}
+
 // ② 页面数必须与 src/pages 下的页面目录一致（漏页是最隐蔽的回归）
 const SRC_PAGES = 'src/pages'
 function collectPages(dir, acc = []) {

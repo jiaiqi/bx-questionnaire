@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="@uni-helper/vite-plugin-uni-pages/client" />
 
 interface ImportMetaEnv {
   /** 网关地址，如 http://192.168.0.214/bxapi */

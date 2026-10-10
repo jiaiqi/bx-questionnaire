@@ -27,7 +27,20 @@ function loadMore(): void {
   void listRef.value?.loadMore()
 }
 
-defineExpose({ loadMore })
+/**
+ * 下拉刷新
+ *
+ * 老工程 history.vue 有 `onPullDownRefresh`：重置分页后重新拉第一页。
+ * 新工程此前只有触底加载 —— 列表出错或想看到最新记录时，用户没有手动刷新的入口。
+ *
+ * `onPullDownRefresh` 是页面级生命周期，只能在页面文件里调用，所以由页面转发到这里。
+ * 返回 Promise，让页面能等刷新真正结束再收起原生下拉指示器。
+ */
+function refresh(): Promise<void> {
+  return listRef.value?.refresh() ?? Promise.resolve()
+}
+
+defineExpose({ loadMore, refresh })
 </script>
 
 <template>

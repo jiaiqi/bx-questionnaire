@@ -56,6 +56,11 @@ export const ALLOWED = [
     name: 'recordShareAdd',
     reason: '分享埋点刻意未接线：H5 分享需要微信 JSSDK，小程序端需新后端服务，均超出「接口不变」范围',
   },
+  {
+    file: 'src/composables/useRecordHistoryPage.ts',
+    name: 'RECORD_HISTORY_PAGE_STYLE',
+    reason: 'composable 依赖的页面配置契约：页面配置只能在编译期的 definePage 宏里写，运行期改不了，所以这份常量由单测用来校验页面声明是否与之一致 —— 它的消费者就是那个守卫',
+  },
 ]
 
 /**
