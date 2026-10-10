@@ -1,0 +1,54 @@
+<script setup lang="ts">
+/**
+ * 作答记录页正文
+ *
+ * `history/history` 与 `survey/history` 是两个入口，路由即文件路径，
+ * 所以必须是两个页面文件；但正文逻辑只有一份，放在这里共用，
+ * 避免「改一处漏一处」—— 重复代码此前已经让题号与日期格式各出过一次问题。
+ *
+ * `onLoad` / `onReachBottom` 是页面级生命周期，只能在页面文件里调用，
+ * 因此由页面把 activityNo / title 作为 props 传进来，并转发 loadMore。
+ */
+
+import { ref } from 'vue'
+
+import BxEmpty from '@/components/base/BxEmpty.vue'
+import BxNavBar from '@/components/base/BxNavBar.vue'
+import RecordList from '@/components/questionnaire/RecordList.vue'
+
+defineProps<{
+  activityNo: string
+  title: string
+}>()
+
+const listRef = ref<InstanceType<typeof RecordList>>()
+
+function loadMore(): void {
+  void listRef.value?.loadMore()
+}
+
+defineExpose({ loadMore })
+</script>
+
+<template>
+  <view class="history-page">
+    <BxNavBar :title="title" />
+
+    <view class="history-page__body">
+      <RecordList v-if="activityNo" ref="listRef" :activity-no="activityNo" />
+      <BxEmpty v-else text="缺少活动编号" tip="请从问卷页进入记录列表" />
+    </view>
+  </view>
+</template>
+
+<style lang="scss" scoped>
+.history-page {
+  min-height: 100vh;
+  background-color: var(--bx-bg);
+}
+
+.history-page__body {
+  padding-top: 12px;
+  padding-bottom: 24px;
+}
+</style>

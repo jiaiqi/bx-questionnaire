@@ -2,19 +2,18 @@
 /**
  * 调研作答记录页（老工程 survey/history）
  *
- * 与 history/history 同源，仅入口不同。
+ * 与 history/history 是不同入口，路由即文件路径，故各自保留页面文件；
+ * 正文逻辑由 RecordHistory 共用，本文件只做路由适配（onLoad / onReachBottom 是页面级生命周期）
  */
 
 import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 
-import BxEmpty from '@/components/base/BxEmpty.vue'
-import BxNavBar from '@/components/base/BxNavBar.vue'
-import RecordList from '@/components/questionnaire/RecordList.vue'
+import RecordHistory from '@/components/questionnaire/RecordHistory.vue'
 
 const activityNo = ref('')
 const title = ref('作答记录')
-const listRef = ref<InstanceType<typeof RecordList>>()
+const pageRef = ref<InstanceType<typeof RecordHistory>>()
 
 onLoad((query) => {
   activityNo.value = String(query?.activity_no ?? '')
@@ -24,29 +23,10 @@ onLoad((query) => {
 })
 
 onReachBottom(() => {
-  void listRef.value?.loadMore()
+  pageRef.value?.loadMore()
 })
 </script>
 
 <template>
-  <view class="history-page">
-    <BxNavBar :title="title" />
-
-    <view class="history-page__body">
-      <RecordList v-if="activityNo" ref="listRef" :activity-no="activityNo" />
-      <BxEmpty v-else text="缺少活动编号" tip="请从问卷页进入记录列表" />
-    </view>
-  </view>
+  <RecordHistory ref="pageRef" :activity-no="activityNo" :title="title" />
 </template>
-
-<style lang="scss" scoped>
-.history-page {
-  min-height: 100vh;
-  background-color: var(--bx-bg);
-}
-
-.history-page__body {
-  padding-top: 12px;
-  padding-bottom: 24px;
-}
-</style>
