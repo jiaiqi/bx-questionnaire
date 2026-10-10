@@ -16,6 +16,7 @@ import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
+import { formatDateTime } from '@/domain/questionnaire'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 
@@ -35,13 +36,6 @@ const items = ref<AssessmentItem[]>([])
 const errorMessage = ref('')
 
 const userNo = computed(() => session.userInfo?.user_no ?? '')
-
-function formatTime(value?: string | null): string {
-  if (!value) {
-    return ''
-  }
-  return value.length >= 16 ? value.slice(0, 16) : value
-}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -77,7 +71,7 @@ async function load(): Promise<void> {
       title: String(row.title ?? row.activity_no ?? '问卷'),
       score: row.score === null || row.score === undefined ? null : Number(row.score),
       batchNo: String(row.fill_batch_no ?? ''),
-      finishedAt: formatTime(row.end_time ?? row.start_time),
+      finishedAt: formatDateTime(row.end_time ?? row.start_time),
     }))
   }
   catch (error) {

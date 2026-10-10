@@ -18,3 +18,18 @@ export function formatQuestionTitle(
   }
   return /^\d+\s*[.、)）]/.test(text) ? text : `${index}. ${text}`
 }
+
+/**
+ * 时间展示格式化
+ *
+ * 后端返回的是「2026-10-10 10:03:10」这种字符串，只做字符串切片，
+ * **不要用 new Date()** —— iOS Safari 与微信小程序解析带空格的这种格式会得到 Invalid Date。
+ *
+ * 该逻辑原先在 RecordList 与 couple 各写了一份（且完全相同），抽到此处共用。
+ */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return ''
+  }
+  return value.length >= 16 ? value.slice(0, 16) : value
+}

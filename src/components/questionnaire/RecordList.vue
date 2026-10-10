@@ -13,6 +13,7 @@ import { ref } from 'vue'
 import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
+import { formatDateTime } from '@/domain/questionnaire'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { toast } from '@/utils/ui'
@@ -101,13 +102,6 @@ function openDetail(row: DaqRecordReplyRow): void {
   })
 }
 
-function formatTime(value?: string | null): string {
-  if (!value) {
-    return ''
-  }
-  return value.length >= 16 ? value.slice(0, 16) : value
-}
-
 defineExpose({ refresh, loadMore })
 
 void fetchPage(true)
@@ -157,11 +151,11 @@ void fetchPage(true)
         </view>
 
         <view class="record__meta">
-          <text v-if="formatTime(row.start_time)" class="record__meta-text">
-            开始 {{ formatTime(row.start_time) }}
+          <text v-if="formatDateTime(row.start_time)" class="record__meta-text">
+            开始 {{ formatDateTime(row.start_time) }}
           </text>
-          <text v-if="formatTime(row.end_time)" class="record__meta-text">
-            结束 {{ formatTime(row.end_time) }}
+          <text v-if="formatDateTime(row.end_time)" class="record__meta-text">
+            结束 {{ formatDateTime(row.end_time) }}
           </text>
         </view>
 

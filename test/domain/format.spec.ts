@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatQuestionTitle } from '@/domain/questionnaire'
+import { formatDateTime, formatQuestionTitle } from '@/domain/questionnaire'
 
 describe('formatQuestionTitle', () => {
   it('标题已带序号时原样返回，不再重复拼接', () => {
@@ -28,5 +28,27 @@ describe('formatQuestionTitle', () => {
   it('先裁剪首尾空白再判断，避免「 1. 题干」被误判为无序号', () => {
     expect(formatQuestionTitle(1, '  1. 题干  ')).toBe('1. 题干')
     expect(formatQuestionTitle(1, '   题干  ')).toBe('1. 题干')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('裁剪到分钟精度', () => {
+    expect(formatDateTime('2026-10-10 10:03:10')).toBe('2026-10-10 10:03')
+  })
+
+  it('短于 16 位时原样返回', () => {
+    expect(formatDateTime('2026-10-10')).toBe('2026-10-10')
+  })
+
+  it('空值返回空串，调用方可用它决定是否渲染', () => {
+    expect(formatDateTime('')).toBe('')
+    expect(formatDateTime(null)).toBe('')
+    expect(formatDateTime(undefined)).toBe('')
+  })
+
+  it('只做字符串裁剪，不走 new Date —— 否则 iOS/微信小程序会得到 Invalid Date', () => {
+    const out = formatDateTime('2026-10-10 10:03:10')
+    expect(out).not.toContain('Invalid')
+    expect(out).not.toContain('NaN')
   })
 })
