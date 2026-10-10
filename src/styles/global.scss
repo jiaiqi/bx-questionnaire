@@ -18,9 +18,8 @@ uni-page-body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* H5 端 <view> 编译为 <uni-view>：uni-app 内置的元素级规则会盖掉通配选择器（优先级 0,0,0），
- * 导致带 padding 的卡片按 content-box 撑宽、整页横向溢出。
- * 这里连同 uni-* 元素一起提升优先级，统一盒模型。 */
+/* 盒模型统一：H5 端 <view> 编译为 <uni-view>，标签选择器的通配重置优先级（0,0,0）
+ * 可能被 uni-app 内置的元素级规则盖掉，这里连同 uni-* 元素一并声明，避免带 padding 的容器按 content-box 计算。 */
 *,
 *::before,
 *::after,
@@ -55,9 +54,8 @@ button {
  * - 微信小程序移动端竖屏：全宽紧凑。
  */
 .bx-container {
-  /* 显式声明盒模型：H5 端 <view> 编译为 <uni-view>，通配符重置未必覆盖到，
-   * 一旦 box-sizing 失效，width: 100% + padding 就会横向溢出。
-   * width: 100% 也不能省：flex 父级下 margin: 0 auto 会让子项收缩。 */
+  /* width 不能省：flex 父级下 margin: 0 auto 会让子项收缩；
+   * 同时显式声明盒模型，避免依赖通配重置的优先级。 */
   box-sizing: border-box;
   width: 100%;
   max-width: var(--bx-content-width);
