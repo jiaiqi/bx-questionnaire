@@ -46,10 +46,24 @@ async function init(): Promise<void> {
     errorMessage.value = '缺少活动编号，无法查看结果'
     return
   }
-  await load(activityNo.value, {
-    mode: 'plain',
+
+  // 必须用 type=use 且带上 fill_batch_no，服务端才会返回 user_data 作答回填 ——
+  // 这是「我的作答」唯一可用的服务端数据源（merge 服务需要会话，匿名访问拿不到）。
+  // 已结束活动上 type=use 会 FAILURE，此时退回 plain；结果页是只读页面，
+  // 必须关掉 autoUpdateState，不能因为「活动已结束」就去改活动状态。
+  const ok = await load(activityNo.value, {
+    mode: 'use',
     fillBatchNo: batchNo.value || undefined,
+    autoUpdateState: false,
   })
+  if (!ok) {
+    await load(activityNo.value, {
+      mode: 'plain',
+      fillBatchNo: batchNo.value || undefined,
+      autoUpdateState: false,
+    })
+  }
+
   await loadServerResult()
 }
 
