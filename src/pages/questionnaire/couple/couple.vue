@@ -17,6 +17,7 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { formatDateTime } from '@/domain/questionnaire'
+import { answerUrl, resultUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 
@@ -84,15 +85,11 @@ async function load(): Promise<void> {
 }
 
 function openResult(item: AssessmentItem): void {
-  uni.navigateTo({
-    url: `/pages/questionnaire/index/result?activity_no=${item.activityNo}&fill_batch_no=${item.batchNo}`,
-  })
+  uni.navigateTo({ url: resultUrl(item.activityNo, item.batchNo) })
 }
 
 function openRecord(item: AssessmentItem): void {
-  uni.navigateTo({
-    url: `/pages/questionnaire/index/index?formType=detail&activity_no=${item.activityNo}&status=完成&fill_batch_no=${item.batchNo}`,
-  })
+  uni.navigateTo({ url: answerUrl(item.activityNo, { formType: 'detail', status: '完成', fillBatchNo: item.batchNo }) })
 }
 
 /**

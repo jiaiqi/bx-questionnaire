@@ -15,6 +15,7 @@ import { ref } from 'vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import RecordList from '@/components/questionnaire/RecordList.vue'
+import { coverUrl } from '@/domain/questionnaire/routes'
 
 defineProps<{
   activityNo: string
@@ -45,7 +46,7 @@ defineExpose({ loadMore, refresh })
 
 <template>
   <view class="history-page">
-    <BxNavBar :title="title" />
+    <BxNavBar :title="title" :fallback-url="coverUrl(activityNo)" />
 
     <view class="history-page__body">
       <RecordList v-if="activityNo" ref="listRef" :activity-no="activityNo" />

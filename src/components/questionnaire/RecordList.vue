@@ -14,6 +14,7 @@ import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import { formatDateTime } from '@/domain/questionnaire'
+import { answerUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { toast } from '@/utils/ui'
@@ -99,7 +100,11 @@ function openDetail(row: DaqRecordReplyRow): void {
   const state = String(row.state ?? '')
   const formType = state === '未完成' ? 'form' : 'detail'
   uni.navigateTo({
-    url: `/pages/questionnaire/index/index?formType=${formType}&activity_no=${row.activity_no}&status=${state}&fill_batch_no=${row.fill_batch_no}`,
+    url: answerUrl(String(row.activity_no ?? ''), {
+      formType,
+      status: state,
+      fillBatchNo: String(row.fill_batch_no ?? ''),
+    }),
   })
 }
 

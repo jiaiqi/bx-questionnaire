@@ -4,12 +4,22 @@ interface Props {
   showBack?: boolean
   /** 右侧插槽占位高度，避免标题偏移 */
   border?: boolean
+  /**
+   * 页面栈为空时的兜底跳转地址
+   *
+   * 从分享链接 / 扫码直接打开时页面栈只有 1 层，`navigateBack()` 无处可回，
+   * 需要一个兜底页面。**必须由调用方显式给出** —— 这里曾写死
+   * `/pages/questionnaire/cover/index`，但封面页要求 `activity_no`，
+   * 直接 reLaunch 过去会把用户送到「缺少活动编号」错误页，比不跳更糟。
+   */
+  fallbackUrl?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   showBack: true,
   border: true,
+  fallbackUrl: '',
 })
 
 function goBack(): void {
@@ -18,7 +28,10 @@ function goBack(): void {
     uni.navigateBack()
     return
   }
-  uni.reLaunch({ url: '/pages/questionnaire/cover/index' })
+  // 没给兜底地址就不跳：宁可返回键不生效，也不要猜一个缺参数的地址把用户送进错误页
+  if (props.fallbackUrl) {
+    uni.reLaunch({ url: props.fallbackUrl })
+  }
 }
 
 /**

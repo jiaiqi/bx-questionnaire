@@ -10,6 +10,7 @@ import { ref } from 'vue'
 
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import SuggestionPanel from '@/components/questionnaire/SuggestionPanel.vue'
+import { coverUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
 const activityNo = ref('')
@@ -23,7 +24,7 @@ onLoad((query) => {
 
 <template>
   <view class="ar-page">
-    <BxNavBar title="评估结果" />
+    <BxNavBar title="评估结果" :fallback-url="coverUrl(activityNo)" />
 
     <view class="ar-page__body bx-container">
       <SuggestionPanel :activity-no="activityNo" :fill-batch-no="fillBatchNo" />

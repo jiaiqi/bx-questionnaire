@@ -12,6 +12,7 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { answerUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
 const { loading, activity, fields, errorMessage, load } = useQuestionnaire()
@@ -37,9 +38,7 @@ async function init(): Promise<void> {
 }
 
 function start(): void {
-  uni.navigateTo({
-    url: `/pages/questionnaire/index/index?activity_no=${activityNo.value}&formType=form&status=${activity.value?.status ?? '进行中'}`,
-  })
+  uni.navigateTo({ url: answerUrl(activityNo.value, { status: activity.value?.status ?? '进行中' }) })
 }
 </script>
 

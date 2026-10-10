@@ -23,6 +23,7 @@ import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useSubmit } from '@/composables/useSubmit'
 import { fromLocalDraft, toArray, toLocalDraft, validateRequired } from '@/domain/questionnaire'
 import { matchEntryPrefill } from '@/domain/questionnaire/prefill'
+import { coverUrl, historyUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { draftAnswersKey, storage, STORAGE_KEYS } from '@/utils/storage'
@@ -315,11 +316,42 @@ async function onSubmit(): Promise<void> {
     toast(error instanceof BxError ? error.message : '提交失败，请稍后重试')
   }
 }
+
+/** 打开该活动的作答记录（老工程标题栏的「答题记录」） */
+function openHistory(): void {
+  uni.navigateTo({ url: historyUrl(props.activityNo, title.value) })
+}
+
+/** 键盘激活：「记录」是 <view>，天然不可聚焦，键盘用户打不开 */
+function onHistoryKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+    return
+  }
+  event.preventDefault()
+  openHistory()
+}
 </script>
 
 <template>
   <view class="runner">
-    <BxNavBar :title="title" />
+    <BxNavBar :title="title" :fallback-url="coverUrl(props.activityNo)">
+      <template #extra>
+        <!--
+          答题记录入口：老工程在标题栏常驻「答题记录」按钮（无 v-if），
+          新工程此前只能在记录页里手动改 URL 进入，属入口缺失。
+        -->
+        <view
+          class="runner__nav-link"
+          role="button"
+          aria-label="答题记录"
+          tabindex="0"
+          @click="openHistory"
+          @keydown="onHistoryKeydown"
+        >
+          <text class="runner__nav-link-text">记录</text>
+        </view>
+      </template>
+    </BxNavBar>
     <BxProgressBar :percent="progress.percent" />
 
     <view class="runner__body bx-container">
@@ -385,6 +417,26 @@ async function onSubmit(): Promise<void> {
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--bx-bg);
+}
+
+.runner__nav-link {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 8px;
+  cursor: pointer;
+  border-radius: var(--bx-radius);
+}
+
+/* 焦点可见性：uni-app 内置样式把 outline 设成 none */
+.runner__nav-link:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: -2px;
+}
+
+.runner__nav-link-text {
+  font-size: 14px;
+  color: var(--bx-blue);
 }
 
 .runner__body {

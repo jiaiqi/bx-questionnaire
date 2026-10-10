@@ -22,6 +22,8 @@ import {
   serverAnswersToAnswerMap,
   toMergeAnswerMap,
 } from '@/domain/questionnaire'
+import { shouldShowRetryEntry, shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
+import { answerUrl, coverUrl, suggestionUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
@@ -200,7 +202,17 @@ const rows = computed(() =>
 )
 
 /** 活动已结束就不该给「重新测试」入口 —— 点进去也答不了 */
-const canRetry = computed(() => activity.value?.status !== '已结束')
+const canRetry = computed(() => shouldShowRetryEntry(activity.value?.status))
+
+/** 是否显示「查看评估结果」入口（判定规则见 shouldShowSuggestionEntry） */
+const showSuggestionEntry = computed(() =>
+  shouldShowSuggestionEntry(activity.value?.info_collect_type, batchNo.value),
+)
+
+/** 查看评估结果（建议区间来自 srvdaq_activity_sug_select） */
+function openSuggestion(): void {
+  uni.navigateTo({ url: suggestionUrl(activityNo.value, batchNo.value) })
+}
 
 /**
  * 返回问卷封面
@@ -210,9 +222,7 @@ const canRetry = computed(() => activity.value?.status !== '已结束')
  * 带上活动号才是真实可用的页面。
  */
 function goHome(): void {
-  uni.reLaunch({
-    url: `/pages/questionnaire/cover/index?activity_no=${activityNo.value}`,
-  })
+  uni.reLaunch({ url: coverUrl(activityNo.value) })
 }
 
 /**
@@ -222,15 +232,13 @@ function goHome(): void {
  * 这里显式写上，避免依赖默认值。
  */
 function restart(): void {
-  uni.redirectTo({
-    url: `/pages/questionnaire/index/index?activity_no=${activityNo.value}&formType=form&status=进行中`,
-  })
+  uni.redirectTo({ url: answerUrl(activityNo.value, { status: '进行中' }) })
 }
 </script>
 
 <template>
   <view class="r-page">
-    <BxNavBar title="作答结果" />
+    <BxNavBar title="作答结果" :fallback-url="coverUrl(activityNo)" />
 
     <view class="r-page__body bx-container">
       <view v-if="loading" class="r-page__state">
@@ -316,6 +324,9 @@ function restart(): void {
         </view>
 
         <view class="r-page__actions">
+          <BxButton v-if="showSuggestionEntry" type="ghost" block @click="openSuggestion">
+            查看评估结果
+          </BxButton>
           <BxButton v-if="canRetry" block @click="restart">
             重新测试
           </BxButton>

@@ -11,6 +11,7 @@ import { ref } from 'vue'
 
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import QuestionnaireRunner from '@/components/questionnaire/QuestionnaireRunner.vue'
+import { queryString, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
 const activityNo = ref('')
@@ -26,21 +27,22 @@ onLoad((query) => {
   fillBatchNo.value = readQuery(query, 'fill_batch_no')
 })
 
-/** 分享路径与老工程一致：好友点开可直接作答 */
-const shareQuery = () => `formType=form&activity_no=${activityNo.value}&status=进行中`
-
 function shareTitle(): string {
   return String(runner.value?.activityTitle || '邀请你填写问卷')
 }
-
+/**
+ * 分享给好友：`path` 不带前导 `/` 是 `onShareAppMessage` 的要求
+ * 与老工程一致，好友点开可直接作答。
+ */
 onShareAppMessage(() => ({
   title: shareTitle(),
-  path: `/pages/questionnaire/index/index?${shareQuery()}`,
+  path: `/${shareAnswerPath(activityNo.value)}`,
 }))
 
+/** 分享到朋友圈：`query` 只接受查询串，不能带页面路径 */
 onShareTimeline(() => ({
   title: shareTitle(),
-  query: shareQuery(),
+  query: queryString({ formType: 'form', activity_no: activityNo.value, status: '进行中' }),
 }))
 </script>
 

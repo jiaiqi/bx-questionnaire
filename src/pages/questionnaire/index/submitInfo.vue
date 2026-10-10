@@ -15,6 +15,7 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useAriaLabel } from '@/composables/useAriaLabel'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { answerUrl, coverUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 import { storage, STORAGE_KEYS } from '@/utils/storage'
 import { toast } from '@/utils/ui'
@@ -68,15 +69,13 @@ function onNext(): void {
     user_phone: userPhone.value.trim(),
   })
 
-  uni.navigateTo({
-    url: `/pages/questionnaire/index/index?activity_no=${activityNo.value}&formType=form&status=进行中`,
-  })
+  uni.navigateTo({ url: answerUrl(activityNo.value, { status: '进行中' }) })
 }
 </script>
 
 <template>
   <view class="si-page">
-    <BxNavBar :title="title" />
+    <BxNavBar :title="title" :fallback-url="coverUrl(activityNo)" />
 
     <view class="si-page__body bx-container">
       <view class="si-card">
