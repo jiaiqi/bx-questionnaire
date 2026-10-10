@@ -31,6 +31,12 @@ export function useSubmit() {
   const submitting = ref(false)
 
   async function submit(params: SubmitParams): Promise<SubmitResult> {
+    // 函数级防重：不能只依赖按钮的 loading 态 —— 那是 UI 层的保证，
+    // 任何绕过 UI 的调用（快捷入口、重复触发）都会造成重复提交。
+    if (submitting.value) {
+      return { ok: false, batchNo: params.fillBatchNo ?? '', firstIssueKey: '' }
+    }
+
     const issues = validateRequired(params.fields, params.answers)
     if (issues.length > 0) {
       return { ok: false, batchNo: params.fillBatchNo ?? '', firstIssueKey: issues[0]!.key }
