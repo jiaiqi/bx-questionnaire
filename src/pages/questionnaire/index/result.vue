@@ -24,8 +24,6 @@ const batchNo = ref('')
 const serverScore = ref<number | null>(null)
 const serverState = ref('')
 const serverAnswers = ref<Record<string, string>>({})
-/** 服务端结果不可用时的原因（仅内部记录，不打扰用户） */
-const serverTip = ref('')
 
 onLoad((query) => {
   activityNo.value = String(query?.activity_no ?? '')
@@ -73,12 +71,9 @@ async function loadServerResult(): Promise<void> {
         : Number(rawScore)
       serverState.value = String(record.state ?? '')
     }
-    else {
-      serverTip.value = '未查到作答记录'
-    }
   }
-  catch (error) {
-    serverTip.value = `记录查询失败：${error instanceof Error ? error.message : String(error)}`
+  catch {
+    // 结果页容错：拿不到服务端记录时保持本地计算结果
   }
 
   try {
@@ -96,8 +91,8 @@ async function loadServerResult(): Promise<void> {
     }
     serverAnswers.value = map
   }
-  catch (error) {
-    serverTip.value += `${serverTip.value ? '；' : ''}汇总查询失败：${error instanceof Error ? error.message : String(error)}`
+  catch {
+    // 维度汇总在部分活动上没有数据，失败不影响得分展示
   }
 }
 
@@ -155,7 +150,7 @@ function goHome(): void {
         <view class="r-card">
           <text class="r-card__title">{{ activity?.title || '问卷' }}</text>
 
-          <text v-if="serverTip" style="display:block;font-size:12px;color:#F53F3F">{{ serverTip }}</text>`n          <view v-if="hasScore" class="r-score">
+          <view v-if="hasScore" class="r-score">
             <text class="r-score__value">{{ score.score }}</text>
             <text class="r-score__unit">/ {{ score.total }} 分</text>
           </view>
