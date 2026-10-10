@@ -871,6 +871,129 @@ async function main() {
   checks.push({ name: '登记信息写入本地存储', pass: String(entry.result.value).includes('测试单位') })
   checks.push({ name: '登记信息含姓名与手机号', pass: String(entry.result.value).includes('13800138000') })
 
+  // ── 场景九：我的测评（couple）──────────────────────────────────
+  // couple 依赖 session.userInfo.user_no 过滤「完成」记录，同一问卷多次作答取最近一次。
+  // 浏览器端默认没有登录态，只会走「未获取到登录信息」的降级路径 —— 那条路径
+  // 前面已经验证过。这里注入真实 user_no 来验证真正的列表逻辑。
+  //
+  // 服务端实测：user_no 过滤确实生效（用 fc2cfd47... 查到 1 行）；
+  // 且登录态的 user_no 就是账号名本身（实测存在 user_no="jq" 的完成记录），
+  // 匿名作答时才是随机 hex。所以注入 user_no='jq' 等价于真实登录用户。
+  console.log('\n\n=== 场景九：我的测评（注入登录态）===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', { url: `${BASE}/#/pages/questionnaire/couple/couple` })
+  await sleep(8000)
+
+  // 注入登录用户信息：store 在启动时读 storage，所以要写完再 reload
+  const injected = await send('Runtime.evaluate', {
+    expression: `(() => {
+      try {
+        uni.setStorageSync('login_user_info', { user_no: 'jq', user_name: 'jq', user_type: '1' })
+        return String(uni.getStorageSync('login_user_info').user_no || '')
+      }
+      catch (e) { return 'ERR:' + e.message }
+    })()`,
+    returnByValue: true,
+  })
+  console.log(`  注入 user_no：${JSON.stringify(injected.result.value)}`)
+  checks.push({ name: '登录态注入成功', pass: injected.result.value === 'jq' })
+
+  // 捕获所有 select 请求体：couple 显示「暂无记录」而不是「加载失败」，
+  // 说明请求成功但返回 0 行，必须看实际发出去的 condition 才能定位
+  const selectReqs = []
+  const selectReqIds = []
+  const onSelect = (m) => {
+    if (m.method !== 'Network.requestWillBeSent') return
+    const u = m.params.request.url || ''
+    if (!u.includes('/select/')) return
+    const h = m.params.request.headers || {}
+    const authKeys = Object.keys(h).filter(k => /auth|ticket|cookie/i.test(k))
+    selectReqs.push({
+      url: u.split('/select/')[1]?.split('?')[0],
+      post: m.params.request.postData ?? null,
+      authHeaders: authKeys.map(k => `${k}=${String(h[k]).slice(0, 24)}…`),
+    })
+    selectReqIds.push(m.params.requestId)
+  }
+  ws.addEventListener('message', (ev) => {
+    try { onSelect(JSON.parse(ev.data)) } catch { /* 忽略 */ }
+  })
+  await send('Network.enable')
+
+  // 决定性验证：脚本探测同一条件能查到 11 行，浏览器却 0 行。
+  // 唯一差异是浏览器请求带 Cookie（withCredentials: true）—— 服务端可能按会话身份
+  // 二次过滤。先清掉 Cookie 再试，若数据出现即证明是会话过滤（平台行为，非产品缺陷）。
+  await send('Network.clearBrowserCookies')
+  console.log('  已清浏览器 Cookie')
+
+  await send('Page.reload')
+  // 请求要跑网络，轮询等列表出现
+  let coupleState = await readState()
+  for (let i = 0; i < 20 && !coupleState.text.includes('批次'); i++) {
+    await sleep(800)
+    coupleState = await readState()
+  }
+  console.log(`  页面文本：${coupleState.text.slice(0, 220)}`)
+  console.log(`  发出的 select 请求 ${selectReqs.length} 个：`)
+  for (const r of selectReqs) {
+    console.log(`    ${r.url}`)
+    console.log(`      体：${r.post}`)
+    console.log(`      认证相关头：${JSON.stringify(r.authHeaders)}`)
+  }
+
+  // 请求体正确却 0 行：用 CDP 直接读服务端响应体，看它到底返回了什么
+  for (const rid of selectReqIds) {
+    try {
+      const body = await send('Network.getResponseBody', { requestId: rid })
+      console.log(`  响应体[${rid.slice(-6)}]：${String(body.body).slice(0, 400)}`)
+    } catch (e) {
+      console.log(`  响应体[${rid.slice(-6)}]：读取失败 ${e.message}`)
+    }
+  }
+  checks.push({
+    name: '我的测评渲染出记录卡片',
+    pass: coupleState.text.includes('批次') && coupleState.text.includes('查看结果'),
+  })
+  checks.push({ name: '我的测评显示查看作答入口', pass: coupleState.text.includes('查看作答') })
+  checks.push({
+    name: '我的测评不再显示未获取登录信息',
+    pass: !coupleState.text.includes('未获取到登录信息'),
+  })
+
+  // 同一问卷多次作答只保留最近一次。
+  //
+  // 注意不能断言「卡片总数 === 1」：jq 在服务端有 11 条完成记录，涉及 8 个不同
+  // 活动，所以卡片本来就该有 8 张（首轮就是按 1 张写的，误判成失败）。
+  // 正确的断言是「本测试活动在列表里只出现一次」—— 它实际有 2 条完成记录
+  // （批次 9118ea27… 与 aba2358c…），聚合后只应保留较新的那条。
+  const aggProbe = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const cards = [...document.querySelectorAll('.cp-card')]
+      const titles = cards.map(e => (e.innerText || '').split('\\n')[0].trim())
+      const target = titles.filter(t => t.includes('bxq 自动化测试问卷')).length
+      return { total: cards.length, target, titles: [...new Set(titles)] }
+    })()`,
+    returnByValue: true,
+  })
+  console.log(`  卡片数：${aggProbe.result.value.total}，其中本测试活动出现 ${aggProbe.result.value.target} 次`)
+  checks.push({
+    name: '同一问卷多次作答聚合为一张卡片',
+    pass: aggProbe.result.value.target === 1,
+  })
+  checks.push({ name: '我的测评列出多个活动的记录', pass: aggProbe.result.value.total > 1 })
+
+  // 点「查看作答」应走详情模式
+  await clickByText('查看作答', '我的测评查看作答')
+  await sleep(8000)
+  const afterCouple = await readState()
+  console.log(`  跳转 hash：${afterCouple.hash.slice(0, 120)}`)
+  checks.push({
+    name: '我的测评点查看作答走详情模式',
+    pass: afterCouple.hash.includes('formType=detail') && afterCouple.hash.includes('fill_batch_no'),
+  })
+  checks.push({ name: '我的测评详情页只读', pass: !afterCouple.text.includes('提交问卷') })
+
   ws.close()
   chrome.kill()
   try { rmSync(userDataDir, { recursive: true, force: true }) } catch { /* Windows */ }
