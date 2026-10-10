@@ -190,6 +190,9 @@ void fetchPage(true)
 }
 
 .records__retry {
+  /* BxButton 基类是块级元素，不套 flex 会撑满整行 */
+  display: flex;
+  justify-content: center;
   margin-top: 16px;
 }
 
