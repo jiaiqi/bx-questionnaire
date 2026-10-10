@@ -12,12 +12,13 @@
  * 反过来，H5 端若误用 rpx，uni-app 也会按 375 基准换算，同样不该出现。
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 const SRC = join(__dirname, '..', 'src')
+const MP_DIST = join(__dirname, '..', 'dist', 'build', 'mp-weixin')
 
 function walk(dir: string): string[] {
   const out: string[] = []
@@ -66,5 +67,42 @@ describe('样式单位约束', () => {
     const m = tokens.match(/--bx-content-width:\s*(\d+)px/)
     expect(m, 'tokens.scss 应定义 --bx-content-width（px）').not.toBeNull()
     expect(Number(m![1])).toBeGreaterThan(0)
+  })
+
+  /**
+   * 产物侧的守卫
+   *
+   * 只扫 src 是不够的：`@uni-helper/unocss-preset-uni` 会把工具类里的 px 换算成
+   * rpx（实测 `.px` 类产出 `padding-left:32rpx`）。那个类本项目从未使用，属于
+   * 预设的固定产物，风险低 —— 但**只扫 src 的测试发现不了它**，于是「零 rpx」
+   * 这条约束在产物层面是无人看管的。
+   *
+   * 这里断言产物里的 rpx 只出现在已知的 UnoCSS 工具类选择器里。若哪天有人
+   * 在 `.vue` 里写了 rpx 又被预处理器换算进产物，或预设新增了 rpx 工具类，
+   * 这条会变红。
+   */
+  it('小程序产物里的 rpx 只来自 UnoCSS 预设的工具类（src 侧已单独守住）', () => {
+    const wxss = join(MP_DIST, 'app.wxss')
+    if (!existsSync(wxss)) {
+      // 未构建时跳过 —— 构建产物是外部条件，不该让单测在干净检出上失败
+      return
+    }
+    const css = readFileSync(wxss, 'utf8')
+    // 允许清单：UnoCSS 预设产出的固定工具类（本项目未使用，仅随预设带出）
+    const ALLOWED = ['.px{padding-left:32rpx;padding-right:32rpx}']
+    const offenders: string[] = []
+    const re = /[^{}]*\{[^{}]*\d(?:\.\d+)?rpx[^{}]*\}/g
+    let m = re.exec(css)
+    while (m !== null) {
+      const rule = m[0].trim()
+      if (!ALLOWED.includes(rule)) {
+        offenders.push(rule.slice(0, 120))
+      }
+      m = re.exec(css)
+    }
+    expect(
+      offenders,
+      '小程序产物里出现非预期的 rpx 规则：rpx 在 PC 横屏会等比放大，请改用 px',
+    ).toEqual([])
   })
 })

@@ -13,6 +13,7 @@ import { computed, ref } from 'vue'
 
 import BxButton from '@/components/base/BxButton.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
+import { useAriaLabel } from '@/composables/useAriaLabel'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { readQuery } from '@/utils/query'
 import { storage, STORAGE_KEYS } from '@/utils/storage'
@@ -24,6 +25,14 @@ const activityNo = ref('')
 const company = ref('')
 const userName = ref('')
 const userPhone = ref('')
+
+// 把可读名称补到内层原生 input 上：aria-label 留在外层 uni-input 时屏幕阅读器读不到
+const companyRef = ref<HTMLElement | null>(null)
+const userNameRef = ref<HTMLElement | null>(null)
+const userPhoneRef = ref<HTMLElement | null>(null)
+useAriaLabel(companyRef, () => '所属单位')
+useAriaLabel(userNameRef, () => '姓名')
+useAriaLabel(userPhoneRef, () => '联系电话')
 
 const title = computed(() => activity.value?.title || '填写信息')
 const intro = computed(() => activity.value?.start_remark || '')
@@ -82,8 +91,9 @@ function onNext(): void {
             <text class="si-field__required">*</text>
           </view>
           <input
+            ref="companyRef"
             v-model="company"
-            v-aria-label="'所属单位'"
+            aria-label="所属单位"
             class="si-field__input"
             placeholder="请输入所属单位"
             placeholder-class="si-field__placeholder"
@@ -96,8 +106,9 @@ function onNext(): void {
             <text class="si-field__label">姓名</text>
           </view>
           <input
+            ref="userNameRef"
             v-model="userName"
-            v-aria-label="'姓名'"
+            aria-label="姓名"
             class="si-field__input"
             placeholder="请输入姓名"
             placeholder-class="si-field__placeholder"
@@ -110,8 +121,9 @@ function onNext(): void {
             <text class="si-field__label">联系电话</text>
           </view>
           <input
+            ref="userPhoneRef"
             v-model="userPhone"
-            v-aria-label="'联系电话'"
+            aria-label="联系电话"
             class="si-field__input"
             type="number"
             placeholder="请输入手机号码"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 interface Props {
   field: QuestionField
@@ -25,16 +25,20 @@ const text = computed(() => {
 const isTextarea = computed(() => props.field.widget === 'textarea')
 const isNumber = computed(() => props.field.widget === 'number')
 
+// 把可读名称补到内层原生控件上：aria-label 留在外层 uni-input 时屏幕阅读器读不到
+const rootRef = ref<HTMLElement | null>(null)
+useAriaLabel(rootRef, () => props.field.label)
+
 function onInput(event: { detail: { value: string } }): void {
   emit('update:modelValue', event.detail.value)
 }
 </script>
 
 <template>
-  <view class="bx-text">
+  <view ref="rootRef" class="bx-text">
     <textarea
       v-if="isTextarea"
-      v-aria-label="props.field.label"
+      :aria-label="props.field.label"
       class="bx-text__control bx-text__control--area"
       :value="text"
       :disabled="props.disabled"
@@ -45,7 +49,7 @@ function onInput(event: { detail: { value: string } }): void {
     />
     <input
       v-else
-      v-aria-label="props.field.label"
+      :aria-label="props.field.label"
       class="bx-text__control"
       :value="text"
       :disabled="props.disabled"

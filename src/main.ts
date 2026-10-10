@@ -2,7 +2,6 @@ import * as Pinia from 'pinia'
 import { createSSRApp } from 'vue'
 
 import App from './App.vue'
-import { vAriaLabel } from './directives/aria-label'
 import 'uno.css'
 
 /**
@@ -25,8 +24,6 @@ if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
 export function createApp() {
   const app = createSSRApp(App)
   app.use(Pinia.createPinia())
-  // 把可读名称写到 uni-app 真正渲染出的原生控件上（见 directives/aria-label.ts）
-  app.directive('aria-label', vAriaLabel)
   return {
     app,
     Pinia,

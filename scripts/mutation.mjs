@@ -100,7 +100,7 @@ const TARGETS = [
   { file: 'src/stores/session.ts', test: 'test/utils/draft-storage.spec.ts' },
   { file: 'src/utils/request/env.ts', test: 'test/utils/request.spec.ts' },
   { file: 'src/api/file/attachment.ts', test: 'test/api/attachment.spec.ts' },
-  { file: 'src/directives/aria-label.ts', test: 'test/directives/aria-label.spec.ts' },
+  { file: 'src/composables/useAriaLabel.ts', test: 'test/composables/useAriaLabel.spec.ts' },
   { file: 'src/utils/ui.ts', test: 'test/utils/ui.spec.ts' },
   { file: 'src/api/config/area.ts', test: 'test/api/area.spec.ts' },
 ]
