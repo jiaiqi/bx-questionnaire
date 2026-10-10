@@ -128,7 +128,10 @@ export function recordReplySelect(query: RecordReplyQuery = {}) {
     serviceName: 'srvdaq_record_reply_select',
     colNames: ['*'],
     condition,
-    order: query.order ?? [{ colName: 'start_time', ruleType: 'desc' }],
+    // 实测：该服务**不接受 order** —— 传任何排序字段（start_time / end_time / id / create_time，
+    // asc 或 desc）都会返回 0 条且不报错，属静默失效。老工程 history.vue 也未传 order。
+    // 因此默认不传，仅在调用方显式要求时才带上。
+    ...(query.order?.length ? { order: query.order } : {}),
     page: {
       pageNo: query.pageNo ?? 1,
       rownumber: query.rownumber ?? 20,

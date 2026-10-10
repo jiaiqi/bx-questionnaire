@@ -128,11 +128,20 @@ describe('recordReplyMergeSelect', () => {
 })
 
 describe('recordReplySelect', () => {
-  it('按需组装条件，并给出默认排序与分页', () => {
+  it('按需组装条件，并给出分页', () => {
     recordReplySelect({ activityNo: 'A1', userNo: 'u1', state: '完成' })
     expect(conditionCols()).toEqual(['activity_no', 'user_no', 'state'])
-    expect(lastSelectArg().order).toEqual([{ colName: 'start_time', ruleType: 'desc' }])
     expect(lastSelectArg().page).toEqual({ pageNo: 1, rownumber: 20 })
+  })
+
+  it('默认不传 order：该服务传任何排序字段都会返回 0 条（实测静默失效）', () => {
+    recordReplySelect({ activityNo: 'A1' })
+    expect(lastSelectArg().order).toBeUndefined()
+  })
+
+  it('调用方显式要求时才带上 order', () => {
+    recordReplySelect({ activityNo: 'A1', order: [{ colName: 'start_time', ruleType: 'desc' }] })
+    expect(lastSelectArg().order).toEqual([{ colName: 'start_time', ruleType: 'desc' }])
   })
 
   it('传入的条件都可被裁剪，不传即不拼', () => {
