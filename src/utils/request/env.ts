@@ -1,13 +1,12 @@
 /**
  * 运行时环境解析
  *
- * 网关优先级：H5 宿主注入（iframe 嵌入老门户） > 构建期环境变量 > 默认开发网关。
+ * 网关优先级：H5 宿主注入（iframe 嵌入老门户） > 构建期环境变量。
+ * 没有兜底默认值：环境变量缺失时直接报错，避免生产静默连到内网开发环境。
  * 票据优先级：本地存储（登录/授权链路写入） > 构建期联调票据（仅开发环境）。
  */
 
 import { SHARED_KEYS, storage } from '@/utils/storage'
-
-const DEFAULT_GATEWAY = 'http://192.168.0.214/bxapi'
 
 /** 宿主门户注入的运行时配置（老门户 iframe 场景） */
 interface HostPathConfig {
@@ -57,7 +56,12 @@ export function resolveGateway(): string {
   if (fromHost) {
     return fromHost
   }
-  return normalizeGateway(import.meta.env.VITE_BX_GATEWAY) || DEFAULT_GATEWAY
+  const gateway = normalizeGateway(import.meta.env.VITE_BX_GATEWAY)
+  if (!gateway) {
+    // 刻意不提供默认值：缺失时立刻暴露，否则生产环境会静默请求内网开发网关
+    throw new Error('未配置网关地址（VITE_BX_GATEWAY）')
+  }
+  return gateway
 }
 
 /** 解析当前生效的票据 */
