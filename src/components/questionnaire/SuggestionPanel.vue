@@ -42,13 +42,22 @@ async function load(): Promise<void> {
     errorMessage.value = '缺少活动编号'
     return
   }
+  // 老工程 assessmentResult.vue 的 onLoad 是 `if (option.activity_no && option.fill_batch_no)`
+  // —— 两个参数都有才发请求。缺批次号时服务端返回的是「系统繁忙，请稍后再试」，
+  // 那是网关的兜底文案，用户看不懂，也没法据此判断该怎么办。
+  // 这里保留同样的拦截，但给出明确提示（老工程是页面全空白）。
+  if (!props.fillBatchNo) {
+    errorMessage.value = '缺少作答批次号'
+    loaded.value = true
+    return
+  }
 
   loading.value = true
   errorMessage.value = ''
   try {
     const envelope = await activitySugSelect({
       activityNo: props.activityNo,
-      fillBatchNo: props.fillBatchNo || undefined,
+      fillBatchNo: props.fillBatchNo,
     })
     suggestions.value = envelope.data ?? []
   }
