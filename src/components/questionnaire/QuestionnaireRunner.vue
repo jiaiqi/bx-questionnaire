@@ -45,7 +45,7 @@ const emit = defineEmits<{ submitted: [{ batchNo: string }] }>()
 const session = useSessionStore()
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 const { answers, progress, replace } = useAnswerModel(() => fields.value)
-const { savedTip, save: saveDraftItem, saveAll: saveAllDraft } = useDraft()
+const { savedTip, save: saveDraftItem, saveAll: saveAllDraft, waitIdle: waitDraftIdle } = useDraft()
 const { submitting, submit } = useSubmit()
 
 const errors = ref<Record<string, string>>({})
@@ -173,6 +173,8 @@ function onAnswerChange(field: QuestionField, value: AnswerValue): void {
 }
 
 async function onSaveDraft(): Promise<void> {
+  // 先等自动保存排空，避免「暂存草稿」与逐题自动保存并发写同一批次
+  await waitDraftIdle()
   await saveAllDraft({
     activityNo: props.activityNo,
     fillBatchNo: session.fillBatchNo || undefined,
@@ -200,6 +202,10 @@ async function onSubmit(): Promise<void> {
   if (!confirmed) {
     return
   }
+
+  // 先等草稿队列排空：否则草稿与提交并发，提交那一刻批次号可能还是空的，
+  // 于是提交也触发一次「首次保存」，两者分属不同批次且批次号互相覆盖
+  await waitDraftIdle()
 
   try {
     const result = await submit({

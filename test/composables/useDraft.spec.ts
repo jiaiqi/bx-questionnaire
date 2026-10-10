@@ -112,3 +112,39 @@ describe('useDraft · 批次号', () => {
     expect(got).toEqual(['B9'])
   })
 })
+
+describe('useDraft · waitIdle', () => {
+  it('等到队列排空才返回，保证提交前草稿已落库并拿到批次号', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    mocks.resultSave.mockImplementationOnce(async () => {
+      await gate
+      return okWithBatch('B1')
+    })
+
+    const draft = useDraft()
+    void draft.save({ activityNo: 'A1', field: fieldOf('k1'), answers: { k1: 'x' } })
+
+    let idle = false
+    const waiting = draft.waitIdle().then(() => {
+      idle = true
+    })
+
+    // 请求尚未返回，waitIdle 不能提前结束，否则提交会与草稿并发
+    await Promise.resolve()
+    expect(idle).toBe(false)
+
+    release()
+    await waiting
+    expect(idle).toBe(true)
+    expect(mocks.resultSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('没有进行中的保存时立即返回', async () => {
+    const draft = useDraft()
+    await expect(draft.waitIdle()).resolves.toBeUndefined()
+    expect(mocks.resultSave).not.toHaveBeenCalled()
+  })
+})

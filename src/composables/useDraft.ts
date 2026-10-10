@@ -50,6 +50,9 @@ export function useDraft() {
    */
   let currentBatchNo = ''
 
+  /** 正在进行的 flush，用于让提交前能等待队列排空 */
+  let inflight: Promise<void> | null = null
+
   async function flush(): Promise<void> {
     saving.value = true
     failed.value = false
@@ -99,11 +102,29 @@ export function useDraft() {
       onBatchNo: params.onBatchNo,
     })
 
-    // 已有 flush 在跑时，本次入队后直接返回
-    if (saving.value) {
-      return
+    if (!inflight) {
+      inflight = flush().finally(() => {
+        inflight = null
+      })
     }
-    await flush()
+    await inflight
+  }
+
+  /**
+   * 等待草稿队列排空
+   *
+   * 提交前必须调用：否则「答完最后一题立刻提交」时草稿请求与提交请求并发，
+   * 提交那一刻 session.fillBatchNo 还是空的，提交也被当成首次保存，
+   * 平台再分配一个批次号 —— 草稿与提交分属两个批次，两个响应还会互相覆盖批次号。
+   * 等待排空后草稿先落库并回传批次号，提交就能落在同一批次上。
+   */
+  async function waitIdle(): Promise<void> {
+    // 等待期间可能有新任务入队并开启新一轮 flush，所以要循环重读
+    let pending = inflight
+    while (pending) {
+      await pending
+      pending = inflight
+    }
   }
 
   /** 「暂存草稿」按钮：一次提交全部已作答项 */
@@ -157,5 +178,6 @@ export function useDraft() {
     failed,
     save,
     saveAll,
+    waitIdle,
   }
 }
