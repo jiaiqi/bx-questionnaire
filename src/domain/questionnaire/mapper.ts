@@ -140,8 +140,30 @@ export interface BackfillRow {
 }
 
 /** 数字回填去掉 `.0` 尾巴（平台数字列会带小数位） */
+/**
+ * 数字题回填归一化
+ *
+ * 服务端数字题固定按 5 位小数回传（实测 `"2026.00000"`），直接展示会很难看。
+ * 早期实现是 `replace(/\.0+$/, '')`，只能去掉「小数部分全是 0」的情况：
+ * `"2026.00000"` → `"2026"` 没问题，但 `"2026.50000"` 会原样留下 5 位小数。
+ * 这里统一去掉尾随零，再收掉可能剩下的小数点。
+ *
+ *   "2026.00000" → "2026"
+ *   "2026.50000" → "2026.5"
+ *   "0.00000"    → "0"
+ *   "2026"       → "2026"（无小数点，不变）
+ *   "-1.20000"   → "-1.2"
+ *
+ * 实现刻意分两步，而不是用一条 /(\.\d*?)0+$/ 正则：那两个量词可以互相交换字符，
+ * eslint 的 regexp/no-super-linear-backtracking 会判定为多项式级回溯风险。
+ * 先去掉尾随零（/0+$/ 无回溯），再收掉可能只剩一个小数点的情况。
+ */
 function normalizeNumberText(text: string): string {
-  return text.replace(/\.0+$/, '')
+  if (!text.includes('.')) {
+    return text
+  }
+  const trimmed = text.replace(/0+$/, '')
+  return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed
 }
 
 /**

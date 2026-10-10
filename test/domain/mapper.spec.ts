@@ -267,6 +267,24 @@ describe('mapper · 变异测试补漏', () => {
     expect(serverAnswersToAnswerMap([field!], { n1: '2026.00000' })).toEqual({ n1: '2026' })
   })
 
+  it('serverAnswersToAnswerMap：数字题带有效小数时只去尾随零，不截断有效位', () => {
+    const [field] = toQuestionFields([{ item_no: 'n1', item_type: '数字' }])
+    // 平台固定回传 5 位小数，小数题必须保留有效小数位：
+    // 早期实现 replace(/\.0+$/) 只处理「小数全为 0」，会把 2026.50000 原样留下
+    expect(serverAnswersToAnswerMap([field!], { n1: '2026.50000' })).toEqual({ n1: '2026.5' })
+    expect(serverAnswersToAnswerMap([field!], { n1: '-1.20000' })).toEqual({ n1: '-1.2' })
+    expect(serverAnswersToAnswerMap([field!], { n1: '0.00000' })).toEqual({ n1: '0' })
+    // 已归一化或本就无小数点的值不受影响
+    expect(serverAnswersToAnswerMap([field!], { n1: '2026.5' })).toEqual({ n1: '2026.5' })
+    expect(serverAnswersToAnswerMap([field!], { n1: '2026' })).toEqual({ n1: '2026' })
+  })
+
+  it('applyBackfill：数字题回填同样去尾随零（详情模式走的是这条）', () => {
+    const [field] = toQuestionFields([{ item_no: 'n1', item_type: '数字' }])
+    const answers = applyBackfill([field!], [{ item_no: 'n1', option_data: ['2026.50000'] }])
+    expect(answers).toEqual({ n1: '2026.5' })
+  })
+
   it('toMergeAnswerMap：null / undefined 行安全跳过', () => {
     expect(toMergeAnswerMap(null)).toEqual({})
     expect(toMergeAnswerMap(undefined)).toEqual({})
