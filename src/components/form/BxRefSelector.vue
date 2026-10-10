@@ -74,6 +74,8 @@ const config = computed(() => {
 
 const visible = ref(false)
 const loading = ref(false)
+/** 加载失败的原因：必须与「确实没有数据」区分开 */
+const errorMessage = ref('')
 const options = ref<RefOption[]>([])
 const draft = ref<string[]>([])
 
@@ -105,6 +107,7 @@ async function load(): Promise<void> {
   }
 
   loading.value = true
+  errorMessage.value = ''
   try {
     const envelope = await bxSelect<Record<string, unknown>>({
       serviceName: config.value.serviceName,
@@ -126,7 +129,9 @@ async function load(): Promise<void> {
     }
   }
   catch (error) {
-    toast(error instanceof BxError ? error.message : '引用数据加载失败')
+    // 失败必须与「确实没有数据」区分开：否则权限/网络错误会被「暂无可选项」掩盖
+    errorMessage.value = error instanceof BxError ? error.message : '引用数据加载失败'
+    toast(errorMessage.value)
   }
   finally {
     loading.value = false
@@ -188,6 +193,11 @@ watch(() => props.field.key, () => {
         <scroll-view class="bx-ref__list" scroll-y>
           <view v-if="loading" class="bx-ref__state">
             <text class="bx-ref__state-text">正在加载…</text>
+          </view>
+          <!-- 错误态排在空态之前：否则权限/网络错误会被「暂无可选项」掩盖 -->
+          <view v-else-if="errorMessage" class="bx-ref__state">
+            <text class="bx-ref__state-text">{{ errorMessage }}</text>
+            <text class="bx-ref__retry" @click="load">重新加载</text>
           </view>
           <view v-else-if="options.length === 0" class="bx-ref__state">
             <text class="bx-ref__state-text">暂无可选项</text>
@@ -311,6 +321,13 @@ watch(() => props.field.key, () => {
 .bx-ref__state-text {
   font-size: 13px;
   color: var(--bx-text-3);
+}
+
+.bx-ref__retry {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--bx-blue);
 }
 
 .bx-ref__item {
