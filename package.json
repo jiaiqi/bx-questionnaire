@@ -19,6 +19,7 @@
     "a11y": "node scripts/a11y.mjs",
     "scan:dist": "node scripts/scan-dist.mjs",
     "check:mp": "node scripts/check-mp.mjs",
+    "check:cond": "node scripts/check-conditional.mjs",
     "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {

@@ -27,7 +27,7 @@
 │   ├── pages/questionnaire/ # 10 个页面
 │   ├── stores/              # session 等
 │   └── utils/               # request（请求层）/ storage / query（页面参数解析）
-├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ scan-dist.mjs（产物安全扫描）+ check-mp.mjs（小程序产物校验）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
+├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ scan-dist.mjs（产物安全扫描）+ check-mp.mjs（小程序产物校验）+ check-conditional.mjs（条件编译剥离验证）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
 ├── test/                    # 单元测试 + 集成测试（含 env-config.spec.ts：环境变量配置回归防护、directives/aria-label.spec.ts：可访问性指令）
 ├── pages.config.ts          # 路由配置源
 ├── manifest.config.ts       # 应用配置源
