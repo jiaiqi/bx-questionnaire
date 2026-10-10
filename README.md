@@ -27,7 +27,7 @@
 │   ├── pages/questionnaire/ # 10 个页面
 │   ├── stores/              # session 等
 │   └── utils/               # request（请求层）/ storage / query（页面参数解析）
-├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ perf.mjs（首屏性能基线）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
+├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
 ├── test/                    # 单元测试 + 集成测试（含 env-config.spec.ts：环境变量配置回归防护）
 ├── pages.config.ts          # 路由配置源
 ├── manifest.config.ts       # 应用配置源
@@ -50,7 +50,8 @@ pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑
 pnpm perf            # 首屏性能基线（需先在 --mode test 下构建并起产物服务）
-pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面 × PC/移动竖屏/移动横屏（需先 pnpm dev h5）
+pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面 × PC/移动竖屏/移动横屏/公众号H5（需先 pnpm dev h5）
+pnpm a11y            # 可访问性审计：可读名称 / 图片 alt / 真实 Tab 键焦点可见性（需先 pnpm dev h5）
 pnpm e2e             # 端到端交互：真实作答 → 暂存草稿 → 提交（默认不提交，加 --submit）
 pnpm build h5        # 产物 dist/build/h5
 pnpm build mp-weixin # 产物 dist/build/mp-weixin
