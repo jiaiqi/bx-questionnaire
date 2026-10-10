@@ -55,6 +55,8 @@ const kind = computed(() => {
       return 'ref'
     case 'image':
       return 'image'
+    case 'section':
+      return 'section'
     default:
       return 'unsupported'
   }
@@ -63,8 +65,10 @@ const kind = computed(() => {
 
 <template>
   <BxQuestionItem :field="props.field" :error="props.error">
+    <!-- 分节符只有标题，没有作答控件；标题由 BxQuestionItem 渲染 -->
+    <view v-if="kind === 'section'" class="bx-field-section" />
     <BxOptionList
-      v-if="kind === 'options'"
+      v-else-if="kind === 'options'"
       v-model="value"
       :field="props.field"
       :disabled="props.disabled"

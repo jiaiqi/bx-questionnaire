@@ -20,13 +20,18 @@ const title = computed(() => formatQuestionTitle(props.field.index, props.field.
 </script>
 
 <template>
-  <view :id="`q-${props.field.key}`" class="bx-question" :class="{ 'bx-question--error': !!props.error }">
+  <view
+    :id="`q-${props.field.key}`"
+    class="bx-question"
+    :class="{ 'bx-question--error': !!props.error, 'bx-question--section': props.field.widget === 'section' }"
+  >
     <view class="bx-question__head">
       <text class="bx-question__title">{{ title }}</text>
       <text v-if="props.field.required" class="bx-question__required">*</text>
     </view>
 
-    <text v-if="props.field.multi" class="bx-question__hint">多选题</text>
+    <!-- 只有多选控件才提示「多选题」；图片题的 multi 表示可上传多张，不是多选题 -->
+    <text v-if="props.field.widget === 'checkbox'" class="bx-question__hint">多选题</text>
 
     <view class="bx-question__body">
       <slot />
@@ -40,6 +45,21 @@ const title = computed(() => formatQuestionTitle(props.field.index, props.field.
 .bx-question {
   padding: 18px 16px;
   background-color: var(--bx-surface);
+}
+
+.bx-question--section {
+  padding: 10px 16px;
+  background-color: transparent;
+}
+
+.bx-question--section .bx-question__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bx-text-2);
+}
+
+.bx-question--section .bx-question__body {
+  margin-top: 0;
 }
 
 .bx-question--error {

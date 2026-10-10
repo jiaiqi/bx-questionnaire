@@ -13,6 +13,10 @@ export function formatQuestionTitle(
   label: string | null | undefined,
 ): string {
   const text = String(label ?? '').trim()
+  // index 为 0 表示不占题号（分节符），此时不能拼出「0. 标题」
+  if (!index || index === '0') {
+    return text
+  }
   if (!text) {
     return `${index}.`
   }

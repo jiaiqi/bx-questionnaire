@@ -29,6 +29,18 @@ describe('formatQuestionTitle', () => {
     expect(formatQuestionTitle(1, '  1. 题干  ')).toBe('1. 题干')
     expect(formatQuestionTitle(1, '   题干  ')).toBe('1. 题干')
   })
+
+  it('index 为 0 时不拼序号 —— 分节符不占题号，否则会渲染成「0. 分节标题」', () => {
+    expect(formatQuestionTitle(0, '第一部分')).toBe('第一部分')
+    expect(formatQuestionTitle(0, '1. 已带序号的分节')).toBe('1. 已带序号的分节')
+    // 字符串 '0' 与数字 0 都要挡住
+    expect(formatQuestionTitle('0', '第二部分')).toBe('第二部分')
+  })
+
+  it('index 为 0 且标题为空时返回空串，而不是「0.」', () => {
+    expect(formatQuestionTitle(0, '')).toBe('')
+    expect(formatQuestionTitle(0, null)).toBe('')
+  })
 })
 
 describe('formatDateTime', () => {
