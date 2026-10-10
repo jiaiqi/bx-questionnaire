@@ -18,14 +18,15 @@ export default defineConfig({
   },
   plugins: [
     // https://uni-helper.js.org/vite-plugin-uni-pages
-    UniPages(),
+    UniPages({ homePage: 'pages/questionnaire/index/index' }),
     // https://uni-helper.js.org/vite-plugin-uni-layouts
     UniLayouts(),
     // https://uni-helper.js.org/vite-plugin-uni-manifest
     UniManifest(),
     // https://github.com/unplugin/unplugin-auto-import
+    // 不引入 @vueuse/core：uni-use 已提供适配 uni-app 的同名能力，重复引入会产生冲突告警
     AutoImport({
-      imports: ['vue', 'uni-app', 'pinia', '@vueuse/core', uniuseAutoImports()],
+      imports: ['vue', 'uni-app', 'pinia', uniuseAutoImports()],
       dts: 'src/auto-imports.d.ts',
       dirs: ['src/composables', 'src/stores', 'src/utils'],
       vueTemplate: true,
