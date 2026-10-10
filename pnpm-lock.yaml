@@ -74,9 +74,6 @@ importers:
       vue-router:
         specifier: 4.5.1
         version: 4.5.1(vue@3.4.21(typescript@5.9.3))
-      wot-design-uni:
-        specifier: ^1.14.0
-        version: 1.14.0(vue@3.4.21(typescript@5.9.3))
     devDependencies:
       '@dcloudio/types':
         specifier: ^3.4.8
@@ -165,9 +162,6 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@26.6.4)(jsdom@16.7.0(supports-color@8.1.1))(sass@1.64.2)(supports-color@8.1.1)(terser@5.51.2)
-      vitest-environment-uniapp:
-        specifier: ^0.0.5
-        version: 0.0.5(@dcloudio/uni-automator@3.0.0-5020420260813003(@vueuse/core@9.13.0(vue@3.4.21(typescript@5.9.3)))(jest-environment-node@27.5.1)(jest@27.0.4(supports-color@8.1.1))(postcss@8.5.29)(rollup@4.14.3)(supports-color@8.1.1)(vue@3.4.21(typescript@5.9.3)))(vitest@2.1.9(@types/node@26.6.4)(jsdom@16.7.0(supports-color@8.1.1))(sass@1.64.2)(supports-color@8.1.1)(terser@5.51.2))
       vue-tsc:
         specifier: ^3.3.11
         version: 3.3.12(typescript@5.9.3)
@@ -5633,12 +5627,6 @@ packages:
       terser:
         optional: true
 
-  vitest-environment-uniapp@0.0.5:
-    resolution: {integrity: sha512-6BpJjVc3wwSEmMkJbsjB9ZDY34Rv3B2ERHcdgBekOzOn0CjuJB38SC3I53p6TXDl0dbYpMdqFWwQVM4+drxb9g==}
-    peerDependencies:
-      '@dcloudio/uni-automator': '*'
-      vitest: '*'
-
   vitest@2.1.9:
     resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -5762,12 +5750,6 @@ packages:
   word-wrap@1.2.5:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
-
-  wot-design-uni@1.14.0:
-    resolution: {integrity: sha512-FaBXtmxxAkZNZUxR2xeKBg/Agck+SPaFFFeCvbBzAFeqM/5m2Y/v/7te7rhMJpZFkMoAgtJR1yaWR0DnjOmTnA==}
-    engines: {HBuilderX: ^3.8.7}
-    peerDependencies:
-      vue: '>=3.2.47'
 
   wrap-ansi@7.0.0:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
@@ -12834,11 +12816,6 @@ snapshots:
       sass: 1.64.2
       terser: 5.51.2
 
-  vitest-environment-uniapp@0.0.5(@dcloudio/uni-automator@3.0.0-5020420260813003(@vueuse/core@9.13.0(vue@3.4.21(typescript@5.9.3)))(jest-environment-node@27.5.1)(jest@27.0.4(supports-color@8.1.1))(postcss@8.5.29)(rollup@4.14.3)(supports-color@8.1.1)(vue@3.4.21(typescript@5.9.3)))(vitest@2.1.9(@types/node@26.6.4)(jsdom@16.7.0(supports-color@8.1.1))(sass@1.64.2)(supports-color@8.1.1)(terser@5.51.2)):
-    dependencies:
-      '@dcloudio/uni-automator': 3.0.0-5020420260813003(@vueuse/core@9.13.0(vue@3.4.21(typescript@5.9.3)))(jest-environment-node@27.5.1)(jest@27.0.4(supports-color@8.1.1))(postcss@8.5.29)(rollup@4.14.3)(supports-color@8.1.1)(vue@3.4.21(typescript@5.9.3))
-      vitest: 2.1.9(@types/node@26.6.4)(jsdom@16.7.0(supports-color@8.1.1))(sass@1.64.2)(supports-color@8.1.1)(terser@5.51.2)
-
   vitest@2.1.9(@types/node@26.6.4)(jsdom@16.7.0(supports-color@8.1.1))(sass@1.64.2)(supports-color@8.1.1)(terser@5.51.2):
     dependencies:
       '@vitest/expect': 2.1.9
@@ -12967,10 +12944,6 @@ snapshots:
       stackback: 0.0.2
 
   word-wrap@1.2.5: {}
-
-  wot-design-uni@1.14.0(vue@3.4.21(typescript@5.9.3)):
-    dependencies:
-      vue: 3.4.21(typescript@5.9.3)
 
   wrap-ansi@7.0.0:
     dependencies:

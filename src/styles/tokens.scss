@@ -1,0 +1,37 @@
+/**
+ * 设计 token（CSS 自定义属性）
+ *
+ * 使用 CSS 变量而非纯 SCSS 变量，便于运行时覆盖与宿主门户注入主题。
+ * 小程序端支持 CSS 变量；`page` 会被 uni-app 编译为各端根节点。
+ */
+
+page,
+:root {
+  /* 主色 */
+  --bx-blue: #007aff;
+  --bx-blue-hover: #0067db;
+  --bx-blue-active: #0059bd;
+  --bx-blue-soft: #eaf3ff;
+
+  /* 中性色 */
+  --bx-bg: #f5f6f8;
+  --bx-surface: #ffffff;
+  --bx-text: #1f2329;
+  --bx-text-2: #646a73;
+  --bx-text-3: #8f959e;
+  --bx-line: #e5e6eb;
+  --bx-line-2: #f0f1f3;
+
+  /* 语义色 */
+  --bx-danger: #f53f3f;
+  --bx-success: #00b42a;
+  --bx-warn: #ff7d00;
+
+  /* 尺寸与阴影 */
+  --bx-radius: 8px;
+  --bx-radius-card: 12px;
+  --bx-shadow-card: 0 1px 2px rgba(31, 35, 41, 0.04), 0 2px 8px rgba(31, 35, 41, 0.04);
+
+  /* 内容列宽：PC 端居中定宽，移动端全宽（由容器宽度决定布局，见 §5.4） */
+  --bx-content-width: 860px;
+}

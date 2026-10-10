@@ -1,0 +1,57 @@
+/**
+ * 全局基础样式
+ *
+ * 只做必要的重置与通用排版，业务样式留在各组件内（scoped）。
+ */
+
+page {
+  background-color: var(--bx-bg);
+  color: var(--bx-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+view,
+text,
+button,
+input,
+textarea {
+  box-sizing: border-box;
+}
+
+/* 去掉小程序 button 默认边框与背景，统一由业务样式控制 */
+button {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+  line-height: inherit;
+
+  &::after {
+    border: none;
+  }
+}
+
+/* 双端布局：容器宽时居中定宽，窄时全宽 */
+.bx-container {
+  width: 100%;
+  max-width: var(--bx-content-width);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* 通用文本截断 */
+.bx-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bx-ellipsis-2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

@@ -1,1 +1,14 @@
+minimumReleaseAgeExcludePrune: true
+
+trustPolicy: no-downgrade
+# 以下三个包是 uni-app 构建链的间接依赖（@vitejs/plugin-legacy 来自 h5 构建链，
+# chokidar / semver 为通用传递依赖），版本由上游锁定、无法通过升级规避，
+# 且 registry 元数据的信任级别判定会误报，因此按包名精准排除。
+# 其余依赖仍受 no-downgrade 策略保护。
+trustPolicyExclude:
+  - '@vitejs/plugin-legacy'
+  - chokidar
+  - semver
+
 dangerouslyAllowAllBuilds: true
+shellEmulator: true
