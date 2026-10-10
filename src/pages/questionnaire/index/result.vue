@@ -13,7 +13,7 @@ import BxEmpty from '@/components/base/BxEmpty.vue'
 
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
-import { calcScore, describeAnswer, describeSelected } from '@/domain/questionnaire'
+import { calcScore, describeAnswer, describeSelected, toMergeAnswerMap } from '@/domain/questionnaire'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 
@@ -78,16 +78,7 @@ async function loadServerResult(): Promise<void> {
 
   try {
     const merge = await recordReplyMergeSelect({ fillBatchNo: batchNo.value })
-    // 该服务用 item_seq 标识题目（没有 item_no），与题目的序号对应
-    const map: Record<string, string> = {}
-    for (const row of merge.data ?? []) {
-      const seq = row.item_seq
-      const value = row.svalue
-      if (seq !== null && seq !== undefined && value !== null && value !== undefined && String(value) !== '') {
-        map[String(seq)] = String(value)
-      }
-    }
-    serverAnswers.value = map
+    serverAnswers.value = toMergeAnswerMap(merge.data)
   }
   catch {
     // 维度汇总在部分活动上没有数据，失败不影响得分展示

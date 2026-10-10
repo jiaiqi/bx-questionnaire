@@ -201,3 +201,27 @@ export function applyBackfill(
 
   return answers
 }
+
+/**
+ * 维度汇总行 → 「题目序号 → 作答值」映射
+ *
+ * 契约来自真实响应（srvdaq_record_reply_merge_select）：
+ * - 该服务**没有 item_no**，题目维度只能用 item_seq 标识（与题目行 item_seq 对应）；
+ * - 作答值在 svalue，单选/多选存 option_value。
+ *
+ * 用结构化参数而不是 api 层类型，避免 domain 反向依赖 api。
+ */
+export function toMergeAnswerMap(
+  rows: Array<{ item_seq?: number | null, svalue?: string | null }> | null | undefined,
+): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const row of rows ?? []) {
+    const seq = row?.item_seq
+    const value = row?.svalue
+    if (seq === null || seq === undefined || value === null || value === undefined || String(value) === '') {
+      continue
+    }
+    map[String(seq)] = String(value)
+  }
+  return map
+}
