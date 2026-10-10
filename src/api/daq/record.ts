@@ -122,19 +122,18 @@ export function recordReplySelect(query: RecordReplyQuery = {}) {
   })
 }
 
-/** 评估维度汇总 */
-export function recordReplyMergeSelect(params: { activityNo: string, fillBatchNo?: string }) {
-  const condition: BxCondition[] = [
-    { colName: 'activity_no', ruleType: 'eq', value: params.activityNo },
-  ]
-  if (params.fillBatchNo) {
-    condition.push({ colName: 'fill_batch_no', ruleType: 'eq', value: params.fillBatchNo })
-  }
-
+/**
+ * 评估维度汇总
+ *
+ * 实测：该服务的服务列里**没有 activity_no**，传该条件会直接返回
+ * `CONDITION_COLUMS_NOT_EXISTS`（[activity_no]条件列信息不存在、不合法），
+ * 导致维度汇总永远拿不到数据。老工程也只用 fill_batch_no 查询，这里与之一致。
+ */
+export function recordReplyMergeSelect(params: { fillBatchNo: string }) {
   return bxSelect<DaqRecordMergeRow>({
     serviceName: 'srvdaq_record_reply_merge_select',
     colNames: ['*'],
-    condition,
+    condition: [{ colName: 'fill_batch_no', ruleType: 'eq', value: params.fillBatchNo }],
   })
 }
 

@@ -77,10 +77,7 @@ async function loadServerResult(): Promise<void> {
   }
 
   try {
-    const merge = await recordReplyMergeSelect({
-      activityNo: activityNo.value,
-      fillBatchNo: batchNo.value,
-    })
+    const merge = await recordReplyMergeSelect({ fillBatchNo: batchNo.value })
     const map: Record<string, string> = {}
     for (const row of merge.data ?? []) {
       const itemNo = String((row as Record<string, unknown>).item_no ?? '')
