@@ -2,7 +2,12 @@
  * 草稿保存
  *
  * 按老工程方案：**逐题即时保存**到 `srvdaq_activity_result_save`，
- * 响应回传的 `fill_batch_no` 作为后续保存与提交的批次号。
+ * **首次**保存响应回传的 `fill_batch_no` 锁定为本次作答的批次号，后续保存与提交都用它。
+ *
+ * 批次号语义**严格对齐老工程**（`if (data.fill_batch_no && !self.fill_batch_no)`）：
+ * 只在首次保存时锁定，之后服务端再回传新批次号也不采用。实测服务端每次保存都会回传
+ * 一个新批次号，若无条件采用，批次号会被逐次推进，同一次作答被割裂到多条草稿，
+ * 提交只能挂到最后一条上，其余成为孤儿记录。
  *
  * 相比老实现加固两点：
  * - 串行队列：快速连续作答不会并发打同一接口；
@@ -67,7 +72,11 @@ export function useDraft() {
           itemData: [task.item],
         })
         const payload = extractResponsePayload<{ fill_batch_no?: string }>(envelope)
-        if (payload?.fill_batch_no) {
+        // 批次号只在首次保存时锁定，后续服务端即使回传新批次也不覆盖 ——
+        // 与老工程 indexyax.vue 的 `if (data.fill_batch_no && !self.fill_batch_no)` 一致。
+        // 实测服务端每次保存都会回传一个新批次号：若无条件覆盖，同一次作答会被
+        // 割裂到多条草稿记录（每次保存一条），提交只能挂到最后一条上，其余成为孤儿。
+        if (payload?.fill_batch_no && !currentBatchNo) {
           currentBatchNo = payload.fill_batch_no
           task.onBatchNo?.(payload.fill_batch_no)
         }
@@ -151,7 +160,8 @@ export function useDraft() {
         itemData: items,
       })
       const payload = extractResponsePayload<{ fill_batch_no?: string }>(envelope)
-      if (payload?.fill_batch_no) {
+      // 同 flush：批次号首次锁定后不再被服务端回传值覆盖（对齐老工程语义）
+      if (payload?.fill_batch_no && !currentBatchNo) {
         currentBatchNo = payload.fill_batch_no
         params.onBatchNo?.(payload.fill_batch_no)
       }

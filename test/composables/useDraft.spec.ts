@@ -111,6 +111,59 @@ describe('useDraft · 批次号', () => {
 
     expect(got).toEqual(['B9'])
   })
+
+  /**
+   * 实测（CDP 抓真实请求）：服务端每次保存都会回传一个**新的** fill_batch_no，
+   * 即便请求里带了批次号。所以「无条件采用响应批次号」会让批次号每次都被推进：
+   * 同一次作答被割裂到多条草稿记录，提交只能挂到最后一条上，其余成为孤儿。
+   *
+   * 老工程 indexyax.vue 的写法是 `if (data.fill_batch_no && !self.fill_batch_no)`，
+   * 即只在首次锁定。本用例固定住这一语义 —— 注意响应必须返回**不同**批次号，
+   * 否则覆盖行为不可见（这正是该缺陷此前能溜过测试的原因）。
+   */
+  it('服务端回传新批次号时不覆盖已锁定的批次号，避免作答被割裂到多条草稿', async () => {
+    mocks.resultSave
+      .mockResolvedValueOnce(okWithBatch('B1'))
+      .mockResolvedValueOnce(okWithBatch('B2'))
+      .mockResolvedValueOnce(okWithBatch('B3'))
+
+    const draft = useDraft()
+    const got: string[] = []
+    for (const key of ['k1', 'k2', 'k3']) {
+      await draft.save({
+        activityNo: 'A1',
+        field: fieldOf(key),
+        answers: { [key]: 'x' },
+        onBatchNo: batchNo => got.push(batchNo),
+      })
+    }
+
+    expect(mocks.resultSave).toHaveBeenCalledTimes(3)
+    // 首次保存：无批次号
+    expect(mocks.resultSave.mock.calls[0]?.[0]).toMatchObject({ fillBatchNo: undefined })
+    // 后续两次：都锁在首次返回的 B1 上，不被 B2 / B3 推进
+    expect(mocks.resultSave.mock.calls[1]?.[0]).toMatchObject({ fillBatchNo: 'B1' })
+    expect(mocks.resultSave.mock.calls[2]?.[0]).toMatchObject({ fillBatchNo: 'B1' })
+    // 回调也只应播报一次，避免调用方（session）把批次号改掉
+    expect(got).toEqual(['B1'])
+  })
+
+  it('「暂存草稿」整卷保存同样锁定首次批次号', async () => {
+    mocks.resultSave
+      .mockResolvedValueOnce(okWithBatch('C1'))
+      .mockResolvedValueOnce(okWithBatch('C2'))
+      .mockResolvedValueOnce(okWithBatch('C3'))
+
+    const draft = useDraft()
+    // 需要三次：覆盖行为影响的是「下一次」请求，两次调用时第二次已经用旧值发出，看不出差别
+    await draft.saveAll({ activityNo: 'A1', fields: [fieldOf('k1')], answers: { k1: 'x' } })
+    await draft.saveAll({ activityNo: 'A1', fields: [fieldOf('k2')], answers: { k2: 'y' } })
+    await draft.saveAll({ activityNo: 'A1', fields: [fieldOf('k3')], answers: { k3: 'z' } })
+
+    expect(mocks.resultSave.mock.calls[0]?.[0]).toMatchObject({ fillBatchNo: undefined })
+    expect(mocks.resultSave.mock.calls[1]?.[0]).toMatchObject({ fillBatchNo: 'C1' })
+    expect(mocks.resultSave.mock.calls[2]?.[0]).toMatchObject({ fillBatchNo: 'C1' })
+  })
 })
 
 describe('useDraft · waitIdle', () => {
