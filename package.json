@@ -15,6 +15,7 @@
     "mutation": "node scripts/mutation.mjs",
     "smoke": "node scripts/smoke.mjs",
     "e2e": "node scripts/e2e.mjs",
+    "perf": "node scripts/perf.mjs",
     "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
