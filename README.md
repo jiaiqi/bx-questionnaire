@@ -97,7 +97,7 @@ location /questionnaire/ {
     try_files $uri $uri/ /questionnaire/index.html;
 }
 
-# 网关反向代理，与前端同域以复用会话 cookie
+# 网关反向代理，与前端同域（避免跨域，并与生产形态一致）
 location /bxapi/ {
     proxy_pass http://<内网网关>/;
     proxy_set_header Host $host;
@@ -142,8 +142,16 @@ pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具�
 - `srvdaq_record_reply_merge_select` **没有 `activity_no` / `item_no` 列**，题目维度用 `item_seq`，作答值在 `svalue`
 - `srvdaq_record_reply_select` **不接受 `order`**：传任何排序字段（asc / desc 皆然）都会静默返回 0 条，而不是报错
 - `srvdaq_record_reply_select` **必须带 `condition`**，空数组会直接 FAILURE
-- 记录类服务按**会话**校验：本地开发跨域（`localhost:5173` → 内网）时拿不到数据，
-  结果页会回退本地计算；生产同域部署不受影响
+- 服务按**票据**鉴权，与浏览器会话 cookie 无关（实测 `document.cookie` 为 0 条）。
+  各服务的差异来自自身的**权限与业务校验**，不是「跨域」：
+  - `srvdaq_record_reply_select`：无需登录，成功
+  - `srvdaq_init_view_select`（无 `type`）：成功；带 `type=use` 时报
+    「非活动创建人」——这是**业务校验**（调用者须为活动创建人），不是鉴权失败
+  - `srvdaq_record_reply_merge_select`：需要登录态，请求层已自动带票据
+  - `srvdaq_item_cfg_select`：报「无权限访问」，是票据身份**缺少该服务的权限**
+
+  > 排查提示：手写 `uni.request` 探测时**必须自己带票据头**（业务请求层会自动加）。
+  > 漏带会得到 `0011 需要登录访问`，极易误判成「服务需要会话」。
 
 ## 相关文档
 
