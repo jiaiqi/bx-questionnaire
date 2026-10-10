@@ -23,6 +23,8 @@ const DO_SUBMIT = process.argv.includes('--submit')
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9336
 const ACTIVITY_NO = '20261010100256000001'
+// 测试活动里一条已完成记录的批次号（详情模式用）
+const FILL_BATCH_NO = '4d5b54fb88144b53bd136776f6a383d3'
 const ITEMS = {
   radio: 'q-20261010100256000002',
   checkbox: 'q-20261010100256000007',
@@ -416,6 +418,47 @@ async function main() {
   checks.push({
     name: '缺活动号给出明确提示',
     pass: /缺少活动编号/.test(noActivity.text),
+  })
+
+  // ── 场景四：详情模式（查看历史作答）────────────────────────────
+  // 用户从「作答记录」点进已完成记录走的就是这条路：formType=detail。
+  // 此时活动往往仍在进行中，只读提示不能说成「该问卷已结束」。
+  console.log('\n\n=== 场景四：详情模式（查看历史作答）===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/index/index?formType=detail&activity_no=${ACTIVITY_NO}&status=完成&fill_batch_no=${FILL_BATCH_NO}`,
+  })
+  await sleep(9000)
+
+  const detailState = await readState()
+  console.log(`  文本：${detailState.text.slice(0, 260)}`)
+  checks.push({
+    name: '详情模式能渲染出问卷',
+    pass: detailState.text.includes('共') && detailState.text.includes('题'),
+  })
+  checks.push({
+    name: '详情模式提示为「查看模式」而非「已结束」',
+    pass: detailState.text.includes('以下为查看模式') && !detailState.text.includes('该问卷已结束'),
+  })
+  checks.push({
+    name: '详情模式不显示提交按钮',
+    pass: !detailState.text.includes('提交问卷'),
+  })
+
+  // 只读：输入框应被禁用
+  const readonlyProbe = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const inputs = [...document.querySelectorAll('input, textarea')]
+      if (inputs.length === 0) return { count: 0, allDisabled: true }
+      return { count: inputs.length, allDisabled: inputs.every(e => e.disabled || e.readOnly) }
+    })()`,
+    returnByValue: true,
+  })
+  console.log(`  输入框 ${readonlyProbe.result.value.count} 个，全部只读：${readonlyProbe.result.value.allDisabled}`)
+  checks.push({
+    name: '详情模式输入框为只读',
+    pass: readonlyProbe.result.value.allDisabled,
   })
 
   ws.close()
