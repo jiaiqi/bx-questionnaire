@@ -78,12 +78,13 @@ async function loadServerResult(): Promise<void> {
 
   try {
     const merge = await recordReplyMergeSelect({ fillBatchNo: batchNo.value })
+    // 该服务用 item_seq 标识题目（没有 item_no），与题目的序号对应
     const map: Record<string, string> = {}
     for (const row of merge.data ?? []) {
-      const itemNo = String((row as Record<string, unknown>).item_no ?? '')
-      const value = (row as Record<string, unknown>).svalue
-      if (itemNo && value !== null && value !== undefined && String(value) !== '') {
-        map[itemNo] = String(value)
+      const seq = row.item_seq
+      const value = row.svalue
+      if (seq !== null && seq !== undefined && value !== null && value !== undefined && String(value) !== '') {
+        map[String(seq)] = String(value)
       }
     }
     serverAnswers.value = map
@@ -117,7 +118,7 @@ const rows = computed(() =>
       key: field.key,
       index: field.index,
       label: field.label,
-      mine: serverAnswers.value[String(field.raw.item_no ?? '')]
+      mine: serverAnswers.value[String(field.index)]
         ?? (describeSelected(field, backfill.value) || '未作答'),
       expected: describeAnswer(field),
     })),

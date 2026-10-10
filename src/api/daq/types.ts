@@ -108,15 +108,20 @@ export interface DaqRecordReplyRow {
   [k: string]: unknown
 }
 
-/** 评估维度汇总行（srvdaq_record_reply_merge_select） */
+/**
+ * 评估维度汇总行（srvdaq_record_reply_merge_select）
+ *
+ * 实测字段：该服务**没有 item_no / activity_no**（传 activity_no 会报
+ * CONDITION_COLUMS_NOT_EXISTS），题目维度用 item_seq 与 item_title 标识，
+ * 作答值在 svalue（单选/多选存 option_value）。
+ */
 export interface DaqRecordMergeRow {
-  activity_no?: string
   fill_batch_no?: string
-  item_no?: string
-  classify?: string | null
-  classify_name?: string | null
-  score?: string | number | null
-  total_points?: string | number | null
+  item_seq?: number | null
+  item_type?: string | null
+  item_title?: string | null
+  /** 作答值；单选/多选为 option_value */
+  svalue?: string | null
   [k: string]: unknown
 }
 
