@@ -31,7 +31,8 @@ const loaded = ref(false)
 /** 加载失败：与 finished 区分开，失败后必须允许重试 */
 const failed = ref(false)
 const pageNo = ref(1)
-const rownumber = 10
+// 与老工程 history.vue 的 rownumber 一致，减少翻页请求次数
+const rownumber = 20
 
 async function fetchPage(reset = false): Promise<void> {
   if (loading.value) {
