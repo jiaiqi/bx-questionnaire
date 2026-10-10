@@ -154,6 +154,17 @@ class Cdp {
   }
 }
 
+/**
+ * 视口：用户明确要求同时适配 PC 与移动端，小程序还要竖屏/横屏两套布局。
+ * 横向溢出是最典型的适配缺陷 —— 窄屏下卡片、表格、长文本很容易撑破视口，
+ * 表现为整页可以左右拖，移动端尤其明显。
+ */
+const VIEWPORTS = [
+  { name: 'PC', width: 1440, height: 900, mobile: false },
+  { name: '移动竖屏', width: 375, height: 812, mobile: true },
+  { name: '移动横屏', width: 812, height: 375, mobile: true },
+]
+
 async function connect() {
   for (let i = 0; i < 40; i++) {
     try {
@@ -184,66 +195,80 @@ async function main() {
 
   const results = []
 
-  for (const page of PAGES) {
-    // 先回空白页：uni-app 的 onLoad 只在页面首次创建时执行，同路径不同 query
-    // 会复用组件实例，导致上一页的参数残留（曾把「缺批次号」页测成有批次号）。
-    await cdp.send('Page.navigate', { url: 'about:blank' })
-    await sleep(300)
-    cdp.takeEvents()
-
-    // H5 是 hash 路由
-    const url = `${BASE}/#${page.route}`
-    await cdp.send('Page.navigate', { url })
-
-    // Vite dev 按需编译：首次访问某页可能要等编译完成。
-    // 固定 sleep 会让「编译慢」看起来像「页面白屏」，所以轮询到有内容为止。
-    let r = { hit: [], textLen: 0, head: '' }
-    for (let attempt = 0; attempt < 20; attempt++) {
-      await sleep(700)
-      const probe = await cdp.send('Runtime.evaluate', {
-        expression: `(() => {
-          const sels = ${JSON.stringify(page.markers)}
-          const hit = sels.filter(s => document.querySelector(s))
-          const root = document.querySelector('uni-app') || document.body
-          const text = (root.innerText || '').trim()
-          return { hit, textLen: text.length, head: text.slice(0, 120) }
-        })()`,
-        returnByValue: true,
-      })
-      r = probe.result.value
-      if (r.textLen > 0) break
-    }
-
-    const events = cdp.takeEvents()
-    const consoleErrors = []
-    const exceptions = []
-    for (const e of events) {
-      if (e.method === 'Runtime.exceptionThrown') {
-        const d = e.params.exceptionDetails
-        exceptions.push(d.exception?.description || d.text || '未知异常')
-      }
-      if (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') {
-        consoleErrors.push(e.params.args.map(a => a.value ?? a.description ?? '').join(' '))
-      }
-      if (e.method === 'Log.entryAdded' && e.params.entry.level === 'error') {
-        consoleErrors.push(e.params.entry.text)
-      }
-    }
-
-    results.push({
-      name: page.name,
-      route: page.route,
-      rendered: r.hit.length > 0 && r.textLen > 0,
-      hit: r.hit,
-      missing: page.markers.filter(s => !r.hit.includes(s)),
-      textLen: r.textLen,
-      head: r.head,
-      exceptions,
-      consoleErrors,
-      // 可选：断言首屏文本包含某段内容（用于验证空态/错误态文案）
-      expectText: page.expectText,
-      textOk: page.expectText ? r.head.includes(page.expectText) : true,
+  for (const vp of VIEWPORTS) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: vp.width,
+      height: vp.height,
+      deviceScaleFactor: 1,
+      mobile: vp.mobile,
     })
+
+    for (const page of PAGES) {
+      // 先回空白页：uni-app 的 onLoad 只在页面首次创建时执行，同路径不同 query
+      // 会复用组件实例，导致上一页的参数残留（曾把「缺批次号」页测成有批次号）。
+      await cdp.send('Page.navigate', { url: 'about:blank' })
+      await sleep(300)
+      cdp.takeEvents()
+
+      // H5 是 hash 路由
+      const url = `${BASE}/#${page.route}`
+      await cdp.send('Page.navigate', { url })
+
+      // Vite dev 按需编译：首次访问某页可能要等编译完成。
+      // 固定 sleep 会让「编译慢」看起来像「页面白屏」，所以轮询到有内容为止。
+      let r = { hit: [], textLen: 0, head: '', overflow: 0 }
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await sleep(700)
+        const probe = await cdp.send('Runtime.evaluate', {
+          expression: `(() => {
+            const sels = ${JSON.stringify(page.markers)}
+            const hit = sels.filter(s => document.querySelector(s))
+            const root = document.querySelector('uni-app') || document.body
+            const text = (root.innerText || '').trim()
+            // 横向溢出：整页宽度超过视口即为撑破
+            const overflow = Math.max(0, document.documentElement.scrollWidth - window.innerWidth)
+            return { hit, textLen: text.length, head: text.slice(0, 120), overflow }
+          })()`,
+          returnByValue: true,
+        })
+        r = probe.result.value
+        if (r.textLen > 0) break
+      }
+
+      const events = cdp.takeEvents()
+      const consoleErrors = []
+      const exceptions = []
+      for (const e of events) {
+        if (e.method === 'Runtime.exceptionThrown') {
+          const d = e.params.exceptionDetails
+          exceptions.push(d.exception?.description || d.text || '未知异常')
+        }
+        if (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') {
+          consoleErrors.push(e.params.args.map(a => a.value ?? a.description ?? '').join(' '))
+        }
+        if (e.method === 'Log.entryAdded' && e.params.entry.level === 'error') {
+          consoleErrors.push(e.params.entry.text)
+        }
+      }
+
+      results.push({
+        name: page.name,
+        viewport: vp.name,
+        viewportSize: `${vp.width}×${vp.height}`,
+        route: page.route,
+        rendered: r.hit.length > 0 && r.textLen > 0,
+        hit: r.hit,
+        missing: page.markers.filter(s => !r.hit.includes(s)),
+        textLen: r.textLen,
+        head: r.head,
+        overflow: r.overflow,
+        exceptions,
+        consoleErrors,
+        // 可选：断言首屏文本包含某段内容（用于验证空态/错误态文案）
+        expectText: page.expectText,
+        textOk: page.expectText ? r.head.includes(page.expectText) : true,
+      })
+    }
   }
 
   ws.close()
@@ -258,20 +283,25 @@ async function main() {
   // 报告
   console.log(`\n页面冒烟（${BASE}）\n`)
   let bad = 0
+  let currentVp = ''
   for (const r of results) {
-    const ok = r.rendered && r.exceptions.length === 0 && r.consoleErrors.length === 0 && r.textOk
+    if (r.viewport !== currentVp) {
+      currentVp = r.viewport
+      console.log(`\n── ${r.viewport}（${r.viewportSize}）──`)
+    }
+    const overflowBad = r.overflow > 1
+    const ok = r.rendered && r.exceptions.length === 0 && r.consoleErrors.length === 0 && r.textOk && !overflowBad
     if (!ok) bad++
-    console.log(`${ok ? '✓' : '✗'} ${r.name}`)
-    console.log(`    路由 ${r.route}`)
-    console.log(`    渲染 ${r.rendered ? '有内容' : '空白'}（文本 ${r.textLen} 字），命中选择器 ${r.hit.length}/${r.hit.length + r.missing.length}`)
+    console.log(`${ok ? '✓' : '✗'} ${r.name}（文本 ${r.textLen} 字${overflowBad ? `，横向溢出 ${r.overflow}px` : ''}）`)
+    if (!r.rendered) console.log(`    未渲染出内容，路由 ${r.route}`)
     if (r.missing.length) console.log(`    未命中 ${r.missing.join(', ')}`)
-    if (r.head) console.log(`    首屏文本：${r.head.replace(/\n/g, ' / ')}`)
+    if (r.head) console.log(`    首屏：${r.head.replace(/\n/g, ' / ')}`)
     if (r.expectText && !r.textOk) console.log(`    [文案不符] 期望包含「${r.expectText}」`)
     for (const e of r.exceptions) console.log(`    [未捕获异常] ${e.split('\n')[0]}`)
     for (const e of r.consoleErrors) console.log(`    [console.error] ${e.slice(0, 200)}`)
   }
 
-  console.log(`\n== 共 ${results.length} 页，异常 ${bad} 页 ==`)
+  console.log(`\n== 共 ${results.length} 次渲染（${PAGES.length} 页 × ${VIEWPORTS.length} 视口），异常 ${bad} 次 ==`)
   process.exit(bad === 0 ? 0 : 1)
 }
 
