@@ -237,6 +237,18 @@ async function main() {
   console.log(`初始：已答 ${initial.answered}`)
   checks.push({ name: '初始进度为 0', pass: initial.answered === '0' })
 
+  // 答题记录入口：老工程标题栏常驻该按钮，新工程曾只能在记录页里手改 URL 进入。
+  // 只断言存在、不点击 —— 点它会离开答题页，打断后面的作答流程。
+  const navExtra = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const el = document.querySelector('.bx-navbar__side--right')
+      return el ? (el.innerText || '').trim() : ''
+    })()`,
+    returnByValue: true,
+  })
+  console.log(`  导航栏右侧插槽：${JSON.stringify(navExtra.result.value)}`)
+  checks.push({ name: '答题页有「记录」入口', pass: String(navExtra.result.value).includes('记录') })
+
   console.log('\n开始作答：')
   // 单选：选第 1 项
   await clickSelector(`#${ITEMS.radio} .bx-option`, '单选题第 1 项')
