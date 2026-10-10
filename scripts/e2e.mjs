@@ -943,12 +943,22 @@ async function main() {
   }
 
   // 请求体正确却 0 行：用 CDP 直接读服务端响应体，看它到底返回了什么
+  //
+  // 注意：页面导航后 CDP 会丢弃旧请求的记录，此时 getResponseBody 报
+  // 「No resource with given identifier found」。那是**正常的资源回收**，
+  // 不是读取失败 —— 措辞必须区分开，否则每次跑都会打印一行看似报错的东西，
+  // 让人以为有问题（这类噪音会训练出「忽略输出」的坏习惯）。
   for (const rid of selectReqIds) {
     try {
       const body = await send('Network.getResponseBody', { requestId: rid })
       console.log(`  响应体[${rid.slice(-6)}]：${String(body.body).slice(0, 400)}`)
     } catch (e) {
-      console.log(`  响应体[${rid.slice(-6)}]：读取失败 ${e.message}`)
+      const released = /No resource with given identifier found/.test(e.message)
+      console.log(
+        released
+          ? `  响应体[${rid.slice(-6)}]：已随页面导航回收（正常，不影响断言）`
+          : `  响应体[${rid.slice(-6)}]：读取失败 ${e.message}`,
+      )
     }
   }
   checks.push({
