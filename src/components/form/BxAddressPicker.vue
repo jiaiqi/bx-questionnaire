@@ -54,10 +54,27 @@ function toOptions(rows: Array<{ no?: string | null, path_name?: string | null }
     .filter(item => !!item.no)
 }
 
-/** 加载第 level 级；parentNo 为空表示顶层 */
-async function loadLevel(level: number, parentNo?: string): Promise<AreaOption[]> {
+/**
+ * 每一级的加载序号
+ *
+ * picker 的 columnchange 在滑动过程中会高频触发，用户从「广东省」快速滑到「湖南省」时
+ * 两次请求会并发。若先发的后返回，columns[level] 会被旧省份的下级列表覆盖，
+ * 出现「选的是湖南、市列表却是广东的」这种错乱。所以同一级只认最新一次请求的结果。
+ */
+const levelTokens: number[] = []
+
+/** 加载第 level 级；parentNo 为空表示顶层；返回 null 表示结果已过期、调用方不要改 UI */
+async function loadLevel(level: number, parentNo?: string): Promise<AreaOption[] | null> {
+  const token = (levelTokens[level] ?? 0) + 1
+  levelTokens[level] = token
+
   const envelope = await areaAdjSelect(parentNo)
   const options = toOptions(envelope.data ?? [])
+
+  if (levelTokens[level] !== token) {
+    return null
+  }
+
   columns.value[level] = options
   return options
 }
@@ -98,6 +115,10 @@ async function onColumnChange(event: { detail: { column: number, value: number }
 
   try {
     const next = await loadLevel(column + 1, picked.no)
+    // 结果已过期（用户又改了上级）：不要再调整列与索引，否则会与新的选择错配
+    if (!next) {
+      return
+    }
     if (next.length === 0) {
       // 没有下级：当前级即末级
       columns.value = columns.value.slice(0, column + 1)
