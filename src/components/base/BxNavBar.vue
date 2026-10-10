@@ -18,7 +18,7 @@ function goBack(): void {
     uni.navigateBack()
     return
   }
-  uni.reLaunch({ url: '/pages/questionnaire/cover' })
+  uni.reLaunch({ url: '/pages/questionnaire/cover/index' })
 }
 </script>
 
