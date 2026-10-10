@@ -446,6 +446,103 @@ async function main() {
     pass: !otherBatch.inputs.includes('端到端测试建议'),
   })
 
+  // ── 场景六：作答记录页点进两条路径 ──────────────────────────────
+  // RecordList 用 state === '未完成' 决定点进去是续答（formType=form）
+  // 还是查看（formType=detail）。这是老工程的核心回流路径：用户填一半退出，
+  // 从记录页点回来继续填。此前从未端到端验证过。
+  //
+  // 两个坑：
+  //  - '未完成' 里含 '完成' 子串，按文本 includes 找会找错记录；
+  //  - 记录可能在视口之外，坐标点击会落空，必须先 scrollIntoView。
+  console.log('\n\n=== 场景六：作答记录页的两条跳转路径 ===')
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/history/history?activity_no=${ACTIVITY_NO}`,
+  })
+  await sleep(10000)
+
+  // 用「恰好 1 个 state 行」筛出真正的记录卡片（外层容器会把 20 条的 state 全包进来）
+  const findCardIndex = async (state) => {
+    const r = await send('Runtime.evaluate', {
+      expression: `(() => {
+        const cards = [...document.querySelectorAll('uni-view')].filter(e => {
+          const lines = (e.innerText || '').split('\\n').map(s => s.trim())
+          return lines.filter(l => l === '完成' || l === '未完成').length === 1
+        })
+        return cards.findIndex(e => (e.innerText || '').split('\\n').map(s => s.trim()).includes(${JSON.stringify(state)}))
+      })()`,
+      returnByValue: true,
+    })
+    return r.result.value
+  }
+
+  const clickCard = async (idx) => {
+    const box = await send('Runtime.evaluate', {
+      expression: `(() => {
+        const cards = [...document.querySelectorAll('uni-view')].filter(e => {
+          const lines = (e.innerText || '').split('\\n').map(s => s.trim())
+          return lines.filter(l => l === '完成' || l === '未完成').length === 1
+        })
+        const el = cards[${idx}]
+        if (!el) return null
+        el.scrollIntoView({ block: 'center' })
+        const b = el.getBoundingClientRect()
+        return { x: b.left + b.width / 2, y: b.top + 30 }
+      })()`,
+      returnByValue: true,
+    })
+    if (!box.result.value) return null
+    const pt = box.result.value
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send('Input.dispatchMouseEvent', { type, x: pt.x, y: pt.y, button: 'left', clickCount: 1 })
+    }
+    await sleep(9000)
+    const after = await send('Runtime.evaluate', {
+      expression: `(() => ({
+        hash: location.hash,
+        text: ((document.querySelector('uni-app') || document.body).innerText || '').slice(0, 400),
+      }))()`,
+      returnByValue: true,
+    })
+    return after.result.value
+  }
+
+  const recordCount = await send('Runtime.evaluate', {
+    expression: `[...document.querySelectorAll('uni-view')].filter(e => (e.innerText || '').split('\\n').map(s => s.trim()).filter(l => l === '完成' || l === '未完成').length === 1).length`,
+    returnByValue: true,
+  })
+  console.log(`  记录卡片数：${recordCount.result.value}`)
+  checks.push({ name: '作答记录页渲染出记录卡片', pass: recordCount.result.value > 0 })
+
+  const undoneIdx = await findCardIndex('未完成')
+  console.log(`  「未完成」卡片下标：${undoneIdx}`)
+  const undoneNav = await clickCard(undoneIdx)
+  if (undoneNav) {
+    console.log(`    跳转：${undoneNav.hash.slice(0, 110)}`)
+    checks.push({ name: '点「未完成」记录走续答（formType=form）', pass: undoneNav.hash.includes('formType=form') })
+    checks.push({ name: '续答带上 fill_batch_no', pass: undoneNav.hash.includes('fill_batch_no') })
+    checks.push({ name: '续答页可编辑（有提交按钮）', pass: undoneNav.text.includes('提交问卷') })
+  }
+
+  // 回到记录页，点「完成」记录
+  await send('Page.navigate', { url: 'about:blank' })
+  await sleep(400)
+  await send('Page.navigate', {
+    url: `${BASE}/#/pages/questionnaire/history/history?activity_no=${ACTIVITY_NO}`,
+  })
+  await sleep(10000)
+  const doneIdx = await findCardIndex('完成')
+  console.log(`  「完成」卡片下标：${doneIdx}`)
+  if (doneIdx >= 0) {
+    const doneNav = await clickCard(doneIdx)
+    if (doneNav) {
+      console.log(`    跳转：${doneNav.hash.slice(0, 110)}`)
+      checks.push({ name: '点「完成」记录走查看（formType=detail）', pass: doneNav.hash.includes('formType=detail') })
+      checks.push({ name: '查看页只读（无提交按钮）', pass: !doneNav.text.includes('提交问卷') })
+    }
+  }
+
   // ── 场景二：必填校验 ────────────────────────────────────────────
   // 空卷直接提交必须被拦住。这条路径用户一定会遇到，但此前从未验证过。
   //
