@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { bxSelect, bxWrite, setSessionExpiredHandler } from '@/utils/request'
+import { ENV, resolveTicket } from '@/utils/request/env'
 
 interface RequestOptions {
   url: string
@@ -160,5 +161,26 @@ describe('request · operate 逐项校验', () => {
 
     const envelope = await bxWrite('operate', [{ serviceName: 'srvdaq_activity_result_save', data: [] }])
     expect(envelope.response?.[0]?.response?.fill_batch_no).toBe('FB1')
+  })
+})
+
+describe('resolveTicket（票据优先级）', () => {
+  it('本地存储有票据时优先用它', () => {
+    getStorageSync.mockReturnValue('from-storage')
+    expect(resolveTicket()).toBe('from-storage')
+  })
+
+  it('本地存储为空时回退到构建期 VITE_BX_TICKET（ENV.devTicket）', () => {
+    getStorageSync.mockReturnValue('')
+    expect(resolveTicket()).toBe(ENV.devTicket)
+  })
+
+  it('请求头走 resolveTicket，不再内联同一段逻辑', () => {
+    getStorageSync.mockReturnValue('header-ticket')
+    bxSelect({ serviceName: 'srvdaq_activity_cfg_select' })
+
+    const header = requestMock.mock.calls.at(-1)?.[0].header
+    expect(header?.bx_auth_ticket).toBe('header-ticket')
+    expect(header?.['bx-auth-ticket']).toBe('header-ticket')
   })
 })

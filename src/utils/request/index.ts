@@ -10,7 +10,7 @@
 import type { BxAction, BxEnvelope, BxSelectParams, BxWriteItem } from './types'
 
 import { SHARED_KEYS, storage } from '@/utils/storage'
-import { buildServiceUrl, ENV } from './env'
+import { buildServiceUrl, ENV, resolveTicket } from './env'
 import { BX_CODE, BxError } from './types'
 
 export interface BxRequestOptions {
@@ -47,7 +47,9 @@ const FAILURE_CODES = new Set<string>([
 ])
 
 function buildHeaders(): Record<string, string> {
-  const ticket = storage.getString(SHARED_KEYS.TICKET) || ENV.devTicket
+  // 票据优先级（本地存储 > 构建期 VITE_BX_TICKET）统一由 resolveTicket 决定，
+  // 这里不再内联同一段逻辑，避免两处口径漂移。
+  const ticket = resolveTicket()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
