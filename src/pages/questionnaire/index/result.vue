@@ -25,6 +25,15 @@ const batchNo = ref('')
 const serverScore = ref<number | null>(null)
 const serverState = ref('')
 const serverAnswers = ref<Record<string, string>>({})
+/**
+ * 维度汇总是否成功返回
+ *
+ * `record_reply_merge_select` 需要会话（浏览器端返回 0011「需要登录访问」），
+ * 而同一页面的 `record_reply_select` 只需票据。两者都失败时页面必须能区分：
+ * 「服务端明确说这道题没作答」与「服务端根本没给作答数据」不是一回事，
+ * 前者显示「未作答」，后者不能谎报成未作答。
+ */
+const serverAnswersLoaded = ref(false)
 
 onLoad((query) => {
   activityNo.value = readQuery(query, 'activity_no')
@@ -80,6 +89,7 @@ async function loadServerResult(): Promise<void> {
   try {
     const merge = await recordReplyMergeSelect({ fillBatchNo: batchNo.value })
     serverAnswers.value = toMergeAnswerMap(merge.data)
+    serverAnswersLoaded.value = true
   }
   catch {
     // 维度汇总在部分活动上没有数据，失败不影响得分展示
@@ -112,7 +122,9 @@ const rows = computed(() =>
       // 老工程按 item_no 取值，parkDev 实测返回 item_seq（映射里两个键都写了），逐个兜底
       mine: serverAnswers.value[String(field.raw.item_no ?? '')]
         ?? serverAnswers.value[String(field.index)]
-        ?? (describeSelected(field, backfill.value) || '未作答'),
+        // 服务端作答值拿不到时，才回退本地回填；本地也没有则区分「确实未作答」与「数据不可用」
+        ?? (describeSelected(field, backfill.value)
+          || (serverAnswersLoaded.value ? '未作答' : '暂无法获取')),
       expected: describeAnswer(field),
     })),
 )

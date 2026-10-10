@@ -13,7 +13,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { initViewSelect } from '@/api/daq/activity'
-import { toQuestionFields } from '@/domain/questionnaire'
+import { recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
+import { toMergeAnswerMap, toQuestionFields } from '@/domain/questionnaire'
 import { bxSelect } from '@/utils/request'
 
 const ticket = (import.meta.env.VITE_BX_TICKET as string | undefined) || process.env.BX_TICKET || ''
@@ -50,6 +51,9 @@ vi.stubGlobal('uni', {
 
 /** 真实环境存在的进行中活动（测试11123） */
 const ACTIVITY_NO = '20260513185113000009'
+
+/** 有作答记录的活动（bxq 自动化测试问卷），用于验证记录类服务 */
+const RECORD_ACTIVITY_NO = '20261010100256000001'
 
 describe.skipIf(!ticket)('真实网关集成 · 只读', () => {
   it('网关可达且票据有效（裸请求层）', async () => {
@@ -89,6 +93,37 @@ describe.skipIf(!ticket)('真实网关集成 · 只读', () => {
       expect(field.options.every(option => !!option.label)).toBe(true)
     }
   }, 30000)
+
+  it('维度汇总可按批次号取到作答值（结果页「我的作答」的数据源）', async () => {
+    // 两步都走真实接口：先取真实记录的批次号，再查它的维度汇总。
+    // 这条链路是结果页「我的作答」的唯一服务端数据源，曾经静默为空。
+    //
+    // 注意：环境里存在「已提交但未作答」的记录（svalue 全为 null），
+    // 所以不能只取第一条 —— 要找到确实有作答值的批次，否则断言的是数据而不是契约。
+    const reply = await recordReplySelect({ activityNo: RECORD_ACTIVITY_NO, rownumber: 50 })
+    const batches = (reply.data ?? [])
+      .map(row => String(row.fill_batch_no ?? ''))
+      .filter(Boolean)
+    expect(batches.length).toBeGreaterThan(0)
+
+    let hit: { batchNo: string, map: Record<string, string> } | null = null
+    for (const batchNo of batches) {
+      const merge = await recordReplyMergeSelect({ fillBatchNo: batchNo })
+      expect(Array.isArray(merge.data)).toBe(true)
+      const map = toMergeAnswerMap(merge.data)
+      if (Object.keys(map).length > 0) {
+        hit = { batchNo, map }
+        break
+      }
+    }
+
+    expect(hit, '至少应有一个批次能在维度汇总里取到作答值').not.toBeNull()
+
+    // 该服务没有 item_no，只能靠 item_seq 定位题目（与题目行的 item_seq 对应）
+    const merge = await recordReplyMergeSelect({ fillBatchNo: hit!.batchNo })
+    const rows = merge.data ?? []
+    expect(rows.some(row => row.item_seq !== null && row.item_seq !== undefined)).toBe(true)
+  }, 60000)
 
   it('活动编号不存在时返回业务错误而不是静默成功', async () => {
     await expect(
