@@ -14,7 +14,7 @@ import type { AnswerMap, DraftItem, QuestionField } from '@/domain/questionnaire
 import { ref } from 'vue'
 
 import { resultSave } from '@/api/daq/record'
-import { toDraftPayload } from '@/domain/questionnaire'
+import { toDraftPayload, toDraftPayloads } from '@/domain/questionnaire'
 import { extractResponsePayload } from '@/utils/request'
 
 export interface DraftSaveParams {
@@ -129,13 +129,9 @@ export function useDraft() {
 
   /** 「暂存草稿」按钮：一次提交全部已作答项 */
   async function saveAll(params: Omit<DraftSaveParams, 'field'> & { fields: QuestionField[] }): Promise<void> {
-    const items: DraftItem[] = []
-    for (const field of params.fields) {
-      const item = toDraftPayload(field, params.answers)
-      if (item) {
-        items.push(item)
-      }
-    }
+    // 全卷组装复用 domain 的 toDraftPayloads：此前这里把「遍历 + 调 toDraftPayload +
+    // 过滤空值」抄了一遍，与 serializer 里的实现逐字重复，且让 toDraftPayloads 成了死代码。
+    const items = toDraftPayloads(params.fields, params.answers)
     if (items.length === 0) {
       return
     }

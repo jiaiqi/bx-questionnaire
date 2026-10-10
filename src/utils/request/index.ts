@@ -171,16 +171,13 @@ export async function bxWrite<T = Record<string, unknown>>(
   return envelope
 }
 
-/** 取写操作返回的 effect_data 首项 */
-export function extractEffectData<T = Record<string, unknown>>(envelope: BxEnvelope<T>): T | null {
-  const effectData = envelope.response?.[0]?.response?.effect_data
-  if (Array.isArray(effectData) && effectData.length > 0) {
-    return effectData[0] as T
-  }
-  return null
-}
-
-/** 取写操作返回的 response 负载（如 fill_batch_no 这类不在 effect_data 里的字段） */
+/**
+ * 取写操作返回的 response 负载。
+ *
+ * 曾经有一个 extractEffectData（按 `effect_data` 解析），但实测证明平台把 `fill_batch_no`
+ * 这类回填字段放在 `response` 而不是 `effect_data`，该函数从头到尾没有生产调用，已删除。
+ * 若将来确认某服务确实回填 `effect_data`，再按需添加，不要凭字段名推测。
+ */
 export function extractResponsePayload<T = Record<string, unknown>>(envelope: BxEnvelope): T | null {
   const payload = envelope.response?.[0]?.response
   return (payload as T) ?? null

@@ -194,6 +194,8 @@ async function onSubmit(): Promise<void> {
       next[issue.key] = issue.message
     }
     errors.value = next
+    // 此处需要整份 issues 来构造逐题提示与计数，所以直接用 issues[0]；
+    // 只有「只要第一处问题」的场景（如 useSubmit）才用 findFirstIssue。
     scrollToSelector(`#q-${issues[0]!.key}`)
     toast(`还有 ${issues.length} 道必填题未作答`)
     return

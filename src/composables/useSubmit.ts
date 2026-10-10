@@ -10,7 +10,7 @@ import type { AnswerMap, QuestionField } from '@/domain/questionnaire'
 import { ref } from 'vue'
 
 import { resultSubmit } from '@/api/daq/record'
-import { toSubmitPayload, validateRequired } from '@/domain/questionnaire'
+import { findFirstIssue, toSubmitPayload } from '@/domain/questionnaire'
 import { extractResponsePayload } from '@/utils/request'
 
 export interface SubmitParams {
@@ -39,9 +39,11 @@ export function useSubmit() {
       return { ok: false, batchNo: params.fillBatchNo ?? '', firstIssueKey: '' }
     }
 
-    const issues = validateRequired(params.fields, params.answers)
-    if (issues.length > 0) {
-      return { ok: false, batchNo: params.fillBatchNo ?? '', firstIssueKey: issues[0]!.key }
+    // 这里只需要「第一处问题」用于定位，直接用 findFirstIssue，
+    // 不必先构造整份 issues 再取 [0]。
+    const firstIssue = findFirstIssue(params.fields, params.answers)
+    if (firstIssue) {
+      return { ok: false, batchNo: params.fillBatchNo ?? '', firstIssueKey: firstIssue.key }
     }
 
     submitting.value = true
