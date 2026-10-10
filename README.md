@@ -45,7 +45,7 @@ pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
 常用校验：
 
 ```bash
-pnpm test            # 190 项测试
+pnpm test            # 192 项测试
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑
