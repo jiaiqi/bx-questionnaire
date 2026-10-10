@@ -53,8 +53,14 @@ export function attachmentSelect(params: { fileNo: string }) {
 /**
  * 把附件的相对 fileurl 拼成可直接访问的地址
  *
- * 网关形如 http://192.168.0.214/bxapi，fileurl 形如 /bxdaq_activity_cfg/.../x.png，
- * 拼接结果是 http://192.168.0.214/bxapi/bxdaq_activity_cfg/.../x.png
+ * **必须走 file 应用的下载接口**，不能直接访问 fileurl（实测）：
+ *   ✅ {gateway}/file/download?filePath=/bxdaq_activity_cfg/.../x.png  → 200 image/png
+ *   ❌ {gateway}/bxdaq_activity_cfg/.../x.png                          → 500（服务端转成 404 NOT_FOUND）
+ *
+ * 老工程同样如此：`$api.srvHost + '/file/download?filePath=' + data.fileurl`，
+ * 其中 srvHost 即网关地址（含 /bxapi 前缀）。
+ *
+ * filePath 不做 URL 编码：老工程直接拼接，且路径里的 `/` 编码成 %2F 反而可能破坏解析。
  */
 export function resolveFileUrl(fileurl: string | null | undefined): string {
   const path = (fileurl ?? '').trim()
@@ -64,5 +70,7 @@ export function resolveFileUrl(fileurl: string | null | undefined): string {
   if (/^https?:\/\//i.test(path)) {
     return path
   }
-  return `${resolveGateway()}${path.startsWith('/') ? '' : '/'}${path}`
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  // 必须走 file 应用的下载接口，直接访问 fileurl 会 500（服务端转成 404 NOT_FOUND）
+  return `${resolveGateway()}/file/download?filePath=${normalized}`
 }

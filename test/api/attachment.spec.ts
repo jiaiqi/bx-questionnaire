@@ -3,7 +3,9 @@
  *
  * 契约（实测）：srvfile_attachment_select 返回的 fileurl 是**相对路径**
  * （如 /bxdaq_activity_cfg/activity_image/20261009/20261009174231636100/xxx.png），
- * 直接当 src 用会 404，必须拼上网关前缀。
+ * 但它不能直接访问 —— 必须走 file 应用的下载接口：
+ *   ✅ {gateway}/file/download?filePath=<fileurl>  → 200 image/png
+ *   ❌ {gateway}<fileurl>                          → 500（服务端转成 404 NOT_FOUND）
  *
  * 测试用的网关来自 .env.test（运行时已移除兜底默认值）。
  */
@@ -15,13 +17,20 @@ import { resolveFileUrl } from '@/api/file/attachment'
 const GATEWAY = import.meta.env.VITE_BX_GATEWAY as string
 
 describe('resolveFileUrl', () => {
-  it('相对路径拼上网关前缀', () => {
+  it('走 file/download 下载接口拼接', () => {
     expect(resolveFileUrl('/bxdaq_activity_cfg/activity_image/20261009/abc/x.png'))
-      .toBe(`${GATEWAY}/bxdaq_activity_cfg/activity_image/20261009/abc/x.png`)
+      .toBe(`${GATEWAY}/file/download?filePath=/bxdaq_activity_cfg/activity_image/20261009/abc/x.png`)
   })
 
   it('缺少前导斜杠时补上分隔符', () => {
-    expect(resolveFileUrl('bxdaq_activity_cfg/x.png')).toBe(`${GATEWAY}/bxdaq_activity_cfg/x.png`)
+    expect(resolveFileUrl('bxdaq_activity_cfg/x.png'))
+      .toBe(`${GATEWAY}/file/download?filePath=/bxdaq_activity_cfg/x.png`)
+  })
+
+  it('不能退化成直接访问 fileurl（会 500）', () => {
+    const url = resolveFileUrl('/bxdaq_activity_cfg/x.png')
+    expect(url).toContain('/file/download?filePath=')
+    expect(url).not.toBe(`${GATEWAY}/bxdaq_activity_cfg/x.png`)
   })
 
   it('已是绝对地址时原样返回', () => {
