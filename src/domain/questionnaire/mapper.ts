@@ -232,3 +232,75 @@ export function toMergeAnswerMap(
 
   return map
 }
+
+/** 选项题的服务端值可能是序号、option_no 或文案，逐个兜底匹配 */
+function matchServerOptions(field: QuestionField, raw: string): FieldOption[] {
+  const parts = String(raw ?? '')
+    .split(/[,;、|]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+
+  return parts
+    .map(part => field.options.find(option =>
+      option.viewNo === part || option.no === part || option.label === part))
+    .filter((option): option is FieldOption => !!option)
+}
+
+/**
+ * 服务端作答值 → 展示文案
+ *
+ * `record_reply_merge_select` 的 `svalue` 对选项题返回的是**选项序号**
+ * （实测单选返回 "1"、"2"），直接渲染会让用户看到「我的作答：1」。
+ * 这里还原为选项文案；文本题原样返回；数字题去掉平台带的小数尾巴。
+ * 匹配不上时保留原值，便于排查而不是显示成空白。
+ */
+export function describeServerValue(field: QuestionField, raw: string): string {
+  const text = String(raw ?? '').trim()
+  if (!text) {
+    return ''
+  }
+  if (field.widget === 'radio' || field.widget === 'checkbox') {
+    const matched = matchServerOptions(field, text)
+    return matched.length > 0 ? matched.map(option => option.label).join('、') : text
+  }
+  if (field.widget === 'number') {
+    return normalizeNumberText(text)
+  }
+  return text
+}
+
+/**
+ * 服务端作答 → AnswerMap（供 `calcScore` 使用）
+ *
+ * 结果页的统计此前基于本地回填（`init_view_select` 的 user_data），
+ * 而逐题「我的作答」基于服务端 merge。当 `type=use` 失败但 merge 成功时
+ * （例如已登录但不是活动创建人），两处数据源不同会导致
+ * 「逐题显示有作答、统计却全是 0」。统一以服务端为准。
+ */
+export function serverAnswersToAnswerMap(
+  fields: QuestionField[],
+  serverAnswers: Record<string, string>,
+): AnswerMap {
+  const map: AnswerMap = {}
+
+  for (const field of fields) {
+    const raw = serverAnswers[String(field.raw.item_no ?? '')] ?? serverAnswers[String(field.index)]
+    // 纯空白与空串一样视为「无作答」：否则会把没答的题算成答错
+    const text = String(raw ?? '').trim()
+    if (!text) {
+      continue
+    }
+
+    if (field.widget === 'radio' || field.widget === 'checkbox') {
+      const matched = matchServerOptions(field, text)
+      if (matched.length > 0) {
+        map[field.key] = matched.map(option => option.no)
+      }
+      continue
+    }
+
+    map[field.key] = field.widget === 'number' ? normalizeNumberText(text) : text
+  }
+
+  return map
+}

@@ -13,7 +13,15 @@ import BxEmpty from '@/components/base/BxEmpty.vue'
 
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
-import { calcScore, describeAnswer, describeSelected, formatQuestionTitle, toMergeAnswerMap } from '@/domain/questionnaire'
+import {
+  calcScore,
+  describeAnswer,
+  describeSelected,
+  describeServerValue,
+  formatQuestionTitle,
+  serverAnswersToAnswerMap,
+  toMergeAnswerMap,
+} from '@/domain/questionnaire'
 import { readQuery } from '@/utils/query'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
@@ -110,7 +118,16 @@ async function loadServerResult(): Promise<void> {
   }
 }
 
-const localScore = computed(() => calcScore(fields.value, backfill.value))
+/** 服务端 merge 的作答（含选项序号还原），用于与服务端统计保持一致 */
+const serverAnswerMap = computed(() => serverAnswersToAnswerMap(fields.value, serverAnswers.value))
+/**
+ * 统计口径与服务端逐题作答保持一致：
+ * 服务端作答可用时用服务端，否则才回退本地回填 —— 避免出现
+ * 「逐题显示有作答、统计却全是 0」这种自相矛盾的页面。
+ */
+const localScore = computed(() =>
+  calcScore(fields.value, serverAnswersLoaded.value ? serverAnswerMap.value : backfill.value),
+)
 /** 服务端有 score 时以它为准，总分仍用本地题目分值合计 */
 const score = computed(() => {
   if (serverScore.value !== null) {
@@ -134,11 +151,16 @@ const rows = computed(() =>
       key: field.key,
       title: formatQuestionTitle(field.index, field.label),
       // 老工程按 item_no 取值，parkDev 实测返回 item_seq（映射里两个键都写了），逐个兜底
-      mine: serverAnswers.value[String(field.raw.item_no ?? '')]
+      // 服务端 svalue 对选项题是序号，需还原成选项文案，否则用户看到「我的作答：1」
+      mine: describeServerValue(
+        field,
+        serverAnswers.value[String(field.raw.item_no ?? '')]
         ?? serverAnswers.value[String(field.index)]
-        // 服务端作答值拿不到时，才回退本地回填；本地也没有则区分「确实未作答」与「数据不可用」
-        ?? (describeSelected(field, backfill.value)
-          || (serverAnswersLoaded.value ? '未作答' : '暂无法获取')),
+        ?? '',
+      )
+      // 服务端作答值拿不到时，才回退本地回填；本地也没有则区分「确实未作答」与「数据不可用」
+      || (describeSelected(field, backfill.value)
+        || (serverAnswersLoaded.value ? '未作答' : '暂无法获取')),
       expected: describeAnswer(field),
     })),
 )
