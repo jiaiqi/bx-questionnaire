@@ -6,7 +6,7 @@
  * 差异仅在路由与结果页指向。
  */
 
-import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
+import type { AnswerValue, LocalDraft, QuestionField } from '@/domain/questionnaire'
 
 import { computed, ref, watch } from 'vue'
 
@@ -20,7 +20,7 @@ import { useAnswerModel } from '@/composables/useAnswerModel'
 import { useDraft } from '@/composables/useDraft'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useSubmit } from '@/composables/useSubmit'
-import { toArray, validateRequired } from '@/domain/questionnaire'
+import { fromLocalDraft, toArray, toLocalDraft, validateRequired } from '@/domain/questionnaire'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { draftAnswersKey, storage, STORAGE_KEYS } from '@/utils/storage'
@@ -73,10 +73,20 @@ async function init(): Promise<void> {
     return
   }
 
-  const ok = await load(props.activityNo, {
-    mode: 'plain',
-    fillBatchNo: props.fillBatchNo || session.fillBatchNo || undefined,
-  })
+  const batchNo = props.fillBatchNo || session.fillBatchNo || undefined
+
+  // 有批次号时先按 use 取：能从服务端拿到该批次的 user_data，恢复已答内容。
+  // 这是「点击未完成记录续答」的关键路径 —— 本地草稿只存在于同一浏览器，
+  // 换设备或换会话时只有服务端能提供答案。无权限/批次失效时 use 会失败，
+  // load 内部已清空 errorMessage，再退回 plain 重取即可。
+  // 无批次号时 use 没有意义（服务端只会返回空 user_data），直接 plain。
+  let ok = false
+  if (batchNo) {
+    ok = await load(props.activityNo, { mode: 'use', fillBatchNo: batchNo })
+  }
+  if (!ok) {
+    ok = await load(props.activityNo, { mode: 'plain', fillBatchNo: batchNo })
+  }
   if (!ok) {
     return
   }
@@ -97,22 +107,15 @@ async function init(): Promise<void> {
 /**
  * 从本地存储恢复草稿答案
  *
- * 只恢复「题目仍然存在」的键：活动配置可能已改，残留的旧键写进 answers 会让
- * 进度统计把不存在的题算进去。
+ * 两条过滤规则：
+ * - 只恢复「题目仍然存在」的键：活动配置可能已改，残留的旧键写进 answers 会让
+ *   进度统计把不存在的题算进去；
+ * - 草稿带批次号时，若当前 URL 指定了别的批次则不恢复 —— 否则点击历史记录里
+ *   另一条未完成记录，会把本机的草稿答案套到那条记录上，提交后数据错乱。
  */
 function restoreLocalDraft(): void {
-  const saved = storage.get<Record<string, unknown>>(draftAnswersKey(props.activityNo), {})
-  if (!saved || typeof saved !== 'object') {
-    return
-  }
-
-  const valid: Record<string, AnswerValue> = {}
-  for (const field of fields.value) {
-    if (Object.hasOwn(saved, field.key)) {
-      valid[field.key] = saved[field.key] as AnswerValue
-    }
-  }
-
+  const saved = storage.get<LocalDraft | null>(draftAnswersKey(props.activityNo), null)
+  const valid = fromLocalDraft(saved, fields.value, props.fillBatchNo || session.fillBatchNo || '')
   if (Object.keys(valid).length > 0) {
     replace(valid)
   }
@@ -203,15 +206,9 @@ watch(
     }
     draftPersistTimer = setTimeout(() => {
       draftPersistTimer = null
-      const snapshot: Record<string, AnswerValue> = {}
-      for (const field of fields.value) {
-        const value = answers[field.key]
-        if (value !== undefined && value !== null && toArray(value).length > 0) {
-          snapshot[field.key] = value
-        }
-      }
-      if (Object.keys(snapshot).length > 0) {
-        storage.set(draftAnswersKey(props.activityNo), snapshot)
+      const draft = toLocalDraft(fields.value, answers, session.fillBatchNo || props.fillBatchNo || '')
+      if (draft) {
+        storage.set(draftAnswersKey(props.activityNo), draft)
       }
     }, 300)
   },
