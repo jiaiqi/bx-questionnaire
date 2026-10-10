@@ -10,7 +10,7 @@
 | 状态 | Pinia |
 | 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
 | 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
-| 测试 | Vitest（101 项） |
+| 测试 | Vitest（113 项） |
 | 校验 | vue-tsc + ESLint |
 
 `pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
@@ -26,7 +26,7 @@
 │   ├── domain/questionnaire # 纯逻辑：题型映射、序列化、校验、计分
 │   ├── pages/questionnaire/ # 10 个页面
 │   ├── stores/              # session 等
-│   └── utils/               # request（请求层）/ storage
+│   └── utils/               # request（请求层）/ storage / query（页面参数解析）
 ├── scripts/                 # 探测与联调脚本（不参与打包）
 ├── test/                    # 单元测试 + 集成测试
 ├── pages.config.ts          # 路由配置源
@@ -45,7 +45,7 @@ pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
 常用校验：
 
 ```bash
-pnpm test            # 101 项测试
+pnpm test            # 113 项测试
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm build h5        # 产物 dist/build/h5
