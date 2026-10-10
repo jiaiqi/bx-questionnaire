@@ -36,6 +36,9 @@ export function validateRequired(fields: QuestionField[], answers: AnswerMap): V
       key: field.key,
       index: field.index,
       label: field.label,
+      // index 由 mapper 赋值：分节符为 0，其余从 1 递增。分节符在 isFieldAnswered
+      // 里恒视为已作答，因此真实数据走不到 else 分支；这里保留兜底是因为
+      // validateRequired 是公开的纯函数，调用方可以直接构造 field。
       message: field.index > 0 ? `第 ${field.index} 题为必填项` : '存在必填项未作答',
     })
   }

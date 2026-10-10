@@ -284,6 +284,14 @@ export function serverAnswersToAnswerMap(
   const map: AnswerMap = {}
 
   for (const field of fields) {
+    // 兜底顺序：item_no → index。
+    //
+    // 这里**刻意不查 item_seq**：merge 服务没有 item_no，题目维度只能用 item_seq
+    // 标识（toMergeAnswerMap 会把 item_no 与 item_seq 都写进映射），但 item_seq
+    // 在真实数据里会重复（activity5 前三题都是 1）。若按 item_seq 查，
+    // 三道题会同时命中同一个值 —— 从「可能错位」变成「必然一对多」，更糟。
+    // 用 index（1 起连续递增）至少保持一对一；item_seq 重复时服务端自身也无法
+    // 区分题目，属数据层缺陷，前端无法补偿（见验收清单的限制条目）。
     const raw = serverAnswers[String(field.raw.item_no ?? '')] ?? serverAnswers[String(field.index)]
     // 纯空白与空串一样视为「无作答」：否则会把没答的题算成答错
     const text = String(raw ?? '').trim()

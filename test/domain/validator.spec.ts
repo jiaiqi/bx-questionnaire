@@ -19,6 +19,26 @@ describe('validator', () => {
     expect(issues[0]).toMatchObject({ key: 'q2', index: 2, label: '第二题' })
   })
 
+  it('有题号时提示带上题号', () => {
+    const issues = validateRequired(fields, { q1: 'o1' })
+    expect(issues[0]!.message).toBe('第 2 题为必填项')
+  })
+
+  /**
+   * index 由 mapper 赋值（分节符为 0，其余从 1 递增），真实数据里分节符恒视为
+   * 已作答，所以走不到无题号的分支。但 validateRequired 是公开纯函数，
+   * 调用方可以直接构造 field —— 这里覆盖该分支，避免它成为无人看管的死代码。
+   */
+  it('无题号时退化为通用提示', () => {
+    const noIndex = toQuestionFields([
+      { item_no: 'x1', item_seq: 1, item_title: '无题号必填', item_type: '文本', is_require: '是' },
+    ])
+    noIndex[0]!.index = 0
+    const issues = validateRequired(noIndex, {})
+    expect(issues).toHaveLength(1)
+    expect(issues[0]!.message).toBe('存在必填项未作答')
+  })
+
   it('分节符永不必填', () => {
     const issues = validateRequired(fields, {})
     expect(issues.map(issue => issue.key)).toEqual(['q1', 'q2'])
