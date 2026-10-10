@@ -136,7 +136,7 @@ describe('request · 错误策略', () => {
    * 只有 HTTP 状态能把这次调用判成失败 —— 必须单独覆盖，否则
    * 改成 `>= 401` 也不会有测试变红（用 500 测不出，500 同时满足两者）。
    */
-  it('HTTP 400 但业务信封自称成功时仍判失败（状态码兜底不可少）', async () => {
+  it('响应 400 但业务信封自称成功时仍判失败（状态码兜底不可少）', async () => {
     respondWith({ state: 'SUCCESS', resultCode: '0000', resultMessage: '', data: null }, 400)
     // code 取自信封的 resultCode（'0000'），不是 HTTP 状态 —— 关键是它**抛错了**
     await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
@@ -145,13 +145,13 @@ describe('request · 错误策略', () => {
     })
   })
 
-  it('HTTP 200 且业务信封自称成功时正常返回，不被状态码判断误伤', async () => {
+  it('响应 200 且业务信封自称成功时正常返回，不被状态码判断误伤', async () => {
     respondWith({ state: 'SUCCESS', resultCode: '0000', resultMessage: '', data: { ok: true } }, 200)
     const res = await bxSelect<{ ok: boolean }>({ serviceName: 'srvdaq_init_view_select' })
     expect(res.data).toEqual({ ok: true })
   })
 
-  it('HTTP 400 且无信封时按服务异常处理（边界值，非 4xx 一律不拦）', async () => {
+  it('响应 400 且无信封时按服务异常处理（边界值）', async () => {
     respondWith(null, 400)
     await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
       code: '400',
@@ -159,7 +159,7 @@ describe('request · 错误策略', () => {
     })
   })
 
-  it('HTTP 400 但带业务信封时仍以信封为准（边界值）', async () => {
+  it('响应 400 但带业务信封时仍以信封为准（边界值）', async () => {
     respondWith({ state: 'FAILURE', resultCode: '0111', resultMessage: '参数错误', data: null }, 400)
     await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
       message: '参数错误',
