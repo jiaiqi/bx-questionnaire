@@ -38,7 +38,13 @@ const PAGES = [
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-/** 在页面里跑的可访问性检查（名称与 alt），返回逐项问题 */
+/**
+ * 在页面里跑的可访问性检查（名称与 alt），返回逐项问题
+ *
+ * 选择器必须覆盖 uni-app 的**自定义元素**：BxButton 用 <view> 渲染，H5 上是
+ * <uni-view>，不是 <button>。首版只查 `button`，于是报「可交互 0 个」——
+ * 而页面上明明有按钮。漏报比误报更危险，因为它让审计看起来是绿的。
+ */
 const AUDIT = `(() => {
   const root = document.querySelector('uni-app') || document.body
   const visible = el => {
@@ -59,18 +65,31 @@ const AUDIT = `(() => {
     return ''
   }
 
+  // 覆盖原生控件 + uni-app 自定义元素 + 显式 role/tabindex
+  const sel = [
+    'button', 'a[href]', 'input', 'select', 'textarea',
+    'uni-button', 'uni-input', 'uni-textarea', 'uni-picker',
+    '[role]', '[tabindex]',
+  ].join(', ')
+
   const interactive = []
-  const sel = 'button, a[href], input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [tabindex]'
   for (const el of root.querySelectorAll(sel)) {
     if (!visible(el)) continue
+    // uni-input / uni-textarea 的外层只是壳，名称看内层原生控件
+    const native = el.matches('input, textarea, select') ? el : el.querySelector('input, textarea, select')
+    const target = native || el
     interactive.push({
       tag: el.tagName.toLowerCase(),
       cls: (el.className || '').toString().slice(0, 50),
       role: el.getAttribute('role') || '',
-      name: nameOf(el),
-      disabled: el.disabled === true || el.getAttribute('aria-disabled') === 'true',
+      tabIndex: target.tabIndex,
+      name: nameOf(target) || nameOf(el),
+      disabled: target.disabled === true || el.getAttribute('aria-disabled') === 'true',
     })
   }
+
+  // 可点击但键盘到不了的元素（tabIndex < 0）—— 键盘用户会完全够不到
+  const unreachable = interactive.filter(i => !i.disabled && i.tabIndex < 0)
 
   const imgsNoAlt = []
   for (const el of root.querySelectorAll('img')) {
@@ -81,6 +100,7 @@ const AUDIT = `(() => {
   return {
     interactiveCount: interactive.length,
     noName: interactive.filter(i => !i.name && !i.disabled),
+    unreachable,
     imgsNoAlt,
   }
 })()`
@@ -148,6 +168,7 @@ async function main() {
   let totalNoName = 0
   let totalImgNoAlt = 0
   let totalFocusInvisible = 0
+  let totalUnreachable = 0
 
   for (const page of PAGES) {
     await send('Page.navigate', { url: 'about:blank' })
@@ -180,6 +201,15 @@ async function main() {
     if (a.imgsNoAlt.length === 0) console.log('  图片 alt：全部有 ✓')
     else console.log(`  图片缺 alt ${a.imgsNoAlt.length} 个：${a.imgsNoAlt.slice(0, 5).join(', ')}`)
 
+    totalUnreachable += a.unreachable.length
+    if (a.unreachable.length === 0) console.log('  键盘可达：✓')
+    else {
+      console.log(`  键盘到不了 ${a.unreachable.length} 个（tabIndex < 0）：`)
+      for (const x of a.unreachable.slice(0, 6)) {
+        console.log(`    <${x.tag} class="${x.cls}"> role=${x.role || '-'} 文本「${x.name}」`)
+      }
+    }
+
     // 焦点：用真实 Tab 走一遍页面上的可聚焦元素
     await send('Runtime.evaluate', { expression: 'document.body.focus()' })
     const invisible = []
@@ -204,13 +234,13 @@ async function main() {
     }
   }
 
-  console.log(`\n== 汇总：无名称 ${totalNoName} 项 / 缺 alt ${totalImgNoAlt} 项 / 焦点不可见 ${totalFocusInvisible} 项 ==`)
+  console.log(`\n== 汇总：无名称 ${totalNoName} 项 / 缺 alt ${totalImgNoAlt} 项 / 键盘到不了 ${totalUnreachable} 项 / 焦点不可见 ${totalFocusInvisible} 项 ==`)
 
   ws.close()
   chrome.kill()
   try { rmSync(userDataDir, { recursive: true, force: true }) } catch { /* Windows */ }
 
-  if (totalNoName > 0 || totalImgNoAlt > 0 || totalFocusInvisible > 0) process.exit(1)
+  if (totalNoName > 0 || totalImgNoAlt > 0 || totalUnreachable > 0 || totalFocusInvisible > 0) process.exit(1)
 }
 
 main().catch(e => { console.error('失败:', e.message); process.exit(1) })
