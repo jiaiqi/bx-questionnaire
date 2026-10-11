@@ -7,6 +7,7 @@
 
 import { onLoad } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
+import { areaAdjSelectByNo } from '@/api/config/area'
 import { recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
 import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import BxButton from '@/components/base/BxButton.vue'
@@ -24,6 +25,7 @@ import {
   serverAnswersToAnswerMap,
   toMergeAnswerMap,
 } from '@/domain/questionnaire'
+import { addressAnswerTargets, pickAreaLabel } from '@/domain/questionnaire/addresses'
 import { shouldShowRetryEntry, shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
 import { imageAnswerTargets } from '@/domain/questionnaire/images'
 import { pickRefLabel, refAnswerTargets } from '@/domain/questionnaire/refs'
@@ -88,6 +90,7 @@ async function init(): Promise<void> {
   await loadServerResult()
   await loadAnswerImages()
   await loadAnswerRefs()
+  await loadAnswerAddresses()
 }
 
 /**
@@ -229,6 +232,39 @@ async function loadAnswerRefs(): Promise<void> {
 
   answerRefLabels.value = labels
 }
+
+/**
+ * 地址题的作答值是地区的**编号**，同样必须先换成名称
+ *
+ * 第三个同类实例（前两个是图片题的文件批次号、引用题的被引用记录编号）。
+ */
+const answerAddressLabels = ref<Record<string, string>>({})
+
+async function loadAnswerAddresses(): Promise<void> {
+  const targets = addressAnswerTargets(
+    fields.value.map(field => ({ key: field.key, widget: field.widget, value: answerMap.value[field.key] })),
+  )
+  if (!targets.length) {
+    return
+  }
+
+  const labels: Record<string, string> = {}
+  await Promise.all(targets.map(async (target) => {
+    try {
+      // 按编号精确查询：顶层/下级都能命中，不依赖层级
+      const envelope = await areaAdjSelectByNo(target.no)
+      labels[target.key] = [labels[target.key], pickAreaLabel(envelope.data ?? [], target.no)]
+        .filter(Boolean)
+        .join('、')
+    }
+    catch {
+      // 解析失败不影响整页：回退到原值，绝不显示空白（空白会被当成「未作答」）
+      labels[target.key] = labels[target.key] ?? target.no
+    }
+  }))
+
+  answerAddressLabels.value = labels
+}
 /**
  * 是否拿到了「用户作答」数据（任一来源）
  *
@@ -287,7 +323,9 @@ const rows = computed(() =>
         ? (hasValue ? '已上传图片' : '')
         : field.widget === 'ref'
           ? (answerRefLabels.value[field.key] || (hasValue ? '已选择' : ''))
-          : describeSelected(field, answerMap.value)
+          : field.widget === 'address'
+            ? (answerAddressLabels.value[field.key] || (hasValue ? '已选择' : ''))
+            : describeSelected(field, answerMap.value)
 
       return {
         key: field.key,

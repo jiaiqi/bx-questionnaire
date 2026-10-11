@@ -487,6 +487,17 @@ check(
   `期望含「${pickedRefLabel}」`,
 )
 
+// 地址题的作答值是地区编号（bxq99），必须换成名称
+const addrRowText = String(await evaluate(`(() => {
+  const row = [...document.querySelectorAll('uni-view.r-item')].find(el => (el.innerText||'').includes('地址题'))
+  return row ? row.innerText : ''
+})()`))
+console.log(`  地址题行文本：${JSON.stringify(addrRowText.slice(0, 140))}`)
+if (addrItemNo) {
+  check('地址题行不展示地区编号', !!addrRowText && !addrRowText.includes('bxq99'))
+  check('地址题行展示地区名称', addrRowText.includes('bxq测试省'))
+}
+
 const failed = checks.filter(c => !c.pass).length
 console.log(`\n== ${checks.length} 项检查，失败 ${failed} 项 ==`)
 ws.close()

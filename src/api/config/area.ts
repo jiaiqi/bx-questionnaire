@@ -32,3 +32,19 @@ export function areaAdjSelect(parentNo?: string) {
     page: { pageNo: 1, rownumber: 500 },
   })
 }
+
+/**
+ * 按地区编号精确查询（回顾页把作答值换回名称时用）
+ *
+ * 与 `areaAdjSelect` 的区别是条件不同，不是重复实现 —— 级联要「某一级的列表」，
+ * 回顾页只要「这一个编号是什么」。
+ */
+export function areaAdjSelectByNo(no: string) {
+  return bxSelect<AreaRow>({
+    serviceName: 'srvconfig_area_adj_select',
+    app: 'config',
+    colNames: ['*'],
+    condition: [{ colName: 'no', ruleType: 'eq', value: no }],
+    page: { pageNo: 1, rownumber: 20 },
+  })
+}
