@@ -14,6 +14,21 @@ import QuestionnaireRunner from '@/components/questionnaire/QuestionnaireRunner.
 import { queryString, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
+/**
+ * 显式声明首页
+ *
+ * `src/pages.json` 是**生成物且被 gitignore**，所以新克隆的仓库里没有它，
+ * 页面顺序完全由 `src/pages/**` 的扫描顺序决定 —— 那会变成按路径字母序，
+ * 首页就成了 `pages/questionnaire/assessmentResult/assessmentResult`。
+ * 之前本地看着正常，只是因为 `pages.json` 已在磁盘上、插件的 `mergePages`
+ * 把旧顺序合并保留了，属于「本机碰巧对」。
+ *
+ * 加 `editor/**` 之后这个隐患更明显（入口可能落到编辑器上），
+ * 因此按插件支持的方式显式标记 `type: 'home'`：插件会把首页排到 pages 数组最前，
+ * 与文件是否已存在、扫描顺序如何都无关。
+ */
+definePage({ type: 'home' })
+
 const activityNo = ref('')
 const formType = ref('form')
 const fillBatchNo = ref('')
