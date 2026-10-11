@@ -216,5 +216,30 @@ export function extractResponsePayload<T = Record<string, unknown>>(envelope: Bx
   return (payload as T) ?? null
 }
 
+/**
+ * 取新增类服务回填的 `effect_data`
+ *
+ * 平台把**落库后的完整行**放在 `response[0].response.effect_data` 里，
+ * 其中包含自动生成的业务主键。实测（parkDev，2026-10-11）：
+ *
+ * ```text
+ * srvdaq_activity_cfg_add → effect_data[0].activity_no = "20261011165001000009"
+ * srvdaq_item_cfg_add     → effect_data[0].item_no     = "20261011165001000057"
+ * srvdaq_option_cfg_add   → effect_data[0].option_no   = "20261011165001000019"
+ * ```
+ *
+ * 因此新增后**不必回查**就能拿到主键。回查不仅多一次往返，还会因为
+ * 「按 title 查活动」这类条件命中多行而取错行。
+ *
+ * 注意与 `extractResponsePayload` 的区别：两者在**同一个 response 对象的不同键**上 ——
+ * `fill_batch_no` 直接在 `response` 上，主键在 `response.effect_data` 里。
+ * 早先删除过一个同名函数，理由是「平台把回填放在 response 而不是 effect_data」；
+ * 该结论只对 `fill_batch_no` 成立，不能推广到主键。
+ */
+export function extractEffectData<T = Record<string, unknown>>(envelope: BxEnvelope): T[] {
+  const rows = envelope.response?.[0]?.response?.effect_data
+  return Array.isArray(rows) ? rows as T[] : []
+}
+
 export { BX_CODE, BxError }
 export type { BxEnvelope, BxSelectParams, BxWriteItem }

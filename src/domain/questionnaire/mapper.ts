@@ -10,6 +10,7 @@
 import type { AnswerMap, FieldOption, QuestionField, QuestionWidget } from './types'
 import type { DaqItemRow, DaqOptionRow } from '@/api/daq/types'
 
+import { parseItemTypeAttr } from './refs'
 import { toArray } from './types'
 
 const SECTION_TYPE = '分节符'
@@ -17,8 +18,16 @@ const SECTION_TYPE = '分节符'
 /** 未提供 item_seq 时的排序兜底值 */
 const SEQ_FALLBACK = 999
 
+/**
+ * 读取 `item_type_attr` 里的一个键
+ *
+ * **必须经 `parseItemTypeAttr` 归一化**：同一列在 `init_view_select` 下是已解析对象、
+ * 在 `item_cfg_select` 下是 JSON 字符串（见 `api/daq/types.ts`）。
+ * 直接下标取值遇到字符串会静默得到 `undefined`，表现是「属性配了却不生效」——
+ * 例如文本题永远渲染成单行、时间日期退化成 date、`fileNum` 上限被忽略。
+ */
 function readAttr(raw: DaqItemRow, key: string): string {
-  const value = raw.item_type_attr?.[key]
+  const value = parseItemTypeAttr(raw.item_type_attr)[key]
   return value === undefined || value === null ? '' : String(value)
 }
 

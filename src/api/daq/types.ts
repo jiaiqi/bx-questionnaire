@@ -36,8 +36,17 @@ export interface DaqItemRow {
   /** 正确答案（客观题） */
   answer?: string | null
   answer_analysis?: string | null
-  /** 题型附加属性，如 { radioType: 'single' } */
-  item_type_attr?: Record<string, unknown> | null
+  /**
+   * 题型附加属性，如 `{ radioType: 'single' }`
+   *
+   * **同一列在不同服务下形态不同**（实测 2026-10-11）：
+   * - `srvdaq_init_view_select` 返回**已解析的对象**；
+   * - `srvdaq_item_cfg_select` 返回 **JSON 字符串**（`"{\"radioType\":\"single\"}"`）。
+   *
+   * 因此消费方**必须**经 `parseItemTypeAttr()` 归一化，不能直接下标取值 ——
+   * 字符串下标会静默取到 `undefined`，表现为「配置写了但不生效」。
+   */
+  item_type_attr?: Record<string, unknown> | string | null
   option_data?: DaqOptionRow[] | null
   /** 显隐配置（老工程未消费，导致前端显隐从未生效） */
   show_cfg?: string | null
@@ -163,5 +172,56 @@ export interface DaqActivitySugRow {
   fill_batch_no?: string
   /** 建议正文 */
   sug_desc?: string | null
+  [k: string]: unknown
+}
+
+/**
+ * 选项配置行（`srvdaq_option_cfg_select`）
+ *
+ * 选项**不在题目表里**，是独立的一张表 `bxdaq_option_cfg`，按 `item_no` 关联。
+ * 实测列（2026-10-11）：`option_value, del_flag, create_time, modify_user_disp,
+ * modify_user, modify_time, create_user_disp, biz_path, item_no, points, option_seq,
+ * option_no, answer, option_view_no, id, create_user, option_img_explain,
+ * option_video_explain`。
+ */
+export interface DaqOptionCfgRow {
+  /** 选项主键，更新/删除的定位键 */
+  option_no: string
+  /** 所属题目编号 */
+  item_no?: string
+  /** 选项文案 */
+  option_value?: string | null
+  /** 展示标识 A..Z，提交时写入 option_flag */
+  option_view_no?: string | null
+  option_seq?: number | null
+  /** 是否为正确答案：'是' / '否' */
+  answer?: string | null
+  points?: string | number | null
+  [k: string]: unknown
+}
+
+/**
+ * 分类树行（`srvdaq_classify_select`）
+ *
+ * 实测（2026-10-11）本环境 13 行，是**树**：`parent_no` 指向父节点、
+ * `path_name` 是「自测/考试」这样的层级路径、`is_leaf` 标记叶子。
+ *
+ * 两点必须注意：
+ * 1. **不能只取叶子** —— 演示问卷用的 `DAQ202409230006`（自测）`is_leaf=否` 却实际在用；
+ * 2. `info_type` 是活动 `info_collect_type` 的**派生源**（服务端按它自动填），
+ *    所以它不等于节点名称（`DAQ202409230002` 名叫「竞答」而 `info_type` 是「自测」）。
+ */
+export interface DaqClassifyRow {
+  classify_no: string
+  classify_name?: string | null
+  parent_no?: string | null
+  /** 层级路径，如 `自测/考试/身体健康问卷` */
+  path_name?: string | null
+  path?: string | null
+  is_leaf?: string | null
+  /** 派生活动 info_collect_type 用 */
+  info_type?: string | null
+  seq?: number | null
+  perm_type?: string | null
   [k: string]: unknown
 }

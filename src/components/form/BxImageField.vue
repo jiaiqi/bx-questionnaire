@@ -29,6 +29,7 @@ import { computed, ref, watch } from 'vue'
 import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import { uploadAttachment } from '@/api/file/upload'
 import { imageAnswerTargets, resolveImageDisplay } from '@/domain/questionnaire/images'
+import { parseItemTypeAttr } from '@/domain/questionnaire/refs'
 import { BxError } from '@/utils/request'
 import { toast } from '@/utils/ui'
 
@@ -47,9 +48,16 @@ const emit = defineEmits<{ 'update:modelValue': [AnswerValue] }>()
 /** 默认上限：平台用 `item_type_attr.fileNum` 配，缺省给 9 */
 const DEFAULT_MAX = 9
 
+/**
+ * 图片数量上限
+ *
+ * `item_type_attr` 必须经 `parseItemTypeAttr` 归一化 —— 同一列在 `init_view_select`
+ * 下是对象、在 `item_cfg_select` 下是 JSON 字符串（见 `api/daq/types.ts`）。
+ * 早先直接判 `typeof raw === 'object'`，遇到字符串会静默回退成默认值 9，
+ * 配置的上限被无声忽略。
+ */
 const maxCount = computed(() => {
-  const raw = props.field.raw?.item_type_attr
-  const value = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).fileNum : undefined
+  const value = parseItemTypeAttr(props.field.raw?.item_type_attr).fileNum
   const num = Number(value)
   return Number.isFinite(num) && num > 0 ? num : DEFAULT_MAX
 })
