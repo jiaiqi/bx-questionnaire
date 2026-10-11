@@ -23,7 +23,9 @@
     "check:mp": "node scripts/check-mp.mjs",
     "check:cond": "node scripts/check-conditional.mjs",
     "check:dead": "node scripts/find-dead-exports.mjs",
-    "serve:dist": "node scripts/serve-dist.mjs"
+    "serve:dist": "node scripts/serve-dist.mjs",
+    "demo:create": "node scripts/create-demo-survey.mjs",
+    "shot": "node scripts/screenshot.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5020420260813003",
