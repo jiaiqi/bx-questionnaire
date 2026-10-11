@@ -8,15 +8,17 @@
 
 import type { DaqRecordReplyRow } from '@/api/daq/types'
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import { formatDateTime } from '@/domain/questionnaire'
+import { filterMyRecords } from '@/domain/questionnaire/records'
 import { answerUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
+import { getMyBatches } from '@/utils/storage'
 import { toast } from '@/utils/ui'
 
 interface Props {
@@ -27,6 +29,7 @@ const props = defineProps<Props>()
 
 const session = useSessionStore()
 
+/** 服务端返回的原始行（分页记账用原始条数，不能用过滤后的） */
 const rows = ref<DaqRecordReplyRow[]>([])
 const loading = ref(false)
 const finished = ref(false)
@@ -38,6 +41,38 @@ const errorMessage = ref('')
 const pageNo = ref(1)
 // 与老工程 history.vue 的 rownumber 一致，减少翻页请求次数
 const rownumber = 20
+
+/**
+ * 记录归属过滤
+ *
+ * `record_reply_select` **未登录时不带 user_no 条件**，会返回该活动的全部记录
+ * （含他人批次号，点进去还能看到他人作答）。已登录时服务端已按 user_no 过滤，
+ * 这里仍然再判一次 —— 服务端行为变了也不会直接漏出他人数据。
+ */
+const ownership = computed(() => ({
+  userNo: session.userInfo?.user_no || '',
+  myBatches: getMyBatches(props.activityNo),
+}))
+
+/** 只属于当前用户的记录 */
+const visibleRows = computed(() => filterMyRecords(rows.value, ownership.value).mine)
+
+/**
+ * 顶部提示文案
+ *
+ * 未登录时列表天然只能覆盖本机，必须解释一句，否则用户会以为记录丢了；
+ * 被过滤掉的条数也如实写出来 —— 「不是没有记录，是不给你看别人的」和
+ * 「一条都没有」是完全不同的两件事，让用户自己判断。
+ */
+const loginHint = computed(() => {
+  if (session.isLogin || visibleRows.value.length === 0) {
+    return ''
+  }
+  const hidden = filterMyRecords(rows.value, ownership.value).hidden
+  return hidden > 0
+    ? `未登录，仅显示本机作答记录（已隐藏 ${hidden} 条其他账号的记录）`
+    : '未登录，仅显示本机作答记录'
+})
 
 async function fetchPage(reset = false): Promise<void> {
   if (loading.value) {
@@ -141,11 +176,11 @@ void fetchPage(true)
 
 <template>
   <view class="records">
-    <view v-if="rows.length === 0 && loading" class="records__state">
+    <view v-if="visibleRows.length === 0 && loading" class="records__state">
       <text class="records__state-text">正在加载记录…</text>
     </view>
 
-    <view v-else-if="rows.length === 0 && failed" class="records__state">
+    <view v-else-if="visibleRows.length === 0 && failed" class="records__state">
       <BxEmpty
         :text="errorMessage || '记录加载失败'"
         tip="网络恢复后可以重新加载"
@@ -158,14 +193,22 @@ void fetchPage(true)
     </view>
 
     <BxEmpty
-      v-else-if="rows.length === 0 && loaded"
+      v-else-if="visibleRows.length === 0 && loaded"
       text="暂无作答记录"
-      tip="完成一次问卷后即可在这里查看；列表仅显示当前登录账号的记录"
+      :tip="session.isLogin
+        ? '当前账号在本问卷下还没有作答记录'
+        : '未登录时只显示本机作答记录；换设备或清过浏览器数据就看不到，登录后可查看账号下的全部记录'"
     />
 
     <view v-else class="records__list">
+      <view v-if="loginHint" class="records__notice">
+        <text class="records__notice-text">
+          {{ loginHint }}
+        </text>
+      </view>
+
       <view
-        v-for="row in rows"
+        v-for="row in visibleRows"
         :key="String(row.fill_batch_no)"
         class="record"
         role="button"
@@ -252,6 +295,16 @@ void fetchPage(true)
 .records__list {
   display: flex;
   flex-direction: column;
+}
+
+.records__notice {
+  padding: 10px 16px;
+  background-color: var(--bx-blue-soft);
+}
+
+.records__notice-text {
+  font-size: 12px;
+  color: var(--bx-text-2);
 }
 
 .record {

@@ -28,7 +28,7 @@ import { coverUrl, historyUrl, withQuery } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { buildSubmitPayload, notifyParent } from '@/utils/embed'
 import { BxError } from '@/utils/request'
-import { draftAnswersKey, storage, STORAGE_KEYS } from '@/utils/storage'
+import { draftAnswersKey, rememberMyBatch, storage, STORAGE_KEYS } from '@/utils/storage'
 import { confirmDialog, scrollToSelector, toast } from '@/utils/ui'
 
 interface Props {
@@ -229,6 +229,20 @@ watch(
   { deep: true },
 )
 
+/**
+ * 采纳服务端回传的批次号
+ *
+ * 两件事必须一起做，所以合并到一处而不是在调用点各写一遍：
+ * 1. 写回会话（续答依赖它）；
+ * 2. 记进「本机产生过的批次号」—— 作答记录页未登录时**只能靠这份本地记录**
+ *    判定哪条是自己的（`record_reply_select` 不带 user_no 会返回全部人的记录）。
+ *    漏记的后果是用户自己的记录在列表里消失。
+ */
+function adoptBatchNo(batchNo: string): void {
+  session.setFillBatchNo(batchNo)
+  rememberMyBatch(props.activityNo, batchNo)
+}
+
 function onAnswerChange(field: QuestionField, value: AnswerValue): void {
   answers[field.key] = value
   if (errors.value[field.key]) {
@@ -241,7 +255,7 @@ function onAnswerChange(field: QuestionField, value: AnswerValue): void {
     fillBatchNo: session.fillBatchNo || undefined,
     field,
     answers,
-    onBatchNo: batchNo => session.setFillBatchNo(batchNo),
+    onBatchNo: adoptBatchNo,
   })
 }
 
@@ -253,7 +267,7 @@ async function onSaveDraft(): Promise<void> {
     fillBatchNo: session.fillBatchNo || undefined,
     fields: fields.value,
     answers,
-    onBatchNo: batchNo => session.setFillBatchNo(batchNo),
+    onBatchNo: adoptBatchNo,
   })
   toast(savedTip.value)
 }
@@ -313,6 +327,9 @@ async function onSubmit(): Promise<void> {
       draftPersistTimer = null
     }
     storage.remove(draftAnswersKey(props.activityNo))
+    // 先记归属再清批次号：提交产生的这条记录也是「本机的」，
+    // 否则刚提交完去记录页会看不到自己刚填的那条。
+    rememberMyBatch(props.activityNo, result.batchNo)
     session.clearFillBatchNo()
     emit('submitted', { batchNo: result.batchNo })
 

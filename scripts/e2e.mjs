@@ -438,6 +438,24 @@ async function main() {
       name: '提交体携带 fill_batch_no（复用草稿批次而非新建）',
       pass: !!parsed?.[0]?.data?.[0]?.fill_batch_no,
     })
+
+    /**
+     * 再留一条草稿，让后面的记录页能同时验证「完成」与「未完成」两条路径
+     *
+     * 提交会把本批次变成「完成」，本浏览器就再没有「未完成」记录了 ——
+     * 而记录页现在按归属过滤（未登录只显示本机记录），拿不到别人的记录来凑。
+     * 所以提交后再暂存一次草稿，产生一条新的「未完成」记录。
+     */
+    console.log('\n补一条草稿（供记录页验证「未完成」续答路径）：')
+    await send('Page.navigate', { url: 'about:blank' })
+    await sleep(400)
+    await send('Page.navigate', {
+      url: `${BASE}/#/pages/questionnaire/index/index?activity_no=${ACTIVITY_NO}&formType=form&status=进行中`,
+    })
+    await sleep(9000)
+    await clickSelector(`#${ITEMS.radio} .bx-option`, '补草稿-单选题第 1 项')
+    await clickByText('暂存草稿', '补草稿-暂存草稿')
+    await sleep(4000)
   }
   else {
     console.log('\n（未加 --submit，跳过提交，避免产生真实记录）')
@@ -484,14 +502,21 @@ async function main() {
   })
   await sleep(10000)
 
-  // 用「恰好 1 个 state 行」筛出真正的记录卡片（外层容器会把 20 条的 state 全包进来）
+  /**
+   * 记录卡片选择器：直接用卡片自己的 class
+   *
+   * 曾经用「innerText 里恰好 1 行 `完成`/`未完成`」来筛，靠的是「外层容器会把多条
+   * state 全包进来」这个**隐含前提**。记录数降到 1 条时前提就不成立了 ——
+   * 整页根节点也恰好只有 1 行 state，于是 `cards[0]` 变成页面根节点，
+   * 点击落在导航栏上，表现为「点了卡片没反应」。
+   * 改成按 class 精确选取，与记录条数无关。
+   */
+  const CARD_SELECTOR = 'uni-view.record'
+
   const findCardIndex = async (state) => {
     const r = await send('Runtime.evaluate', {
       expression: `(() => {
-        const cards = [...document.querySelectorAll('uni-view')].filter(e => {
-          const lines = (e.innerText || '').split('\\n').map(s => s.trim())
-          return lines.filter(l => l === '完成' || l === '未完成').length === 1
-        })
+        const cards = [...document.querySelectorAll(${JSON.stringify(CARD_SELECTOR)})]
         return cards.findIndex(e => (e.innerText || '').split('\\n').map(s => s.trim()).includes(${JSON.stringify(state)}))
       })()`,
       returnByValue: true,
@@ -502,15 +527,11 @@ async function main() {
   const clickCard = async (idx) => {
     const box = await send('Runtime.evaluate', {
       expression: `(() => {
-        const cards = [...document.querySelectorAll('uni-view')].filter(e => {
-          const lines = (e.innerText || '').split('\\n').map(s => s.trim())
-          return lines.filter(l => l === '完成' || l === '未完成').length === 1
-        })
-        const el = cards[${idx}]
+        const el = [...document.querySelectorAll(${JSON.stringify(CARD_SELECTOR)})][${idx}]
         if (!el) return null
         el.scrollIntoView({ block: 'center' })
         const b = el.getBoundingClientRect()
-        return { x: b.left + b.width / 2, y: b.top + 30 }
+        return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
       })()`,
       returnByValue: true,
     })
@@ -531,11 +552,68 @@ async function main() {
   }
 
   const recordCount = await send('Runtime.evaluate', {
-    expression: `[...document.querySelectorAll('uni-view')].filter(e => (e.innerText || '').split('\\n').map(s => s.trim()).filter(l => l === '完成' || l === '未完成').length === 1).length`,
+    expression: `document.querySelectorAll(${JSON.stringify(CARD_SELECTOR)}).length`,
     returnByValue: true,
   })
   console.log(`  记录卡片数：${recordCount.result.value}`)
   checks.push({ name: '作答记录页渲染出记录卡片', pass: recordCount.result.value > 0 })
+
+  /**
+   * 记录归属门槛：未登录时列表只能覆盖本机
+   *
+   * 服务端**不带 user_no 条件**时会返回该活动的全部记录（含他人批次号，
+   * 点进去还能看到他人作答），所以前端必须自己过滤。
+   *
+   * 断言方式很关键：最初写的是「卡片数 ≤ 20」和「提示条文案存在」，两条都**无效** ——
+   * 变异测试（把 visibleRows 改回不过滤）证明：卡片数正好是 20，卡在边界上通过；
+   * 而提示条是按未过滤的 rows 算隐藏数的，过滤与否都会出现。
+   *
+   * 所以改成直接断言不变式：**渲染出来的每条记录，其批次号都必须在本机记录里**。
+   * 一旦不过滤，他人批次号出现 → foreign 非空 → 立刻变红。
+   * 再加一条 `cards <= mine.length` 防「过滤过头把自己也滤没了」的反向错误。
+   */
+  const gateInfo = await send('Runtime.evaluate', {
+    expression: `(() => {
+      // 必须用 uni.getStorageSync 而不是裸 localStorage.getItem：
+      // uni-app H5 的 setStorageSync 会给值加类型包装，裸读拿到的不是可直接 JSON.parse 的内容
+      const all = uni.getStorageSync('bxq:my_batches') || {}
+      const mine = all[${JSON.stringify(ACTIVITY_NO)}] || []
+      const cards = [...document.querySelectorAll(${JSON.stringify(CARD_SELECTOR)})]
+      const batches = cards.map(e => {
+        const m = (e.innerText || '').match(/批次\\s+([0-9a-f]+)/)
+        return m ? m[1] : ''
+      })
+      const notice = document.querySelector('.records__notice')
+      return {
+        total: cards.length,
+        mineCount: mine.length,
+        foreign: batches.filter(b => !mine.includes(b)),
+        notice: notice ? (notice.innerText || '').trim() : '',
+      }
+    })()`,
+    returnByValue: true,
+  })
+  const gate = gateInfo.result.value
+  console.log(`  归属门槛：本机记录 ${gate.mineCount} 条，渲染 ${gate.total} 条，他人 ${gate.foreign.length} 条`)
+  console.log(`  归属提示：${JSON.stringify(gate.notice)}`)
+
+  // 前提：本轮 e2e 一定产生过本机记录（暂存草稿），否则下面的断言没有意义
+  checks.push({
+    name: '前置条件：本机已记录批次号（否则归属断言无从谈起）',
+    pass: gate.mineCount > 0,
+  })
+  checks.push({
+    name: '记录页渲染出的记录全部来自本机（归属过滤生效）',
+    pass: gate.foreign.length === 0,
+  })
+  checks.push({
+    name: '渲染条数不超过本机记录数（没有把他人记录混进来）',
+    pass: gate.total <= gate.mineCount,
+  })
+  checks.push({
+    name: '未登录时给出「仅显示本机记录」提示',
+    pass: gate.notice.includes('仅显示本机作答记录'),
+  })
 
   /**
    * 找指定状态的记录卡片，找不到就先滚动加载更多
@@ -586,18 +664,35 @@ async function main() {
     url: `${BASE}/#/pages/questionnaire/history/history?activity_no=${ACTIVITY_NO}`,
   })
   await sleep(10000)
-  const doneFound = await findCardIndexWithLoadMore('完成')
-  console.log(`  「完成」卡片下标：${doneFound.idx}（滚动 ${doneFound.scrolls} 次后）`)
-  checks.push({
-    name: '记录页能找到「完成」记录（查看模式检查的前提）',
-    pass: doneFound.idx >= 0,
-  })
-  if (doneFound.idx >= 0) {
-    const doneNav = await clickCard(doneFound.idx)
-    if (doneNav) {
-      console.log(`    跳转：${doneNav.hash.slice(0, 110)}`)
-      checks.push({ name: '点「完成」记录走查看（formType=detail）', pass: doneNav.hash.includes('formType=detail') })
-      checks.push({ name: '查看页只读（无提交按钮）', pass: !doneNav.text.includes('提交问卷') })
+
+  /**
+   * 「完成」记录 + 查看模式检查需要本浏览器**自己提交过**才有前提
+   *
+   * 记录页现在按归属过滤（未登录只显示本机记录），所以不能再靠别人的完成记录
+   * 来凑这条路径 —— 那正是被挡掉的东西。默认跑不提交，因此这里**明确跳过并响亮说明**，
+   * 不假装通过，也不静默消失。
+   */
+  if (!DO_SUBMIT) {
+    console.log('')
+    console.log('  ⚠ 跳过：「完成」记录与查看模式检查需要本浏览器提交过记录')
+    console.log('  ⚠ 记录页按归属过滤后不再显示他人记录，无法靠他人数据凑这条路径')
+    console.log('  ⚠ 要验证请加 --submit')
+    console.log('')
+  }
+  else {
+    const doneFound = await findCardIndexWithLoadMore('完成')
+    console.log(`  「完成」卡片下标：${doneFound.idx}（滚动 ${doneFound.scrolls} 次后）`)
+    checks.push({
+      name: '记录页能找到「完成」记录（查看模式检查的前提）',
+      pass: doneFound.idx >= 0,
+    })
+    if (doneFound.idx >= 0) {
+      const doneNav = await clickCard(doneFound.idx)
+      if (doneNav) {
+        console.log(`    跳转：${doneNav.hash.slice(0, 110)}`)
+        checks.push({ name: '点「完成」记录走查看（formType=detail）', pass: doneNav.hash.includes('formType=detail') })
+        checks.push({ name: '查看页只读（无提交按钮）', pass: !doneNav.text.includes('提交问卷') })
+      }
     }
   }
 

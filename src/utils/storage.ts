@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   DRAFT_ANSWERS: `${PREFIX}draft_answers`,
   ENTRY_PARAMS: `${PREFIX}entry_params`,
   SUBMIT_INFO: `${PREFIX}submit_info`,
+  MY_BATCHES: `${PREFIX}my_batches`,
 } as const
 
 /**
@@ -33,6 +34,9 @@ export const STORAGE_KEYS = {
 export function draftAnswersKey(activityNo: string): string {
   return `${STORAGE_KEYS.DRAFT_ANSWERS}:${activityNo}`
 }
+
+/** 本机在某个活动下产生过的批次号集合（按活动号分组） */
+type MyBatchMap = Record<string, string[]>
 
 export const storage = {
   get<T>(key: string, fallback: T): T {
@@ -70,4 +74,39 @@ export const storage = {
       // 同上
     }
   },
+}
+
+/**
+ * 记住「这条作答记录是本机产生的」
+ *
+ * 为什么需要：`record_reply_select` **未登录时不带 user_no 条件**，会返回该活动的
+ * 全部记录（含他人批次号，点进去还能看到他人作答）。而按 `user_no` 查询又要求
+ * 调用者的平台会话，前端拿不到别的身份来源 ——
+ * 所以未登录时只能靠「本机记过哪些批次号」来判定归属。
+ *
+ * 只记批次号，不记答案内容。
+ */
+export function rememberMyBatch(activityNo: string, batchNo: string): void {
+  if (!activityNo || !batchNo) {
+    return
+  }
+  const map = storage.get<MyBatchMap>(STORAGE_KEYS.MY_BATCHES, {})
+  const existing = map[activityNo]
+  // 必须校验是数组：存储被写坏时 `[...'abc']` 会展开成字符，之后
+  // `includes(batchNo)` 变成子串匹配 —— 会让不属于自己的记录被认领。
+  const list = Array.isArray(existing) ? existing.filter(item => typeof item === 'string') : []
+  if (list.includes(batchNo)) {
+    return
+  }
+  // 上限 200 条：长期使用不至于把 storage 撑爆，同时远大于任何正常作答量
+  map[activityNo] = [...list, batchNo].slice(-200)
+  storage.set(STORAGE_KEYS.MY_BATCHES, map)
+}
+
+/** 取本机在某个活动下产生过的批次号 */
+export function getMyBatches(activityNo: string): string[] {
+  const map = storage.get<MyBatchMap>(STORAGE_KEYS.MY_BATCHES, {})
+  const list = map?.[activityNo]
+  // 同样必须校验：返回字符串会让 `myBatches.includes(x)` 退化成子串匹配
+  return Array.isArray(list) ? list.filter(item => typeof item === 'string') : []
 }
