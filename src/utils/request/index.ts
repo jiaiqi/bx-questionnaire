@@ -143,13 +143,23 @@ function toBxError(envelope: BxEnvelope | null, status: number, service: string)
   return error
 }
 
-/** select：返回完整信封（调用方通常需要 page 与 data） */
+/**
+ * select：返回完整信封（调用方通常需要 page 与 data）
+ *
+ * `params.app` **必须参与 URL 拼接**，不能只当请求体字段。
+ * 这是踩过的坑：早先只从第二个参数 `options` 读 `app`，而 `area.ts` / `attachment.ts`
+ * 把 `app` 写在 `params` 里 —— 于是 app 被静默忽略、URL 用了默认的 `daq`，
+ * 服务返回「无权限访问」，地址题**永远**显示「暂无地区数据」，
+ * 图片回显也永远读不到附件列表。而 `params` 整体又是请求体，body 里 `app: 'config'`
+ * 看着完全正确，把 bug 藏住了（同一个错误报了两次「平台无权限」，其实都是自己调错了应用）。
+ */
 export async function bxSelect<T = Record<string, unknown>>(
   params: BxSelectParams,
   options: Partial<Omit<BxRequestOptions, 'action' | 'service' | 'data'>> = {},
 ): Promise<BxEnvelope<T>> {
   const result = await request({
     ...options,
+    app: options.app ?? (typeof params.app === 'string' ? params.app : undefined),
     action: 'select',
     service: params.serviceName,
     data: params,

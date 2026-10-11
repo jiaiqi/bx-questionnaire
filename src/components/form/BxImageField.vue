@@ -63,16 +63,19 @@ const fileNos = computed<string[]>(() => {
 const rows = ref<BxAttachmentRow[]>([])
 const loading = ref(false)
 const uploading = ref(false)
-/** 附件查询失败（实测环境里 `srvfile_attachment_select` 返回「无权限访问」） */
+/** 附件查询失败（网络/权限/服务异常，原因不猜，只如实标记「读不到」） */
 const loadError = ref(false)
 /**
  * 刚上传成功的本地预览（blob URL）
  *
- * 为什么需要：上传端点和附件查询端点的权限是**分开**的 ——
- * 实测 `/file/upload` 可用，但 `srvfile_attachment_select` 返回「无权限访问」。
- * 于是「传上去了」和「看得见」是两件事：只靠服务端列表的话，
- * 用户传完图界面还是「暂无图片」，会以为没传上而反复重传。
+ * 为什么需要：**「传上去了」和「看得见」是两件事** —— 上传成功之后
+ * 回显还要再查一次附件列表，而这次查询可能失败（网络抖动、权限变更、服务异常）。
+ * 只靠服务端列表的话，用户传完图界面还是「暂无图片」，会以为没传上而反复重传。
  * 本地预览让「刚传了什么」立刻可见。
+ *
+ * 注意：这条兜底**不是**为某个具体 bug 写的补丁。我一度把「请求打错应用」
+ * 误判成「`srvfile_attachment_select` 无权限」，而真正的权限问题并不存在
+ * （见验收清单限制 2）。修好 app 之后走的是服务端地址，但这条安全网仍然该留。
  */
 const localPreviews = ref<string[]>([])
 
@@ -249,7 +252,7 @@ function onClear(): void {
     </view>
 
     <text v-if="showLocalOnlyHint" class="bx-image__hint">
-      以下为本机预览：附件列表暂时读不到（{{ loadError ? '附件查询无权限' : '服务未返回数据' }}），已上传的图片会随作答一起提交
+      以下为本机预览：附件列表暂时读不到（{{ loadError ? '查询失败' : '服务未返回数据' }}），已上传的图片会随作答一起提交
     </text>
 
     <view v-if="!disabled" class="bx-image__actions">

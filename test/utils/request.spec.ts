@@ -105,6 +105,39 @@ describe('request · 基础约定', () => {
     })
   })
 
+  it('select 的 params.app 决定 URL 里的应用段（不是只当请求体字段）', async () => {
+    respondWith({ state: 'SUCCESS', resultCode: '0000', data: [], page: { total: 0, pageNo: 1, rownumber: 20 } })
+
+    await bxSelect({ serviceName: 'srvconfig_area_adj_select', app: 'config', colNames: ['*'], condition: [] })
+
+    const options = lastCall()
+    // 这条断言是防回归的核心：早先 bxSelect 只从第二个参数读 app，
+    // 于是 params.app 被静默忽略、URL 用了默认的 daq，服务返回「无权限访问」，
+    // 地址题永远显示「暂无地区数据」。而 params 整体又是请求体，
+    // body 里 app:'config' 看着完全正确 —— 只有断言 URL 才抓得到。
+    expect(options.url).toBe('http://192.168.0.214/bxapi/config/select/srvconfig_area_adj_select?srvconfig_area_adj_select')
+    expect(options.url).not.toContain('/daq/')
+  })
+
+  it('select 不传 app 时回落到默认应用', async () => {
+    respondWith({ state: 'SUCCESS', resultCode: '0000', data: [], page: { total: 0, pageNo: 1, rownumber: 20 } })
+
+    await bxSelect({ serviceName: 'srvdaq_init_view_select', colNames: ['*'] })
+
+    expect(lastCall().url).toContain('/daq/select/srvdaq_init_view_select')
+  })
+
+  it('第二个参数的 app 优先级高于 params.app', async () => {
+    respondWith({ state: 'SUCCESS', resultCode: '0000', data: [], page: { total: 0, pageNo: 1, rownumber: 20 } })
+
+    await bxSelect(
+      { serviceName: 'srvconfig_area_adj_select', app: 'config', colNames: ['*'] },
+      { app: 'other' },
+    )
+
+    expect(lastCall().url).toContain('/other/select/srvconfig_area_adj_select')
+  })
+
   it('写操作 URL 不带 select 后缀，请求体为数组', async () => {
     respondWith({ state: 'SUCCESS', resultCode: '0000', data: null, response: [{ state: 'SUCCESS', response: {} }] })
 

@@ -344,12 +344,13 @@ console.log(`  引用题 item_no（提交前取）：${refItemNo}`)
 check('能从 DOM 反推出引用题 item_no', !!refItemNo)
 
 // ── 地址题 ────────────────────────────────────────────────────
-// 本环境 srvconfig_area_adj_select 任何条件都返回 0 行；
-// 要验证的是「空数据时不要空着打开一个转轮」，而不是「能选地区」
-console.log('\n=== 地址题（本环境无地区数据）===')
+// 本环境 srvconfig_area_adj_select 原本恒 0 行；造了测试地区树（bxq99 等）后能验证级联。
+// 两种部署形态都真实存在，所以按实际数据分支断言，而不是写死某一种 ——
+// 写死的话换个环境就变成假绿或假红。
+let addrItemNo = ''
+console.log('\n=== 地址题 ===')
 const addrPlaceholder = String(await evaluate(`((document.querySelector('.bx-address__placeholder')||{}).innerText||'').trim()`))
 console.log(`  占位文案：${JSON.stringify(addrPlaceholder)}`)
-check('无地区数据时如实提示，而不是「请选择地区」', addrPlaceholder === '暂无地区数据')
 
 /**
  * 断言的是**行为**而不是属性值
@@ -358,17 +359,54 @@ check('无地区数据时如实提示，而不是「请选择地区」', addrPla
  * 属性值变成空串 `""`，断言照样通过 —— 又是一条假绿。
  * 用户真正能感知的是「点了会不会弹出一个空的转轮」，所以直接点它、看有没有弹层。
  */
-check('点到了地址题控件', await clickSel('.bx-address__control'))
-await sleep(2500)
-const addrPickerOpened = await evaluate(`(() => {
+const addrPickerOpened = async () => evaluate(`(() => {
   const box = document.querySelector('.uni-picker-container')
   if (!box) return false
   const style = window.getComputedStyle(box)
   return style.display !== 'none' && style.visibility !== 'hidden'
 })()`)
-check('无地区数据时点它不会弹出空的地区选择器', addrPickerOpened === false)
-if (addrPickerOpened === true) {
-  console.log(`  弹层内容：${JSON.stringify(String(await evaluate(`((document.querySelector('.uni-picker-container')||{}).innerText||'').trim()`)).slice(0, 120))}`)
+
+if (addrPlaceholder === '暂无地区数据') {
+  check('无地区数据时如实提示，而不是「请选择地区」', true)
+  check('点到了地址题控件', await clickSel('.bx-address__control'))
+  await sleep(2500)
+  const opened = await addrPickerOpened()
+  check('无地区数据时点它不会弹出空的地区选择器', opened === false)
+  if (opened === true) {
+    console.log(`  弹层内容：${JSON.stringify(String(await evaluate(`((document.querySelector('.uni-picker-container')||{}).innerText||'').trim()`)).slice(0, 120))}`)
+  }
+}
+else {
+  check('有地区数据时显示「请选择地区」', addrPlaceholder === '请选择地区')
+  check('点到了地址题控件', await clickSel('.bx-address__control'))
+  await sleep(2500)
+
+  const pickerText = String(await evaluate(`((document.querySelector('.uni-picker-container')||{}).innerText||'').trim()`))
+  console.log(`  弹层内容：${JSON.stringify(pickerText)}`)
+  check('地区选择器弹出', pickerText.length > 0)
+
+  /**
+   * 标签必须是**名称**而不是编号
+   *
+   * 地区表的列是 `no`（编号）/ `name`（名称）/ `parent_no`（父编号），
+   * 而老工程取的是 `path_name`。实测本环境 `path_name` 为 **null**（`path` 有值），
+   * 于是 `path_name ?? no` 的回退会把编号直接当标签 —— 用户看到的是「bxq99」。
+   */
+  check('地区选项显示名称而不是编号', pickerText.includes('bxq测试省') && !pickerText.includes('bxq99'))
+
+  check('点到了地区选择器的完成', await clickSel('.uni-picker-action-confirm'))
+  await sleep(2000)
+  const addrAfter = String(await evaluate(`(document.querySelector('.bx-address')||{}).innerText || ''`))
+  console.log(`  确定后控件文本：${JSON.stringify(addrAfter)}`)
+  check('确定后控件显示所选地区名称', addrAfter.includes('bxq测试省'))
+
+  addrItemNo = String(await evaluate(`(() => {
+    let el = document.querySelector('.bx-address')
+    while (el && !(el.id && el.id.startsWith('q-'))) el = el.parentElement
+    return el ? el.id.slice(2) : ''
+  })()`))
+  console.log(`  地址题 item_no（提交前取）：${addrItemNo}`)
+  check('能从 DOM 反推出地址题 item_no', !!addrItemNo)
 }
 
 

@@ -33,6 +33,13 @@ export interface BxOrder {
 /** select 请求体（平铺） */
 export interface BxSelectParams {
   serviceName: string
+  /**
+   * 应用名，决定 URL 里的 `{app}` 段（服务在哪个应用下）
+   *
+   * 不传时用 `ENV.app`（默认 `daq`）。**必须写在这里而不是第二个参数里** ——
+   * `bxSelect` 会读它来拼 URL，写错地方会静默走默认应用并拿到「无权限访问」。
+   */
+  app?: string
   colNames?: string[]
   condition?: BxCondition[]
   relation_condition?: unknown[]

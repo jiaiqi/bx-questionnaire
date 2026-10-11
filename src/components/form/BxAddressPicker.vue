@@ -48,9 +48,17 @@ const display = computed(() => {
   return current.value ? String(current.value) : ''
 })
 
-function toOptions(rows: Array<{ no?: string | null, path_name?: string | null }>): AreaOption[] {
+/**
+ * 地区行 → 选项
+ *
+ * 标签优先取 `path_name`（老工程的 `showCol`），但**必须回退到 `name` 而不是 `no`**：
+ * 实测本环境 `path_name` 为 null（`path` 有值），而 `no` 是编号 ——
+ * 回退到编号会让用户在下拉里看到「bxq99」这种编码。
+ * 地区表的真实列是 `no`（编号）/ `name`（名称）/ `parent_no`（父编号）。
+ */
+function toOptions(rows: Array<{ no?: string | null, name?: string | null, path_name?: string | null }>): AreaOption[] {
   return rows
-    .map(row => ({ no: String(row.no ?? ''), name: String(row.path_name ?? row.no ?? '') }))
+    .map(row => ({ no: String(row.no ?? ''), name: String(row.path_name ?? row.name ?? row.no ?? '') }))
     .filter(item => !!item.no)
 }
 
