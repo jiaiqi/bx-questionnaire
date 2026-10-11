@@ -39,6 +39,39 @@ function respondWith(envelope: unknown, statusCode = 200): void {
   })
 }
 
+/**
+ * 安装最小 window 桩（模拟「被 iframe 嵌入」）
+ *
+ * 刻意不用 `vi.stubGlobal` + `vi.unstubAllGlobals`：后者会把文件级安装的 `uni` 桩
+ * 一并撤掉，导致后续所有用例报 `uni is not defined`。
+ * 这里只接管 `window` 一个键，并原样还原。
+ */
+function stubEmbedWindow(): { posted: Array<{ message: unknown }>, restore: () => void } {
+  const posted: Array<{ message: unknown }> = []
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    writable: true,
+    value: {
+      // self 与 top 是不同对象 → self !== top → 判定为嵌入
+      self: {},
+      top: {},
+      parent: { postMessage: (message: unknown) => posted.push({ message }) },
+    },
+  })
+  return {
+    posted,
+    restore: () => {
+      if (original) {
+        Object.defineProperty(globalThis, 'window', original)
+      }
+      else {
+        delete (globalThis as Record<string, unknown>).window
+      }
+    },
+  }
+}
+
 function lastCall(): RequestOptions {
   const call = requestMock.mock.calls.at(-1)
   if (!call) {
@@ -105,6 +138,51 @@ describe('request · 错误策略', () => {
     expect(removeStorageSync).toHaveBeenCalledWith('bx_auth_ticket')
     expect(handler).toHaveBeenCalledTimes(1)
     setSessionExpiredHandler(null)
+  })
+
+  /**
+   * 嵌入场景：子页掉线必须让父页面知道，否则父页面以为一切正常，
+   * 用户看到的是「填完了但提交没反应」（契约 9.3）。
+   *
+   * 必须带 window 桩才有效 —— 不带桩时 `notifyParent` 在 node 环境本来就会早返回，
+   * 无论有没有接线都通过，等于没测。
+   */
+  it('0011 会话过期：通知父页面 TICKET_EXPIRED', async () => {
+    const { posted, restore } = stubEmbedWindow()
+    try {
+      respondWith({ state: 'FAILURE', resultCode: '0011', resultMessage: '需要登录访问', data: null })
+
+      await expect(bxSelect({ serviceName: 'srvdaq_init_view_select' })).rejects.toMatchObject({
+        code: '0011',
+      })
+
+      expect(posted).toHaveLength(1)
+      expect(posted[0].message).toMatchObject({ type: 'TICKET_EXPIRED' })
+    }
+    finally {
+      restore()
+    }
+  })
+
+  it('非 0011 的业务失败不通知父页面 —— 字段不存在与掉线是两回事，混报会让父页面无端跳登录', async () => {
+    const { posted, restore } = stubEmbedWindow()
+    try {
+      respondWith({
+        state: 'FAILURE',
+        resultCode: 'SEARCH_COLUMS_NOT_EXISTS',
+        resultMessage: '字段不存在',
+        data: null,
+      })
+
+      await expect(bxSelect({ serviceName: 'srvdaq_record_reply_select' })).rejects.toMatchObject({
+        code: 'SEARCH_COLUMS_NOT_EXISTS',
+      })
+
+      expect(posted).toEqual([])
+    }
+    finally {
+      restore()
+    }
   })
 
   /**

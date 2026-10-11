@@ -12,6 +12,7 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 
 import BxNavBar from '@/components/base/BxNavBar.vue'
+import { useEmbedResize } from '@/composables/useEmbedResize'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import {
   calcScore,
@@ -27,6 +28,9 @@ import { answerUrl, coverUrl, suggestionUrl } from '@/domain/questionnaire/route
 import { readQuery } from '@/utils/query'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
+
+// 逐题回顾列表长度取决于题目数，嵌入场景下高度变化明显
+useEmbedResize()
 
 const activityNo = ref('')
 const batchNo = ref('')

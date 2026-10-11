@@ -13,6 +13,9 @@ import { join } from 'node:path'
 const H5_FINGERPRINTS = [
   { name: 'env.ts readHostPathConfig', pattern: 'pathConfig' },
   { name: 'ui.ts scrollToSelector', pattern: 'scrollIntoView' },
+  { name: 'embed.ts notifyParent', pattern: 'postMessage' },
+  { name: 'embed.ts isEmbedded', pattern: 'window.parent' },
+  { name: 'useEmbedResize', pattern: 'ResizeObserver' },
 ]
 
 function collectJs(dir, acc = []) {

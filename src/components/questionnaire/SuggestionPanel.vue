@@ -19,6 +19,7 @@ import { computed, ref } from 'vue'
 
 import { activitySugSelect } from '@/api/daq/record'
 import BxEmpty from '@/components/base/BxEmpty.vue'
+import { useEmbedResize } from '@/composables/useEmbedResize'
 import { BxError } from '@/utils/request'
 
 interface Props {
@@ -29,6 +30,11 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   fillBatchNo: '',
 })
+
+// 建议条数不定，内容高度变化幅度大；嵌入场景下要同步给父页面，
+// 否则父页面的 iframe 会停在初始高度、把后面的建议裁掉。
+// 老工程只在 survey/result.vue 里做了这件事，assessmentResult.vue 漏了。
+useEmbedResize()
 
 const loading = ref(false)
 const loaded = ref(false)

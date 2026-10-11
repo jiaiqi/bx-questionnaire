@@ -19,12 +19,14 @@ import BxProgressBar from '@/components/base/BxProgressBar.vue'
 import BxFieldRenderer from '@/components/form/BxFieldRenderer.vue'
 import { useAnswerModel } from '@/composables/useAnswerModel'
 import { useDraft } from '@/composables/useDraft'
+import { useEmbedResize } from '@/composables/useEmbedResize'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useSubmit } from '@/composables/useSubmit'
 import { fromLocalDraft, toArray, toLocalDraft, validateRequired } from '@/domain/questionnaire'
 import { matchEntryPrefill } from '@/domain/questionnaire/prefill'
-import { coverUrl, historyUrl } from '@/domain/questionnaire/routes'
+import { coverUrl, historyUrl, withQuery } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
+import { buildSubmitPayload, notifyParent } from '@/utils/embed'
 import { BxError } from '@/utils/request'
 import { draftAnswersKey, storage, STORAGE_KEYS } from '@/utils/storage'
 import { confirmDialog, scrollToSelector, toast } from '@/utils/ui'
@@ -50,6 +52,9 @@ const { loading, activity, fields, backfill, errorMessage, load } = useQuestionn
 const { answers, progress, replace } = useAnswerModel(() => fields.value)
 const { savedTip, save: saveDraftItem, saveAll: saveAllDraft, waitIdle: waitDraftIdle } = useDraft()
 const { submitting, submit } = useSubmit()
+
+// 嵌入场景：内容变高时告诉父页面调整 iframe 高度
+useEmbedResize()
 
 const errors = ref<Record<string, string>>({})
 
@@ -102,6 +107,9 @@ async function init(): Promise<void> {
   if (!ok) {
     return
   }
+
+  // 嵌入场景：问卷配置就绪，告诉父页面可以收起加载动画（契约 FORM_READY）
+  notifyParent('FORM_READY', { serviceName: 'srvdaq_init_view_select' })
 
   if (Object.keys(backfill.value).length > 0) {
     replace(backfill.value)
@@ -308,8 +316,23 @@ async function onSubmit(): Promise<void> {
     session.clearFillBatchNo()
     emit('submitted', { batchNo: result.batchNo })
 
+    // 嵌入场景：提交成功必须让父页面知道，否则父页面既不关弹窗也不刷新列表，
+    // 用户看到的是「提交完没反应」（契约 9.2 的典型症状）。
+    // 问卷提交是**新增**一条作答记录，故用 ADD_SUCCESS 而非 UPDATE_SUCCESS。
+    notifyParent('ADD_SUCCESS', buildSubmitPayload(
+      'add',
+      'srvdaq_activity_result_submit',
+      result.payload,
+      result.batchNo,
+    ))
+
     uni.redirectTo({
-      url: `${props.resultPath}?activity_no=${props.activityNo}&fill_batch_no=${result.batchNo}`,
+      // 用 props.resultPath 而非写死 index/result：调研页（survey）靠这个 prop
+      // 把结果页覆盖成 survey/result。查询串统一由 withQuery 拼，避免手写漏参数。
+      url: withQuery(props.resultPath, {
+        activity_no: props.activityNo,
+        fill_batch_no: result.batchNo,
+      }),
     })
   }
   catch (error) {

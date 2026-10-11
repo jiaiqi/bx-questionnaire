@@ -9,6 +9,7 @@
 
 import type { BxAction, BxEnvelope, BxSelectParams, BxWriteItem } from './types'
 
+import { notifyParent } from '@/utils/embed'
 import { SHARED_KEYS, storage } from '@/utils/storage'
 import { buildServiceUrl, ENV, resolveTicket } from './env'
 import { BX_CODE, BxError } from './types'
@@ -122,6 +123,9 @@ function toBxError(envelope: BxEnvelope | null, status: number, service: string)
     // 会话过期：清票据并上报，绝不静默重试
     storage.remove(SHARED_KEYS.TICKET)
     sessionExpiredHandler?.()
+    // 嵌入场景还要告诉父页面 —— 否则父页面不知道子页已经掉线，
+    // 用户会以为「填完了但提交没反应」。父页面收到后跳登录（契约文档 9.3）。
+    notifyParent('TICKET_EXPIRED')
   }
   return error
 }
