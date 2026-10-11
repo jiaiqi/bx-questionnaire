@@ -1,13 +1,21 @@
 /**
- * 图片题端到端验证（真实网关）
+ * 特殊题型端到端验证（真实网关）：图片 / 引用 / 地址
  *
  * 用法：
- *   node scripts/image-e2e.mjs [base] [--activity=<no>]
+ *   node scripts/special-e2e.mjs [base] [--activity=<no>]
  *
  * 默认活动 `20261011113133000003`（「bxq 特殊题型测试问卷」，含图片/引用/地址/文本各一题），
  * 可用 --activity 指定别的。
  *
- * ## 为什么用桩替换 uni.chooseImage
+ * ## 三个题型各自的覆盖边界
+ *
+ * | 题型 | 覆盖 | 未覆盖 |
+ * | --- | --- | --- |
+ * | 图片 | 上传→落库→回显→作答值→提交（选图弹窗用桩，见下） | 选图弹窗本身（原生行为） |
+ * | 引用 | 弹层取数→选中→确定→作答值→提交 | — |
+ * | 地址 | 空数据时的诚实降级（本环境 `srvconfig_area_adj_select` 恒 0 行） | 有数据时的级联选择 |
+ *
+ * ## 为什么图片题的选图弹窗用桩
  *
  * headless Chrome 里 `input.click()` 会**立即触发 `cancel` 事件**（没有真实文件选择器可开），
  * uni-app H5 的 chooseImage 监听 cancel 并 `reject('chooseImage:fail cancel')`，
@@ -20,8 +28,6 @@
  * 所以只把**平台选图弹窗**这一步换成桩：桩返回一个真实 PNG 的 blob URL，
  * 下游（uni.uploadFile 的 multipart 组装、票据 header、服务端落库、
  * 回显地址、作答值写入、提交请求体）**全部是真实链路**。
- *
- * 未被覆盖的：选图弹窗本身的交互（原生行为，无法在 headless 验证）。
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -126,9 +132,36 @@ const clickText = async (text) => {
 }
 
 const checks = []
+/**
+ * 记录一项检查
+ *
+ * `pass` **必须严格等于 true** —— 早期写的是 `if (!c.pass) failed++`，
+ * 于是求值异常返回的对象（`{__err: ...}`）是 truthy，被当成通过，
+ * 产生了一条「选中项出现 ✓ 标记」的假绿。断言失败要失败得响亮。
+ */
 const check = (name, pass, extra = '') => {
-  checks.push({ name, pass })
-  console.log(`  ${pass ? '✓' : '✗'} ${name}${extra ? ` —— ${extra}` : ''}`)
+  const ok = pass === true
+  checks.push({ name, pass: ok })
+  console.log(`  ${ok ? '✓' : '✗'} ${name}${extra ? ` —— ${extra}` : ''}`)
+}
+
+/** 按选择器点击（中心点真实鼠标事件） */
+const clickSel = async (sel, nth = 0) => {
+  const box = await evaluate(`(() => {
+    const els = document.querySelectorAll(${JSON.stringify(sel)})
+    const el = els[${nth}]
+    if (!el) return null
+    el.scrollIntoView({ block: 'center' })
+    const b = el.getBoundingClientRect()
+    return { x: b.left + b.width/2, y: b.top + b.height/2 }
+  })()`)
+  if (!box || !box.x) {
+    return false
+  }
+  for (const type of ['mousePressed', 'mouseReleased']) {
+    await send('Input.dispatchMouseEvent', { type, x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  }
+  return true
 }
 
 await send('Page.enable')
@@ -277,6 +310,68 @@ const imageItemNo = String(await evaluate(`(() => {
 console.log(`  图片题 item_no（提交前取）：${imageItemNo}`)
 check('能从 DOM 反推出图片题 item_no', !!imageItemNo)
 
+// ── 引用题 ────────────────────────────────────────────────────
+// 弹层数据来自 srvdaq_activity_cfg_select（活动表），真实网关返回 13 个活动
+console.log('\n=== 引用题 ===')
+// 控件内是「请选择\n›」两行，clickText 的精确匹配命中不了，必须按选择器点
+check('点到了引用题控件', await clickSel('.bx-ref__control'))
+await sleep(4000)
+const refItems = await evaluate(`document.querySelectorAll('.bx-ref__item').length`)
+console.log(`  弹层项数：${refItems}`)
+check('引用弹层取到真实数据', typeof refItems === 'number' && refItems > 0)
+check('弹层内容来自活动表', await evaluate(`(document.body.innerText||'').includes('bxq 自动化测试问卷')`) === true)
+
+const firstRef = String(await evaluate(`(document.querySelectorAll('.bx-ref__item')[0]||{}).innerText || ''`))
+console.log(`  第 1 项：${JSON.stringify(firstRef)}`)
+check('点到了第 1 项', await clickSel('.bx-ref__item', 0))
+await sleep(700)
+check('选中项出现 ✓ 标记', await evaluate(`String((document.querySelectorAll('.bx-ref__item')[0]||{}).innerText || '').includes('✓')`) === true)
+check('点到了确定', await clickSel('.bx-ref__confirm'))
+await sleep(2500)
+
+const refText = String(await evaluate(`(document.querySelector('.bx-ref')||{}).innerText || ''`))
+console.log(`  引用题控件文本：${JSON.stringify(refText)}`)
+check('确定后控件显示所选内容', refText.trim().length > 0 && !refText.includes('请选择'))
+check('引用题计入已答', Number(await evaluate(`(((document.querySelector('uni-app')||document.body).innerText||'').match(/已答\\s*(\\d+)/)||[])[1]`)) >= 1)
+
+/** 引用题的 item_no 也从 DOM 反推（提交后页面会跳走，必须提前取） */
+const refItemNo = String(await evaluate(`(() => {
+  let el = document.querySelector('.bx-ref')
+  while (el && !(el.id && el.id.startsWith('q-'))) el = el.parentElement
+  return el ? el.id.slice(2) : ''
+})()`))
+console.log(`  引用题 item_no（提交前取）：${refItemNo}`)
+check('能从 DOM 反推出引用题 item_no', !!refItemNo)
+
+// ── 地址题 ────────────────────────────────────────────────────
+// 本环境 srvconfig_area_adj_select 任何条件都返回 0 行；
+// 要验证的是「空数据时不要空着打开一个转轮」，而不是「能选地区」
+console.log('\n=== 地址题（本环境无地区数据）===')
+const addrPlaceholder = String(await evaluate(`((document.querySelector('.bx-address__placeholder')||{}).innerText||'').trim()`))
+console.log(`  占位文案：${JSON.stringify(addrPlaceholder)}`)
+check('无地区数据时如实提示，而不是「请选择地区」', addrPlaceholder === '暂无地区数据')
+
+/**
+ * 断言的是**行为**而不是属性值
+ *
+ * 早先这里查 `getAttribute('disabled')` 是否 !== 'false'，结果变异（去掉守卫）后
+ * 属性值变成空串 `""`，断言照样通过 —— 又是一条假绿。
+ * 用户真正能感知的是「点了会不会弹出一个空的转轮」，所以直接点它、看有没有弹层。
+ */
+check('点到了地址题控件', await clickSel('.bx-address__control'))
+await sleep(2500)
+const addrPickerOpened = await evaluate(`(() => {
+  const box = document.querySelector('.uni-picker-container')
+  if (!box) return false
+  const style = window.getComputedStyle(box)
+  return style.display !== 'none' && style.visibility !== 'hidden'
+})()`)
+check('无地区数据时点它不会弹出空的地区选择器', addrPickerOpened === false)
+if (addrPickerOpened === true) {
+  console.log(`  弹层内容：${JSON.stringify(String(await evaluate(`((document.querySelector('.uni-picker-container')||{}).innerText||'').trim()`)).slice(0, 120))}`)
+}
+
+
 // 提交
 requests.length = 0
 await clickText('提交问卷')
@@ -292,11 +387,17 @@ console.log('\n=== 提交 ===')
 const submitReq = requests.find(r => r.url.includes('activity_result_submit'))
 check('提交真的发出', !!submitReq)
 if (submitReq) {
-  console.log(`  提交体：${submitReq.body.slice(0, 500)}`)
+  console.log(`  提交体：${submitReq.body.slice(0, 700)}`)
   if (imageItemNo) {
     check('提交体包含图片题', submitReq.body.includes(imageItemNo))
     const seg = submitReq.body.split(imageItemNo)[1] || ''
     check('图片题作答值非空（批次号已写入）', /"option_data":\["[^"]+/.test(seg.slice(0, 120)))
+  }
+  // 引用题的容器 id 同样从 DOM 反推
+  if (refItemNo) {
+    check('提交体包含引用题', submitReq.body.includes(refItemNo))
+    const seg = submitReq.body.split(refItemNo)[1] || ''
+    check('引用题作答值非空', /"option_data":\["[^"]+/.test(seg.slice(0, 120)))
   }
 }
 const finalHash = String(await evaluate('location.hash.slice(0, 160)'))

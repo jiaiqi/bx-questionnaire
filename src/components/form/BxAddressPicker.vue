@@ -154,6 +154,16 @@ watch(() => props.field.key, () => {
   labels.value = []
   void init()
 }, { immediate: true })
+
+/**
+ * 顶层有没有可选项
+ *
+ * 实测本环境的 `srvconfig_area_adj_select` **任何条件都返回 0 行**，
+ * 而 uni 的 `<picker>` 在 range 为空时仍会打开一个**空的**选择器 ——
+ * 用户只看到「取消 / 完成」和一个空转轮，会以为页面坏了。
+ * 所以没数据时直接禁用并如实说明，而不是让它空着打开。
+ */
+const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
 </script>
 
 <template>
@@ -163,13 +173,15 @@ watch(() => props.field.key, () => {
       :range="columns"
       :value="indexes"
       range-key="name"
-      :disabled="props.disabled || loading"
+      :disabled="props.disabled || loading || !hasOptions"
       @columnchange="onColumnChange"
       @change="onConfirm"
     >
       <view class="bx-address__control" :class="{ 'bx-address__control--disabled': props.disabled }">
         <text v-if="display" class="bx-address__text">{{ display }}</text>
-        <text v-else class="bx-address__placeholder">{{ loading ? '正在加载地区…' : '请选择地区' }}</text>
+        <text v-else class="bx-address__placeholder">
+          {{ loading ? '正在加载地区…' : (hasOptions ? '请选择地区' : '暂无地区数据') }}
+        </text>
         <text class="bx-address__arrow">›</text>
       </view>
     </picker>
