@@ -34,6 +34,8 @@ const PAGES = [
   { name: '我的测评页', route: '/pages/questionnaire/couple/couple' },
   { name: '调研页', route: `/pages/questionnaire/survey/survey?activity_no=${ACTIVITY_NO}` },
   { name: '评估结果页', route: `/pages/questionnaire/assessmentResult/assessmentResult?activity_no=${ACTIVITY_NO}&fill_batch_no=${FILL_BATCH_NO}` },
+  { name: '问卷列表页', route: '/pages/editor/list/index' },
+  { name: '可视化设计器', route: `/pages/editor/design/index?activity_no=${ACTIVITY_NO}` },
 ]
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -72,18 +74,45 @@ const AUDIT = `(() => {
     '[role]', '[tabindex]',
   ].join(', ')
 
+  /**
+   * uni-app H5 把 aria-label 写在**外层壳**（uni-input / uni-textarea）上，
+   * 不转发给内层原生控件 —— 实测内层 input 的 aria-label 与 placeholder 都是 null。
+   *
+   * 于是同一个控件会被选择器命中两次：外层壳（有名称）+ 内层原生控件（没名称），
+   * 审计里就出现「可交互 41 个、1 个没名称」这种**自相矛盾**的结果
+   * （壳有名字、里面的控件没有）。这里按逻辑控件去重，并单独统计
+   * 「名称只挂在壳上」的数量 —— 那是 uni-app 的平台限制，不是页面作者漏写，
+   * 必须显式报出来，不能靠「壳上有名字」把它算成全绿。
+   */
+  const WRAPPER = 'uni-input, uni-textarea'
+  const wrapperOf = el => (el.closest ? el.closest(WRAPPER) : null)
+
   const interactive = []
+  let wrapperOnlyNames = 0
   for (const el of root.querySelectorAll(sel)) {
     if (!visible(el)) continue
-    // uni-input / uni-textarea 的外层只是壳，名称看内层原生控件
-    const native = el.matches('input, textarea, select') ? el : el.querySelector('input, textarea, select')
+    const isNative = el.matches('input, textarea, select')
+    // 内层原生控件由外层壳那条记录代表，跳过以免同一个控件算两次
+    if (isNative && wrapperOf(el)) continue
+
+    const native = isNative ? el : el.querySelector('input, textarea, select')
     const target = native || el
+    // 原生控件**自己**有没有名称：没有就说明名称只能从外层壳上取到
+    const ownName = nameOf(target)
+    const name = ownName || nameOf(el)
+    if (!ownName && name) {
+      // 作者写了标签，但 uni-app 把它放在了 uni-input / uni-textarea 壳上，
+      // 内层原生控件（真正被聚焦的那个）依然没有名称 —— 屏幕阅读器读不到。
+      // 这不是页面漏写，所以不算失败；但它必须被计数，否则「全部有名称」
+      // 会让人以为辅助技术也能读到。
+      wrapperOnlyNames++
+    }
     interactive.push({
       tag: el.tagName.toLowerCase(),
       cls: (el.className || '').toString().slice(0, 50),
       role: el.getAttribute('role') || '',
       tabIndex: target.tabIndex,
-      name: nameOf(target) || nameOf(el),
+      name,
       disabled: target.disabled === true || el.getAttribute('aria-disabled') === 'true',
     })
   }
@@ -105,6 +134,7 @@ const AUDIT = `(() => {
     noName: interactive.filter(i => !i.name && !i.disabled),
     unreachable,
     imgsNoAlt,
+    wrapperOnlyNames,
   }
 })()`
 
@@ -172,6 +202,7 @@ async function main() {
   let totalImgNoAlt = 0
   let totalFocusInvisible = 0
   let totalUnreachable = 0
+  let totalWrapperOnly = 0
 
   for (const page of PAGES) {
     await send('Page.navigate', { url: 'about:blank' })
@@ -199,6 +230,13 @@ async function main() {
     else {
       console.log(`  可读名称缺失 ${a.noName.length} 个：`)
       for (const x of a.noName.slice(0, 8)) console.log(`    <${x.tag} class="${x.cls}"> role=${x.role || '-'}`)
+    }
+
+    // 平台限制单独报：名称只在 uni-input / uni-textarea 壳上，uni-app 没有转发到
+    // 内层原生控件。这不是页面漏写，但屏幕阅读器确实读不到，所以必须显式可见。
+    totalWrapperOnly += a.wrapperOnlyNames || 0
+    if (a.wrapperOnlyNames > 0) {
+      console.log(`  名称只挂在壳上 ${a.wrapperOnlyNames} 个（uni-app 未转发给原生控件，见 docs/验收清单.md「已知限制」）`)
     }
 
     if (a.imgsNoAlt.length === 0) console.log('  图片 alt：全部有 ✓')
@@ -238,6 +276,7 @@ async function main() {
   }
 
   console.log(`\n== 汇总：无名称 ${totalNoName} 项 / 缺 alt ${totalImgNoAlt} 项 / 键盘到不了 ${totalUnreachable} 项 / 焦点不可见 ${totalFocusInvisible} 项 ==`)
+  console.log(`== 平台限制：名称只挂在 uni-input / uni-textarea 壳上 ${totalWrapperOnly} 项（不计为失败，但不等于屏幕阅读器能读到）==`)
 
   ws.close()
   chrome.kill()

@@ -5,10 +5,11 @@
  * 没有一个能「把页面拍下来」。
  *
  * 用法：
- *   node scripts/screenshot.mjs "<hash 路由或完整 URL>" [--out docs/screenshots] [--name 前缀]
+ *   node scripts/screenshot.mjs "<hash 路由或完整 URL>" [--out docs/screenshots] [--name 前缀] [--click 选择器]
  *
  * 例：
  *   node scripts/screenshot.mjs "/pages/questionnaire/index/index?activity_no=xxx&formType=form&status=进行中" --name 演示问卷
+ *   node scripts/screenshot.mjs "/pages/editor/design/index?activity_no=xxx" --name 设计器 --click ".bx-editor-item-row:nth-child(2)"
  *
  * 前置：`pnpm dev` 已启动。每个视口各出一张 PNG，文件名形如 `前缀-PC.png`。
  */
@@ -35,6 +36,7 @@ const flag = (name, fallback) => {
 }
 const OUT_DIR = resolve(flag('out', 'docs/screenshots'))
 const NAME = flag('name', 'page')
+const CLICK = flag('click', '')
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -126,16 +128,24 @@ try {
     await sleep(300)
     await cdp.send('Page.navigate', { url })
 
-    // Vite dev 按需编译，轮询到有内容为止，不用固定 sleep
+    // Vite dev 按需编译，轮询到内容稳定为止，不用固定 sleep。
+    // 只看「长度 > 20」会拍到「加载中…」那一刻：列表页/详情页先渲染骨架再填数据，
+    // 骨架本身就有几十个字。所以要求连续两次读到的文本完全一致。
     let textLen = 0
-    for (let i = 0; i < 20; i++) {
+    let lastText = null
+    let stable = 0
+    for (let i = 0; i < 30; i++) {
       await sleep(700)
       const probe = await cdp.send('Runtime.evaluate', {
-        expression: '((document.querySelector("uni-app")||document.body).innerText||"").length',
+        expression: '((document.querySelector("uni-app")||document.body).innerText||"")',
         returnByValue: true,
       })
-      textLen = Number(probe?.result?.value ?? 0)
-      if (textLen > 20) break
+      const text = String(probe?.result?.value ?? '')
+      textLen = text.length
+      if (text === lastText) stable++
+      else stable = 0
+      lastText = text
+      if (textLen > 20 && stable >= 2) break
     }
 
     // 等图片解码：题目里有图片题，早拍会是空白框
@@ -145,9 +155,48 @@ try {
     })
     await sleep(400)
 
+    // 可选：先点一下再拍（用于「点开某道题」这类需要交互才能看到的状态）
+    if (CLICK) {
+      const rect = await cdp.send('Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.querySelector(${JSON.stringify(CLICK)})
+          if (!el) return null
+          el.scrollIntoView({ block: 'center' })
+          const r = el.getBoundingClientRect()
+          return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
+        })()`,
+        returnByValue: true,
+      })
+      const point = rect?.result?.value ? JSON.parse(rect.result.value) : null
+      if (!point) {
+        console.log(`  ! 找不到 --click 选择器：${CLICK}（跳过点击）`)
+      }
+      else {
+        console.log(`  点击 ${CLICK} @ (${Math.round(point.x)}, ${Math.round(point.y)})`)
+        // `buttons` 必须给：只给 `button:'left'` 时 Chrome 不把它当有效按下，点击静默无效
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1,
+        })
+        await cdp.send('Input.dispatchMouseEvent', {
+          type: 'mouseReleased', x: point.x, y: point.y, button: 'left', buttons: 0, clickCount: 1,
+        })
+        await sleep(600)
+      }
+    }
+
+    // 显式给 clip：`captureBeyondViewport` 单独用时，图片宽度会按 innerWidth 算，
+    // 而 innerWidth 会随滚动条变化（emulate 1440 时实测出图 1425），
+    // 于是**最右侧约 15px 被静默裁掉** —— 恰好是导航栏右侧按钮所在的位置，
+    // 看起来像「按钮被切了」的布局缺陷。用 cssContentSize 明确高度、宽度取视口宽。
+    const metrics = await cdp.send('Page.getLayoutMetrics')
+    const contentHeight = Math.ceil(
+      metrics.cssContentSize?.height ?? metrics.contentSize?.height ?? vp.height,
+    )
+
     const shot = await cdp.send('Page.captureScreenshot', {
       format: 'png',
       captureBeyondViewport: true,
+      clip: { x: 0, y: 0, width: vp.width, height: contentHeight, scale: 1 },
     })
     const file = join(OUT_DIR, `${NAME}-${vp.name}.png`)
     writeFileSync(file, Buffer.from(shot.data, 'base64'))

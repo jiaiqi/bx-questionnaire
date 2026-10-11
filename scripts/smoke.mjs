@@ -88,6 +88,21 @@ const PAGES = [
     markers: RENDERED,
     expectText: '缺少作答批次号',
   },
+  {
+    name: '问卷列表页',
+    route: '/pages/editor/list/index',
+    markers: RENDERED,
+  },
+  {
+    name: '可视化设计器（新建）',
+    route: '/pages/editor/design/index',
+    markers: RENDERED,
+  },
+  {
+    name: '可视化设计器（编辑已有问卷）',
+    route: `/pages/editor/design/index?activity_no=${ACTIVITY_NO}`,
+    markers: RENDERED,
+  },
 ]
 
 const userDataDir = mkdtempSync(join(tmpdir(), 'bxq-smoke-'))

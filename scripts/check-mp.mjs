@@ -150,7 +150,11 @@ if (notInAppJson.length > 0) {
 notes.push(`src 页面 ${srcPages.length} 个`)
 
 // ③ rpx 只允许出现在已知的 UnoCSS 预设工具类里
-const ALLOWED_RPX = ['.px{padding-left:32rpx;padding-right:32rpx}']
+//
+// 比的是**声明体**而不是整条规则文本：UnoCSS 会为同一个工具类生成多个选择器
+// （`.px` / `[px=""]` / 哈希占位类），拿整条规则比会在选择器变化时误报，
+// 而这条检查真正关心的是「rpx 出现在哪条声明里」。
+const ALLOWED_RPX_DECLS = ['padding-left:32rpx;padding-right:32rpx']
 const rpxOffenders = []
 for (const f of readdirSync(ROOT)) {
   if (!f.endsWith('.wxss'))
@@ -160,7 +164,8 @@ for (const f of readdirSync(ROOT)) {
   let m = re.exec(css)
   while (m !== null) {
     const rule = m[0].trim()
-    if (!ALLOWED_RPX.includes(rule)) {
+    const body = rule.slice(rule.indexOf('{') + 1, rule.lastIndexOf('}')).trim()
+    if (!ALLOWED_RPX_DECLS.includes(body)) {
       rpxOffenders.push(`${f}: ${rule.slice(0, 90)}`)
     }
     m = re.exec(css)
@@ -218,6 +223,100 @@ const GLOBAL_PROPS = [
   ['localStorage.', 'localStorage'],
   ['sessionStorage.', 'sessionStorage'],
 ]
+
+/**
+ * 把字符串字面量抹成等长空格，再交给子串扫描
+ *
+ * 为什么必须做：模块路径 `require("./document.js")` 里就含 `document.`，
+ * 子串扫描会把它当成一次无守卫的全局访问 —— 这是**检查器的误报**，
+ * 不是产物缺陷。字符串里的 `"window.location"` 同理：那是文本，不是属性访问。
+ *
+ * 抹成**等长空格**而不是删掉，是为了不破坏 `guardedRanges` 依赖的字符下标。
+ * 模板串里的 `${...}` 表达式是真实代码，要保留，否则会漏掉真泄漏。
+ */
+function blankStringLiterals(code) {
+  const out = [...code]
+  let quote = null
+  let templateDepth = 0
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i]
+    if (quote === '\'' || quote === '"') {
+      if (ch === '\\') {
+        out[i] = ' '
+        if (i + 1 < code.length)
+          out[i + 1] = ' '
+        i++
+        continue
+      }
+      if (ch === quote)
+        quote = null
+      out[i] = ' '
+      continue
+    }
+    if (quote === '`') {
+      if (ch === '\\') {
+        out[i] = ' '
+        if (i + 1 < code.length)
+          out[i + 1] = ' '
+        i++
+        continue
+      }
+      if (ch === '$' && code[i + 1] === '{') {
+        // 进入模板插值：里面的内容是真实代码，原样保留
+        templateDepth++
+        i++
+        continue
+      }
+      if (ch === '}' && templateDepth > 0) {
+        templateDepth--
+        continue
+      }
+      if (ch === '`' && templateDepth === 0) {
+        quote = null
+        out[i] = ' '
+        continue
+      }
+      if (templateDepth === 0)
+        out[i] = ' '
+      continue
+    }
+    if (ch === '\'' || ch === '"' || ch === '`') {
+      quote = ch
+      out[i] = ' '
+    }
+  }
+  return out.join('')
+}
+
+/**
+ * 检测器自检
+ *
+ * 这条检查曾把 `require("./document.js")` 报成「无守卫的 document 访问」，
+ * 差点让人去改本来正确的代码。所以每次运行都先证明检测器本身有效：
+ * 真泄漏必须抓到，字符串/路径必须放过。
+ */
+const DETECTOR_CASES = [
+  { code: 'const a = document.body', api: 'document.', want: true },
+  { code: 'if (typeof window !== "undefined") { window.location.href = "x" }', api: 'window.', want: false },
+  { code: 'const p = require("./document.js")', api: 'document.', want: false },
+  { code: 'const m = "window.location is not available"', api: 'window.', want: false },
+  { code: 'const u = `prefix ${window.location.href} suffix`', api: 'window.', want: true },
+]
+const detectorFailures = []
+for (const c of DETECTOR_CASES) {
+  const blanked = blankStringLiterals(c.code)
+  const ranges = guardedRanges(blanked, c.api.slice(0, -1))
+  const idx = blanked.indexOf(c.api)
+  const detected = idx !== -1 && !ranges.some(([s, e]) => idx >= s && idx <= e)
+  if (detected !== c.want) {
+    detectorFailures.push(`${JSON.stringify(c.code)} → 期望 ${c.want ? '抓到' : '放过'}，实际 ${detected ? '抓到' : '放过'}`)
+  }
+}
+if (detectorFailures.length > 0) {
+  fail(`H5 API 检测器自检失败（检测器本身不可信，先修它）：${detectorFailures.join('；')}`)
+}
+notes.push(`H5 API 检测器自检 ${DETECTOR_CASES.length} 条通过`)
+
 const leaks = []
 function walkJs(dir) {
   for (const name of readdirSync(dir)) {
@@ -228,7 +327,7 @@ function walkJs(dir) {
     }
     if (!name.endsWith('.js'))
       continue
-    const c = readFileSync(p, 'utf8')
+    const c = blankStringLiterals(readFileSync(p, 'utf8'))
     for (const [api, globalName] of GLOBAL_PROPS) {
       const ranges = guardedRanges(c, globalName)
       let from = 0
