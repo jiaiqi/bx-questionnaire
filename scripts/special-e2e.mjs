@@ -471,6 +471,22 @@ check(
   (resultImg?.count || 0) > 0 || imgRowText.includes('已上传图片'),
 )
 
+// 引用题的作答值同样是被引用记录的编号（活动编号），必须换成展示列
+const refRowText = String(await evaluate(`(() => {
+  const row = [...document.querySelectorAll('uni-view.r-item')].find(el => (el.innerText||'').includes('引用题'))
+  return row ? row.innerText : ''
+})()`))
+console.log(`  引用题行文本：${JSON.stringify(refRowText.slice(0, 140))}`)
+check('引用题行有内容', !!refRowText)
+check('引用题行不展示被引用记录编号', !/\d{20,}/.test(refRowText))
+// 与**实际选中的那一项**比对，而不是写死某个活动名
+const pickedRefLabel = firstRef.replace('✓', '').trim()
+check(
+  '引用题行展示的是被引用记录的标题',
+  !!pickedRefLabel && refRowText.includes(pickedRefLabel),
+  `期望含「${pickedRefLabel}」`,
+)
+
 const failed = checks.filter(c => !c.pass).length
 console.log(`\n== ${checks.length} 项检查，失败 ${failed} 项 ==`)
 ws.close()

@@ -17,6 +17,7 @@ import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
 
 import { computed, ref, watch } from 'vue'
 
+import { parseRefConfig } from '@/domain/questionnaire/refs'
 import { BxError, bxSelect } from '@/utils/request'
 import { toast } from '@/utils/ui'
 
@@ -35,41 +36,10 @@ interface RefOption {
   label: string
 }
 
-function parseAttr(value: unknown): Record<string, unknown> {
-  if (!value) {
-    return {}
-  }
-  if (typeof value === 'object') {
-    return value as Record<string, unknown>
-  }
-  try {
-    const parsed = JSON.parse(String(value))
-    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
-  }
-  catch {
-    return {}
-  }
-}
-
-const config = computed(() => {
-  const raw = props.field.raw as Record<string, unknown>
-  const attr = parseAttr(raw.item_type_attr)
-  const pick = (...keys: string[]): string => {
-    for (const key of keys) {
-      const value = attr[key] ?? raw[key]
-      if (value !== null && value !== undefined && String(value) !== '') {
-        return String(value)
-      }
-    }
-    return ''
-  }
-
-  return {
-    serviceName: pick('serviceName', 'servicename'),
-    app: pick('srv_app') || undefined,
-    valueCol: pick('refed_col') || 'no',
-    labelCol: pick('key_disp_col') || 'name',
-  }
+const config = computed(() => parseRefConfig(props.field.raw as Record<string, unknown>) ?? {
+  serviceName: '',
+  valueCol: 'no',
+  labelCol: 'name',
 })
 
 const visible = ref(false)

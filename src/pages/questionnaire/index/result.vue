@@ -26,8 +26,10 @@ import {
 } from '@/domain/questionnaire'
 import { shouldShowRetryEntry, shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
 import { imageAnswerTargets } from '@/domain/questionnaire/images'
+import { pickRefLabel, refAnswerTargets } from '@/domain/questionnaire/refs'
 import { answerUrl, coverUrl, suggestionUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
+import { bxSelect } from '@/utils/request'
 
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 
@@ -85,6 +87,7 @@ async function init(): Promise<void> {
 
   await loadServerResult()
   await loadAnswerImages()
+  await loadAnswerRefs()
 }
 
 /**
@@ -182,6 +185,50 @@ async function loadAnswerImages(): Promise<void> {
   answerImages.value = grouped
   answerImagesFailed.value = failed
 }
+
+/**
+ * 引用题的作答值是**被引用记录的编号**，同样必须先换成展示列
+ *
+ * 与图片题是同一类问题：不换的话「我的作答」显示的是 `20261011113133000003`
+ * 这种内部 ID。数据源配置由 `parseRefConfig` 解析（与 `BxRefSelector` 共用一份）。
+ */
+const answerRefLabels = ref<Record<string, string>>({})
+
+async function loadAnswerRefs(): Promise<void> {
+  const targets = refAnswerTargets(
+    fields.value.map(field => ({
+      key: field.key,
+      widget: field.widget,
+      value: answerMap.value[field.key],
+      raw: field.raw as Record<string, unknown>,
+    })),
+  )
+  if (!targets.length) {
+    return
+  }
+
+  const labels: Record<string, string> = {}
+  await Promise.all(targets.map(async (target) => {
+    try {
+      const envelope = await bxSelect<Record<string, unknown>>({
+        serviceName: target.config.serviceName,
+        ...(target.config.app ? { app: target.config.app } : {}),
+        colNames: ['*'],
+        condition: [{ colName: target.config.valueCol, ruleType: 'eq', value: target.value }],
+        page: { pageNo: 1, rownumber: 20 },
+      })
+      labels[target.key] = [labels[target.key], pickRefLabel(envelope.data ?? [], target)]
+        .filter(Boolean)
+        .join('、')
+    }
+    catch {
+      // 解析失败不影响整页：回退到原值，并在下面标明「暂时读不到」
+      labels[target.key] = labels[target.key] ?? target.value
+    }
+  }))
+
+  answerRefLabels.value = labels
+}
 /**
  * 是否拿到了「用户作答」数据（任一来源）
  *
@@ -230,14 +277,17 @@ const rows = computed(() =>
       /**
        * 展示与判分同源：选项题还原成选项文案，文本/数字题直接用原值。
        *
-       * 图片题例外：它的作答值是**文件批次号**，展示原值就是给用户看内部 ID。
-       * 这里换成中性文案，真实图片由 `images` 渲染。
+       * 图片题与引用题例外：它们的作答值都是**内部编号**（文件批次号 /
+       * 被引用记录编号），展示原值就是给用户看 ID。图片题渲染缩略图，
+       * 引用题用解析出的展示列。
        */
       const raw = answerMap.value[field.key]
       const hasValue = Array.isArray(raw) ? raw.length > 0 : String(raw ?? '').trim().length > 0
       const mineText = field.widget === 'image'
         ? (hasValue ? '已上传图片' : '')
-        : describeSelected(field, answerMap.value)
+        : field.widget === 'ref'
+          ? (answerRefLabels.value[field.key] || (hasValue ? '已选择' : ''))
+          : describeSelected(field, answerMap.value)
 
       return {
         key: field.key,
