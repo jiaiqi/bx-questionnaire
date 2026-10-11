@@ -47,19 +47,32 @@ const FAILURE_CODES = new Set<string>([
   BX_CODE.FAILURE,
 ])
 
-function buildHeaders(): Record<string, string> {
-  // 票据优先级（本地存储 > 构建期 VITE_BX_TICKET）统一由 resolveTicket 决定，
-  // 这里不再内联同一段逻辑，避免两处口径漂移。
+/**
+ * 票据 header（与传输方式无关）
+ *
+ * 票据优先级（本地存储 > 构建期 VITE_BX_TICKET）统一由 resolveTicket 决定，
+ * 不在各处内联同一段逻辑，避免两处口径漂移。
+ *
+ * 单独抽出来是因为 `Content-Type` 属于**传输方式**的属性，不是票据的属性：
+ * JSON 请求要 `application/json`，而 multipart 上传必须让运行时自己带 boundary，
+ * 手写 Content-Type 会把 boundary 覆盖掉、服务端直接解析失败。
+ */
+export function buildTicketHeaders(): Record<string, string> {
   const ticket = resolveTicket()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
+  const headers: Record<string, string> = {}
   if (ticket) {
     // 平台新旧 header 名同时发
     headers.bx_auth_ticket = ticket
     headers['bx-auth-ticket'] = ticket
   }
   return headers
+}
+
+function buildHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...buildTicketHeaders(),
+  }
 }
 
 function request(options: BxRequestOptions): Promise<RawResult> {

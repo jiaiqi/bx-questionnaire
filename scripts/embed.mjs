@@ -17,19 +17,52 @@
  * getBoundingClientRect 与顶层视口坐标一致，鼠标事件可以直接复用；
  * 作答操作要在 iframe 的**执行上下文**里求值（跨域拿不到 contentDocument）。
  */
+import { spawn } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const BASE = process.argv[2] || 'http://localhost:5174'
 const DO_SUBMIT = process.argv.includes('--submit')
 const CDP_PORT = 9365
 const PARENT_PORT = 4183
 const ACTIVITY = '20261010100256000001'
+const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
 const ITEMS = {
   radio: 'q-20261010100256000002',
   checkbox: 'q-20261010100256000007',
   text: 'q-20261010100256000011',
   number: 'q-20261010100256000012',
+}
+
+/**
+ * 自己拉一个 Chrome
+ *
+ * 早先这里要求「先手动起好 Chrome 再跑」，结果失败信息是 `ECONNREFUSED 127.0.0.1:9365` ——
+ * 看起来像脚本坏了，实际是前置条件没满足。其余套件（smoke/a11y/e2e/perf）都自己拉浏览器，
+ * 只有这个不一样，属于没必要的差异。改成一致。
+ */
+const userDataDir = mkdtempSync(join(tmpdir(), 'bxq-embed-'))
+const chrome = spawn(CHROME, [
+  '--headless=new', '--disable-gpu', '--no-first-run',
+  `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${userDataDir}`, 'about:blank',
+], { stdio: 'ignore' })
+
+/** 等 CDP 端点就绪（Chrome 冷启动可能要几秒） */
+async function waitForChrome(maxTries = 40) {
+  for (let i = 0; i < maxTries; i++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)
+      if (res.ok) {
+        return await res.json()
+      }
+    }
+    catch { /* 还没起来 */ }
+    await new Promise(r => setTimeout(r, 250))
+  }
+  return null
 }
 
 const PARENT_HTML = `<!doctype html>
@@ -51,11 +84,18 @@ const server = createServer((_req, res) => {
 })
 await new Promise(resolve => server.listen(PARENT_PORT, resolve))
 
-const targets = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json()
+const targets = await waitForChrome()
+if (!targets) {
+  console.error(`Chrome 未能在 ${CDP_PORT} 上就绪`)
+  server.close()
+  chrome.kill()
+  process.exit(2)
+}
 const page = targets.find(t => t.type === 'page')
 if (!page) {
-  console.error(`找不到调试目标 —— 先启动 Chrome：--remote-debugging-port=${CDP_PORT}`)
+  console.error('找不到调试目标')
   server.close()
+  chrome.kill()
   process.exit(2)
 }
 const ws = new WebSocket(page.webSocketDebuggerUrl)
@@ -232,4 +272,5 @@ console.log(`\n== ${checks.length} 项检查，失败 ${failed} 项 ==`)
 
 ws.close()
 server.close()
+chrome.kill()
 process.exit(failed === 0 ? 0 : 1)
