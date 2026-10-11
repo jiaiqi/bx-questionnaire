@@ -81,6 +81,8 @@ await new Promise((res, rej) => {
 let id = 0
 const pending = new Map()
 const requests = []
+const reqUrls = new Map()
+let submitResponseBody = ''
 /** /file/upload 的响应状态（multipart 的 postData CDP 拿不到，只能从响应侧断言） */
 let uploadStatus = null
 ws.addEventListener('message', (e) => {
@@ -91,9 +93,22 @@ ws.addEventListener('message', (e) => {
   }
   if (m.method === 'Network.requestWillBeSent' && m.params.request.method === 'POST') {
     requests.push({ url: m.params.request.url, body: m.params.request.postData || '' })
+    reqUrls.set(m.params.requestId, m.params.request.url)
   }
   if (m.method === 'Network.responseReceived' && m.params.response.url.includes('/file/upload')) {
     uploadStatus = m.params.response.status
+  }
+  /**
+   * 抓**提交响应体**
+   *
+   * 只断言请求体是不够的：作答值长度超限时，请求照样发出去、内容也「看起来对」，
+   * 但服务端返回 `FAILURE Data truncation` —— 只看请求体会把失败当成功。
+   * 我自己就踩过一次（图片题作答值放文件路径，提交静默失败而检查全绿）。
+   */
+  if (m.method === 'Network.loadingFinished' && reqUrls.get(m.params.requestId)?.includes('activity_result_submit')) {
+    void send('Network.getResponseBody', { requestId: m.params.requestId })
+      .then((r) => { submitResponseBody = String(r?.body ?? '') })
+      .catch(() => {})
   }
 })
 const send = (method, params = {}) => {
@@ -193,23 +208,27 @@ const beforeAnswered = await evaluate(`(((document.querySelector('uni-app')||doc
 console.log(`  初始已答：${beforeAnswered}`)
 
 // 用真实 PNG 的 blob URL 替换选图弹窗
+//
+// **一次给两张**：作答值改成文件列表之后，「逐张移除」必须真的能验 ——
+// 只传一张的话，列表长度为 1，移除和清空分不出来。
 const stubbed = await evaluate(`(async () => {
   const b64 = ${JSON.stringify(PNG_BASE64)}
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  const file = new File([bytes], 'e2e-photo.png', { type: 'image/png' })
-  window.__stubBlob = URL.createObjectURL(file)
+  const files = [1, 2].map(n => new File([bytes], 'e2e-photo-' + n + '.png', { type: 'image/png' }))
+  window.__stubBlobs = files.map(f => URL.createObjectURL(f))
   window.__stubCalls = 0
   uni.chooseImage = (opts) => {
     window.__stubCalls++
-    opts && opts.success && opts.success({ tempFilePaths: [window.__stubBlob], tempFiles: [file] })
+    opts && opts.success && opts.success({ tempFilePaths: window.__stubBlobs, tempFiles: files })
     return Promise.resolve()
   }
-  return { blob: window.__stubBlob.slice(0, 40), 类型: file.type, 字节: file.size }
+  return { blob: window.__stubBlobs[0].slice(0, 40), 张数: window.__stubBlobs.length, 类型: files[0].type, 字节: files[0].size }
 })()`, true)
 console.log(`\n=== 选图桩 ===\n  ${JSON.stringify(stubbed)}`)
 check('选图桩返回了 blob URL', String(stubbed?.blob || '').startsWith('blob:'))
+check('选图桩一次给两张（这样才能验逐张移除）', stubbed?.张数 === 2)
 
 // 点上传
 const clicked = await clickText('上传图片')
@@ -255,6 +274,7 @@ for (let i = 0; i < 25; i++) {
     clear: ((document.querySelector('.bx-image__clear-text')||{}).innerText||'').trim(),
     hint: ((document.querySelector('.bx-image__hint')||{}).innerText||'').trim(),
     uploading: ((document.querySelector('.bx-image__upload-text')||{}).innerText||'').includes('上传中'),
+    removes: document.querySelectorAll('.bx-image__remove').length,
   }))()`)
   if (uploaded?.imgs > 0) {
     break
@@ -270,8 +290,33 @@ if (uploaded?.html) {
   console.log(`  图片元素 HTML：${uploaded.html}`)
 }
 check('上传后回显出图片', (uploaded?.imgs || 0) > 0)
-check('计数显示 1 / N', /^1\s*\/\s*\d+$/.test(String(uploaded?.count || '')))
+check('两张图都回显出来（作答值是文件列表）', (uploaded?.imgs || 0) === 2)
+check('计数显示 2 / N', /^2\s*\/\s*\d+$/.test(String(uploaded?.count || '')))
 check('出现「清空图片」入口', uploaded?.clear === '清空图片')
+check('每张图都有移除按钮', (uploaded?.removes || 0) === 2, `实际 ${uploaded?.removes}`)
+
+/**
+ * 逐张移除 —— 这是「改成文件列表」要解决的问题本身
+ *
+ * 改造前作答值是一个批次号，同题多图共用一个值，**逐张移除不可表达**：
+ * 做出来的效果是「界面上少了一张，刷新又回来了，提交值也没变」，即假操作。
+ * 所以这里必须同时断言**界面**和**提交值**都变了，只看界面会漏掉假操作。
+ */
+const removedOne = await evaluate(`(() => {
+  const btn = document.querySelector('.bx-image__remove')
+  if (!btn) return false
+  btn.click()
+  return true
+})()`)
+check('点到了某一张的移除按钮', removedOne === true)
+await sleep(1500)
+const afterRemove = await evaluate(`(() => ({
+  imgs: document.querySelectorAll('.bx-image__item').length,
+  count: ((document.querySelector('.bx-image__count')||{}).innerText||'').trim(),
+}))()`)
+console.log(`  移除一张后：${JSON.stringify(afterRemove)}`)
+check('移除后只剩一张', afterRemove?.imgs === 1)
+check('移除后计数变成 1 / N', /^1\s*\/\s*\d+$/.test(String(afterRemove?.count || '')))
 
 /**
  * 回显地址的两种合法形态
@@ -514,10 +559,32 @@ const submitReq = requests.find(r => r.url.includes('activity_result_submit'))
 check('提交真的发出', !!submitReq)
 if (submitReq) {
   console.log(`  提交体：${submitReq.body.slice(0, 700)}`)
+  /**
+   * **先确认服务端真的收下了**
+   *
+   * 只断言请求体是假绿：作答值超长时请求照样发出、内容也「看起来对」，
+   * 服务端却返回 `FAILURE Data truncation`。我自己就踩过 ——
+   * 图片题作答值放文件路径，全部检查通过而提交其实是失败的。
+   */
+  await sleep(1500)
+  console.log(`  提交响应：${submitResponseBody.slice(0, 300)}`)
+  check('提交响应拿到了', !!submitResponseBody)
+  check('提交被服务端接受（不是静默失败）', submitResponseBody.includes('SUCCESS') && !submitResponseBody.includes('FAILURE'), submitResponseBody.slice(0, 160))
+
   if (imageItemNo) {
     check('提交体包含图片题', submitReq.body.includes(imageItemNo))
     const seg = submitReq.body.split(imageItemNo)[1] || ''
-    check('图片题作答值非空（批次号已写入）', /"option_data":\["[^"]+/.test(seg.slice(0, 120)))
+    const match = seg.slice(0, 400).match(/"option_data":\[([^\]]*)\]/)
+    const values = match ? match[1].split(',').map(v => v.trim().replace(/^"|"$/g, '')).filter(Boolean) : []
+    console.log(`  图片题提交值：${JSON.stringify(values)}`)
+    /**
+     * 作答值必须是**批次号列表**，而且只剩移除后那一张
+     *
+     * 只断言「非空」会漏掉假操作：改造前作答值是一个批次号，无论界面上剩几张
+     * 提交的都是同一个值 —— 那正是「逐张移除做不了」的症状。
+     */
+    check('图片题作答值是批次号（不是文件路径）', values.length > 0 && values.every(v => /^\d+$/.test(v)), JSON.stringify(values))
+    check('移除一张后提交值只剩一个批次号（逐张移除真的生效）', values.length === 1, `实际 ${values.length} 个`)
   }
   // 引用题的容器 id 同样从 DOM 反推
   if (refItemNo) {

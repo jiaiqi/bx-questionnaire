@@ -150,10 +150,13 @@ const serverAnswerMap = computed(() => serverAnswersToAnswerMap(fields.value, se
 const answerMap = computed(() => mergeAnswerSources(serverAnswerMap.value, backfill.value))
 
 /**
- * 图片题的作答值是**文件批次号**，回顾页必须先把它换成真实图片地址
+ * 图片题的作答值是**批次号列表**（一个元素一张图），回顾页必须换成真实图片地址
  *
  * 不换的话，「我的作答」会直接显示 `20261011121039186100` 这种内部 ID ——
  * 用户上传的是照片，看到的却是编号（实测确认，见验收清单）。
+ *
+ * > 作答值里**不能存文件路径**：实测图片题的 `option_value` 上限约 50 字符，
+ * > 路径放不下（`FAILURE Data truncation`）。详见 `@/domain/questionnaire/images`。
  */
 const answerImages = ref<Record<string, string[]>>({})
 /** 至少有一条图片题的附件没查出来（网络/权限），用于给出解释而不是假装没有 */

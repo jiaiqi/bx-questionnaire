@@ -2,8 +2,19 @@
 /**
  * 图片题
  *
- * 作答值存**批次号 file_no**（平台模型：一个附件字段一个批次号，同批次多文件），
- * 渲染时按 file_no 查附件表拿到该批次下的全部文件。
+ * **作答值是批次号列表**：一个元素一张图（一个批次号）。
+ * 逐张移除 = 去掉一个元素（引用移除，不动服务端文件），因此天然可表达。
+ *
+ * > 改造前作答值是**一个批次号**，同题多图共用它 —— 逐张移除做不了，只能整体清空。
+ * > 旧数据仍能读：一个批次号就是「长度为 1 的列表」。
+ *
+ * **为什么作答值里不存文件路径**：实测图片题的 `option_value` 上限约 50 字符
+ * （50 过、52 不过），而路径有 55 字符以上，提交直接
+ * `FAILURE Data truncation: Data too long for column 'option_value'`。
+ * 批次号是 20 位数字，放得下。详见 `@/domain/questionnaire/images`。
+ *
+ * **每张图各自成批**（上传时不传 `file_no`）：这样每个批次号对应一张图，
+ * 逐张移除才有意义；也避免「同批次被草稿与提交记录共用」的连带风险。
  *
  * 上传端点是专用路径 `{gateway}/file/upload`（multipart），
  * 不是标准 `{app}/{action}/{service}` —— 详见 `@/api/file/upload` 的实测记录。
@@ -17,7 +28,7 @@ import { computed, ref, watch } from 'vue'
 
 import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import { uploadAttachment } from '@/api/file/upload'
-import { resolveImageDisplay } from '@/domain/questionnaire/images'
+import { imageAnswerTargets, resolveImageDisplay } from '@/domain/questionnaire/images'
 import { BxError } from '@/utils/request'
 import { toast } from '@/utils/ui'
 
@@ -43,22 +54,10 @@ const maxCount = computed(() => {
   return Number.isFinite(num) && num > 0 ? num : DEFAULT_MAX
 })
 
-/**
- * 作答值 = 批次号
- *
- * 兼容逗号分隔（历史上可能存过多个批次），但**上传只追加到第一个批次** ——
- * 平台模型是一个字段一个批次，多批次没有语义依据。
- */
-const fileNos = computed<string[]>(() => {
-  const raw = props.modelValue
-  if (raw === null || raw === undefined || raw === '') {
-    return []
-  }
-  return String(raw)
-    .split(',')
-    .map(item => item.trim())
-    .filter(Boolean)
-})
+/** 作答值 = 批次号列表，一个元素一张图 */
+const fileNos = computed(() => imageAnswerTargets([
+  { key: props.field.key, widget: props.field.widget, value: props.modelValue },
+]).map(target => target.fileNo))
 
 const rows = ref<BxAttachmentRow[]>([])
 const loading = ref(false)
@@ -66,12 +65,18 @@ const uploading = ref(false)
 /** 附件查询失败（网络/权限/服务异常，原因不猜，只如实标记「读不到」） */
 const loadError = ref(false)
 /**
+ * 本次会话上传得到的 `批次号 → 文件地址`
+ *
+ * 刚上传的图立刻就能显示，不必再查一次附件表 —— 少一个失败点，
+ * 也就少一次「传上去了却显示暂无图片」。
+ */
+const uploadedUrls = ref<Record<string, string>>({})
+/**
  * 刚上传成功的本地预览（blob URL）
  *
- * 为什么需要：**「传上去了」和「看得见」是两件事** —— 上传成功之后
- * 回显还要再查一次附件列表，而这次查询可能失败（网络抖动、权限变更、服务异常）。
- * 只靠服务端列表的话，用户传完图界面还是「暂无图片」，会以为没传上而反复重传。
- * 本地预览让「刚传了什么」立刻可见。
+ * 为什么需要：**「传上去了」和「看得见」是两件事** —— 上传成功后还要再查一次
+ * 附件列表才能拿到服务端地址，而这次查询可能失败。只靠服务端地址的话，
+ * 用户传完图界面还是「暂无图片」，会以为没传上而反复重传。
  *
  * 注意：这条兜底**不是**为某个具体 bug 写的补丁。我一度把「请求打错应用」
  * 误判成「`srvfile_attachment_select` 无权限」，而真正的权限问题并不存在
@@ -79,6 +84,7 @@ const loadError = ref(false)
  */
 const localPreviews = ref<string[]>([])
 
+/** 查附件表换出地址；本次会话传过的直接用缓存，不重复查 */
 async function loadRows(): Promise<void> {
   const list = fileNos.value
   if (!list.length) {
@@ -87,10 +93,17 @@ async function loadRows(): Promise<void> {
     return
   }
 
+  const missing = list.filter(fileNo => !uploadedUrls.value[fileNo])
+  if (!missing.length) {
+    rows.value = []
+    loadError.value = false
+    return
+  }
+
   loading.value = true
   try {
-    // 附件服务的 `in` 条件语法未经验证，逐条用 eq 查询更稳妥
-    const envelopes = await Promise.all(list.map(fileNo => attachmentSelect({ fileNo })))
+    // 附件服务的 `in` 条件语法未经验证（拿不到两个真实批次来验），逐条 eq 更稳妥
+    const envelopes = await Promise.all(missing.map(fileNo => attachmentSelect({ fileNo })))
     rows.value = envelopes.flatMap(envelope => envelope.data ?? [])
     loadError.value = false
   }
@@ -105,16 +118,17 @@ async function loadRows(): Promise<void> {
 }
 
 /**
- * 自己刚写进去的批次号
+ * 自己刚写进去的批次号列表
  *
- * 上传成功后要 `emit` 新批次号，而 watch 会因此触发；若不区分来源，
+ * 上传成功后要 `emit` 新列表，而 watch 会因此触发；若不区分来源，
  * 就会把刚建立的本地预览立刻清掉 —— 正是要避免的「传了却看不见」。
  */
-let selfSetBatch = ''
+let selfSetFileNos: string[] = []
 
-watch(fileNos, (next) => {
+watch(() => [props.modelValue, props.field.key], () => {
+  const next = fileNos.value
   // 自己刚设的值：保留本地预览
-  if (next.length === 1 && next[0] === selfSetBatch) {
+  if (next.length && next.join('|') === selfSetFileNos.join('|')) {
     void loadRows()
     return
   }
@@ -123,19 +137,30 @@ watch(fileNos, (next) => {
   void loadRows()
 }, { immediate: true })
 
-const images = computed(() => {
-  const serverUrls = rows.value.map(row => resolveFileUrl(row.fileurl)).filter(Boolean)
-  // 服务端列表优先；读不到时退回本地预览（详见 resolveImageDisplay 的注释）
-  return resolveImageDisplay({ serverUrls, localUrls: localPreviews.value }).images
-})
+/**
+ * 按**作答值的顺序**取地址
+ *
+ * 不能直接用 `rows` 的顺序：一次会话里可能既有刚上传的（走缓存）又有早先的
+ * （走附件表），两条来源合起来顺序就乱了。按 `fileNos` 逐个取，界面顺序才与
+ * 作答值一致 —— 移除某一张时下标才对得上。
+ */
+const serverUrls = computed(() => fileNos.value
+  .map((fileNo) => {
+    const cached = uploadedUrls.value[fileNo]
+    if (cached) {
+      return resolveFileUrl(cached)
+    }
+    const row = rows.value.find(item => String(item.file_no ?? '') === fileNo)
+    return row ? resolveFileUrl(row.fileurl) : ''
+  })
+  .filter(Boolean))
+
+const display = computed(() => resolveImageDisplay({ serverUrls: serverUrls.value, localUrls: localPreviews.value }))
+
+const images = computed(() => display.value.images)
 
 /** 有本地预览却读不到服务端列表 —— 需要向用户解释清楚，否则像是没传上 */
-const showLocalOnlyHint = computed(() =>
-  resolveImageDisplay({
-    serverUrls: rows.value.map(row => resolveFileUrl(row.fileurl)).filter(Boolean),
-    localUrls: localPreviews.value,
-  }).localOnly,
-)
+const showLocalOnlyHint = computed(() => display.value.localOnly)
 
 const reachLimit = computed(() => images.value.length >= maxCount.value)
 
@@ -170,79 +195,118 @@ async function onUpload(): Promise<void> {
     return
   }
 
-  let paths: string[] = []
+  let localPaths: string[] = []
   try {
-    paths = await chooseImages()
+    localPaths = await chooseImages()
   }
   catch (error) {
     toast(error instanceof BxError ? error.message : '选择图片失败')
     return
   }
-  if (!paths.length) {
+  if (!localPaths.length) {
     return
   }
 
   uploading.value = true
+  /** 逐张上传：成功一张就记一张，中途失败已成功的部分也要留下 */
+  const added: string[] = []
+  let failedCount = 0
   try {
-    // 批次号只在首次上传时为空，之后一直复用 —— 这样多张图落在同一个 file_no 下
-    let batchNo = fileNos.value[0] ?? ''
-    for (const filePath of paths) {
-      const result = await uploadAttachment({
-        filePath,
-        fileNo: batchNo || undefined,
-      })
-      batchNo = String(result.file_no ?? batchNo)
-      // 上传成功的本地预览（去重）
-      if (!localPreviews.value.includes(filePath)) {
-        localPreviews.value = [...localPreviews.value, filePath]
+    for (const filePath of localPaths) {
+      try {
+        // 不传 file_no：每张图各自成批，一个批次号对应一张图
+        const result = await uploadAttachment({ filePath })
+        const fileNo = String(result.file_no ?? '')
+        if (fileNo) {
+          added.push(fileNo)
+          uploadedUrls.value = { ...uploadedUrls.value, [fileNo]: String(result.fileurl ?? '') }
+        }
+        // 上传成功的本地预览（去重）
+        if (!localPreviews.value.includes(filePath)) {
+          localPreviews.value = [...localPreviews.value, filePath]
+        }
+      }
+      catch {
+        failedCount += 1
       }
     }
-    selfSetBatch = batchNo
-    emit('update:modelValue', batchNo)
-    toast('图片上传成功')
-  }
-  catch (error) {
-    toast(error instanceof BxError ? error.message : '图片上传失败')
+
+    if (added.length) {
+      const next = [...fileNos.value, ...added]
+      selfSetFileNos = next
+      emit('update:modelValue', next)
+    }
+
+    if (failedCount) {
+      // 部分失败必须说出来，不能只报成功
+      toast(`有 ${failedCount} 张图片上传失败，请重试`)
+    }
+    else if (added.length) {
+      toast('图片上传成功')
+    }
   }
   finally {
     uploading.value = false
-    // 上传后刷新列表：即使中途失败，已成功的部分也要显示出来
     await loadRows()
   }
 }
 
 /**
- * 清空本题图片
+ * 移除其中一张
  *
- * **为什么不做「删掉其中一张」**：作答值是一个**批次号 file_no**，
- * 同一题的多张图共用它。要删中间一张，只能新建一个批次把剩下的重新传一遍
- * （本地没有文件字节，做不到），或者把作答值改成文件列表（平台模型不是这样）。
- * 所以逐张移除在当前数据模型下**不可表达** —— 硬做出来的效果是
- * 「界面上少了一张，刷新后又回来了，提交的作答值也没变」，即假操作。
- *
- * 只清引用，不调 `/file/delete`：同一批次可能被草稿与提交记录共用，
- * 真删会让历史作答里的图一起消失。
+ * 只做**引用移除**（从作答值里去掉这个元素），不调 `/file/delete`：
+ * 真删会让服务端文件消失，而同一张图可能还被草稿或历史作答引用。
+ * 这是平台惯例里明确写的顺序（「先引用移除，确认删除才调 /file/delete」）。
  */
+function onRemove(index: number): void {
+  if (props.disabled) {
+    return
+  }
+  const fileNo = fileNos.value[index]
+  if (!fileNo) {
+    return
+  }
+
+  const next = fileNos.value.filter(item => item !== fileNo)
+  selfSetFileNos = next
+  emit('update:modelValue', next)
+
+  const preview = localPreviews.value[index]
+  if (preview) {
+    localPreviews.value = localPreviews.value.filter(item => item !== preview)
+  }
+}
+
+/** 清空本题图片（引用移除） */
 function onClear(): void {
   if (props.disabled) {
     return
   }
   rows.value = []
   localPreviews.value = []
-  emit('update:modelValue', '')
+  selfSetFileNos = []
+  emit('update:modelValue', [])
 }
 </script>
 
 <template>
   <view class="bx-image">
     <view v-if="images.length" class="bx-image__list">
-      <image
-        v-for="(img, index) in images"
-        :key="index"
-        class="bx-image__item"
-        :src="img"
-        mode="aspectFill"
-      />
+      <view v-for="(img, index) in images" :key="index" class="bx-image__cell">
+        <image class="bx-image__item" :src="img" mode="aspectFill" />
+        <view
+          v-if="!disabled"
+          class="bx-image__remove"
+          role="button"
+          :aria-label="`移除第 ${index + 1} 张图片`"
+          tabindex="0"
+          @click="onRemove(index)"
+        >
+          <text class="bx-image__remove-text">
+            ×
+          </text>
+        </view>
+      </view>
     </view>
 
     <view v-else-if="!disabled" class="bx-image__empty">
@@ -307,6 +371,25 @@ function onClear(): void {
   height: 88px;
   border-radius: var(--bx-radius);
   background-color: var(--bx-bg);
+}
+
+.bx-image__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background-color: var(--bx-text);
+  border-radius: 50%;
+}
+
+.bx-image__remove-text {
+  font-size: 14px;
+  line-height: 1;
+  color: #FFFFFF;
 }
 
 .bx-image__empty {

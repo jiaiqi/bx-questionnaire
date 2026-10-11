@@ -59,13 +59,12 @@ describe('resolveImageDisplay', () => {
 
 describe('imageAnswerTargets', () => {
   it('只挑图片题，非图片题一律忽略', () => {
-    const targets = imageAnswerTargets([
+    expect(imageAnswerTargets([
       { key: 'a', widget: 'radio', value: '1' },
-      { key: 'b', widget: 'image', value: 'batch-1' },
+      { key: 'b', widget: 'image', value: '20261011121039186100' },
       { key: 'c', widget: 'text', value: '备注' },
       { key: 'd', widget: 'address', value: 'bxq99' },
-    ])
-    expect(targets).toEqual([{ key: 'b', fileNo: 'batch-1' }])
+    ])).toEqual([{ key: 'b', fileNo: '20261011121039186100' }])
   })
 
   it('图片题没作答时不产生目标（不该白查一次附件）', () => {
@@ -78,29 +77,41 @@ describe('imageAnswerTargets', () => {
     ])).toEqual([])
   })
 
-  it('多值逐个返回，同一题同一批次号去重', () => {
-    const targets = imageAnswerTargets([
-      { key: 'b', widget: 'image', value: ['batch-1', 'batch-2', 'batch-1'] },
+  it('批次号列表逐个返回，保持顺序，重复的去重', () => {
+    expect(imageAnswerTargets([
+      { key: 'b', widget: 'image', value: ['111', '222', '111'] },
+    ])).toEqual([
+      { key: 'b', fileNo: '111' },
+      { key: 'b', fileNo: '222' },
     ])
-    expect(targets).toEqual([
-      { key: 'b', fileNo: 'batch-1' },
-      { key: 'b', fileNo: 'batch-2' },
-    ])
+  })
+
+  it('旧数据（一个批次号）等价于「长度为 1 的列表」，不需要迁移', () => {
+    // 这条是兼容性的核心：改造前后同一个值读出来必须一致
+    const legacy = imageAnswerTargets([{ key: 'b', widget: 'image', value: '20261011121039186100' }])
+    const single = imageAnswerTargets([{ key: 'b', widget: 'image', value: ['20261011121039186100'] }])
+    expect(legacy).toEqual(single)
+  })
+
+  it('逗号分隔的多个批次号仍然支持（历史兼容）', () => {
+    expect(imageAnswerTargets([{ key: 'b', widget: 'image', value: '111,222' }]))
+      .toEqual([{ key: 'b', fileNo: '111' }, { key: 'b', fileNo: '222' }])
   })
 
   it('不同题目的同一个批次号各自保留（key 不同就是两处展示）', () => {
-    const targets = imageAnswerTargets([
-      { key: 'b', widget: 'image', value: 'batch-1' },
-      { key: 'c', widget: 'image', value: 'batch-1' },
-    ])
-    expect(targets).toEqual([
-      { key: 'b', fileNo: 'batch-1' },
-      { key: 'c', fileNo: 'batch-1' },
-    ])
+    expect(imageAnswerTargets([
+      { key: 'b', widget: 'image', value: '111' },
+      { key: 'c', widget: 'image', value: '111' },
+    ])).toEqual([{ key: 'b', fileNo: '111' }, { key: 'c', fileNo: '111' }])
   })
 
   it('值两边的空白会被去掉', () => {
-    expect(imageAnswerTargets([{ key: 'b', widget: 'image', value: '  batch-1  ' }]))
-      .toEqual([{ key: 'b', fileNo: 'batch-1' }])
+    expect(imageAnswerTargets([{ key: 'b', widget: 'image', value: '  111  ' }]))
+      .toEqual([{ key: 'b', fileNo: '111' }])
+  })
+
+  it('非字符串的值被忽略（不把数字当成批次号去查）', () => {
+    expect(imageAnswerTargets([{ key: 'b', widget: 'image', value: [123, null, '111'] }]))
+      .toEqual([{ key: 'b', fileNo: '111' }])
   })
 })

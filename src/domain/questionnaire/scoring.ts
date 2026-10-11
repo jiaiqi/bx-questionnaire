@@ -113,5 +113,15 @@ export function describeSelected(field: QuestionField, answers: AnswerMap): stri
     // 而用户其实作答了 —— 宁可露出原值便于排查，也不要谎报。
     return labels.length > 0 ? labels.join('、') : selected.join('、')
   }
+  /**
+   * 图片题给中性文案，**绝不拼路径**
+   *
+   * 作答值是文件路径列表（改造前是批次号），拼出来是
+   * `/20261011/.../x.jpg、/20261011/.../y.jpg` 这种内部地址 ——
+   * 与「展示批次号」是同一类问题，只是更难看。真实图片由结果页渲染缩略图。
+   */
+  if (field.widget === 'image') {
+    return `已上传 ${selected.length} 张图片`
+  }
   return selected.join('、')
 }
