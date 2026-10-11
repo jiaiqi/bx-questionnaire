@@ -28,7 +28,7 @@
 │   ├── pages/editor/        # 2 个管理侧页面（问卷列表 / 可视化设计器）
 │   ├── stores/              # session 等
 │   └── utils/               # request（请求层）/ storage / query（页面参数解析）
-├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ scan-dist.mjs（产物安全扫描）+ check-mp.mjs（小程序产物校验）+ check-conditional.mjs（条件编译剥离验证）+ find-dead-exports.mjs（死代码扫描）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
+├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ editor-e2e.mjs（设计器界面级保存链路）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ scan-dist.mjs（产物安全扫描）+ check-mp.mjs（小程序产物校验）+ check-conditional.mjs（条件编译剥离验证）+ find-dead-exports.mjs（死代码扫描）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
 ├── test/                    # 单元测试 + 集成测试（含 env-config.spec.ts：环境变量配置回归防护、directives/aria-label.spec.ts：可访问性指令）
 ├── pages.config.ts          # 路由配置源
 ├── manifest.config.ts       # 应用配置源
@@ -55,6 +55,7 @@ pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面 × P
 pnpm a11y            # 可访问性审计：可读名称 / 图片 alt / 真实 Tab 键焦点可见性（需先 pnpm dev h5）
 pnpm e2e             # 端到端交互：真实作答 → 暂存草稿 → 提交（默认不提交，加 --submit）
 pnpm embed           # iframe 嵌入通信：跨域父页面真嵌一次，断言 FORM_READY/RESIZE/ADD_SUCCESS 到达（默认不提交，加 --submit）
+pnpm editor:e2e      # 可视化设计器界面级保存链路：改标题 → 点保存 → 服务端查回来确认（会真写服务端，跑完还原）
 pnpm build h5        # 产物 dist/build/h5
 pnpm build mp-weixin # 产物 dist/build/mp-weixin
 ```

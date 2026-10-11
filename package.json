@@ -19,6 +19,7 @@
     "a11y": "node scripts/a11y.mjs",
     "embed": "node scripts/embed.mjs",
     "special-e2e": "node scripts/special-e2e.mjs",
+    "editor:e2e": "node scripts/editor-e2e.mjs",
     "scan:dist": "node scripts/scan-dist.mjs",
     "check:mp": "node scripts/check-mp.mjs",
     "check:cond": "node scripts/check-conditional.mjs",
