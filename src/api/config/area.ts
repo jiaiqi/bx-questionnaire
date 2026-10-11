@@ -18,7 +18,7 @@ export interface AreaRow {
 }
 
 /** 拉取某一级的地区列表；不传 parentNo 时取顶层 */
-export function areaAdjSelect(parentNo?: string) {
+export function areaAdjSelect(parentNo?: string, rownumber = 500) {
   const condition: BxCondition[] = []
   if (parentNo) {
     condition.push({ colName: 'parent_no', ruleType: 'eq', value: parentNo })
@@ -29,7 +29,7 @@ export function areaAdjSelect(parentNo?: string) {
     app: 'config',
     colNames: ['*'],
     condition,
-    page: { pageNo: 1, rownumber: 500 },
+    page: { pageNo: 1, rownumber },
   })
 }
 

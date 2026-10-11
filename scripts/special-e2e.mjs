@@ -348,6 +348,8 @@ check('能从 DOM 反推出引用题 item_no', !!refItemNo)
 // 两种部署形态都真实存在，所以按实际数据分支断言，而不是写死某一种 ——
 // 写死的话换个环境就变成假绿或假红。
 let addrItemNo = ''
+/** 地址题确认后的末级名称，用于结果页比对 */
+let addrExpectedLabel = ''
 console.log('\n=== 地址题 ===')
 const addrPlaceholder = String(await evaluate(`((document.querySelector('.bx-address__placeholder')||{}).innerText||'').trim()`))
 console.log(`  占位文案：${JSON.stringify(addrPlaceholder)}`)
@@ -394,11 +396,97 @@ else {
    */
   check('地区选项显示名称而不是编号', pickerText.includes('bxq测试省') && !pickerText.includes('bxq99'))
 
+  /**
+   * 多级联动
+   *
+   * ## 为什么必须用「拖第一列」来验，而不是只看弹层里有没有下级
+   *
+   * 老工程地址题是 `isTree: true` 的树形级联：一次取回**整张表**，组件在客户端分层。
+   * 我第一版把「无条件查询的结果」直接当成第一列 —— 省/市/区**全混在一列**，
+   * 用户可以把一个区选成「省」。所以「第一列只有根」这条必须单独断言。
+   *
+   * 但**只有 1 个顶层节点时 column 0 根本改不了**，级联永远不触发 ——
+   * 拿一个结构上不可能联动的数据去验证联动，是「测量前提错了」。
+   * 所以这条检查要求顶层 ≥2 个，否则**显式跳过并说明原因**（跳过的检查必须是响亮的）。
+   */
+  const topLevel = await evaluate(`[...document.querySelectorAll('uni-picker-view-column')]
+    .map(c => [...c.querySelectorAll('.uni-picker-view-content > .uni-picker-item')].map(e => (e.innerText||'').trim()).filter(Boolean))`)
+  console.log(`  弹层各列：${JSON.stringify(topLevel)}`)
+  /**
+   * 「整张表被当成第一列」的判据是**第一列里混进了下级节点**，不是「第一列只有 1 项」
+   *
+   * 顶层本来就可能多于一个（本环境有 2 个省）。用项数当判据会随数据变化而假红/假绿。
+   */
+  check(
+    '第一列只有顶层节点（没有把下级混进来）',
+    Array.isArray(topLevel) && topLevel[0]?.length > 0 && !topLevel[0].some(label => /市|区/.test(label)),
+    `第一列：${JSON.stringify(topLevel?.[0])}`,
+  )
+
+  if ((topLevel?.[0]?.length ?? 0) < 2) {
+    console.log('  ⚠ 跳过级联联动检查：顶层只有 1 个节点，column 0 无法改变，结构上不可能触发联动')
+  }
+  else {
+    const firstBefore = topLevel[0][0]
+    // 向上拖约一个指示器高度（34px）→ 选中下一个顶层节点
+    const colBox = await evaluate(`(() => {
+      const c = document.querySelector('uni-picker-view-column')
+      const b = c.getBoundingClientRect()
+      return { x: Math.round(b.left + b.width/2), y: Math.round(b.top + b.height/2) }
+    })()`)
+    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: colBox.x, y: colBox.y }] })
+    for (let i = 1; i <= 8; i += 1) {
+      await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: colBox.x, y: colBox.y - i * 6 }] })
+      await sleep(30)
+    }
+    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await sleep(2000)
+
+    const after = await evaluate(`[...document.querySelectorAll('uni-picker-view-column')]
+      .map(c => [...c.querySelectorAll('.uni-picker-view-content > .uni-picker-item')].map(e => (e.innerText||'').trim()).filter(Boolean))`)
+    /**
+     * **当前选中的是哪一项，不能从列的项目列表里读** —— 列表是全部候选项，
+     * 索引变了列表不变。这里从 `.uni-picker-select .uni-picker-item.selected` 取，
+     * 那才是各列真正选中的文案（第一版读列表，于是「换上级」这条永远看不出变化）。
+     */
+    const selected = await evaluate(`[...document.querySelectorAll('.uni-picker-select .uni-picker-item.selected')].map(e => (e.innerText||'').trim())`)
+    const firstAfter = selected?.[0]
+    console.log(`  拖动后各列：${JSON.stringify(after)}`)
+    console.log(`  拖动后各列选中：${JSON.stringify(selected)}`)
+    check('换上级后出现下一级（多级联动生效）', (after?.[1]?.length ?? 0) > 0, `第一列 ${firstBefore} → ${firstAfter}`)
+
+    /**
+     * 下一级必须是**新选中的那个上级**的下级，而不是上一个上级的下级
+     *
+     * 这条才真正证明「联动」而不是「碰巧有个第二列」。
+     */
+    const expectedChild = firstAfter === 'bxq测试省2' ? 'bxq测试市C' : 'bxq测试市A'
+    check(
+      '第二列是当前上级的下级（不是上一个上级的）',
+      (after?.[1] ?? []).includes(expectedChild),
+      `选中「${firstAfter}」时期望第二列含「${expectedChild}」，实际 ${JSON.stringify(after?.[1])}`,
+    )
+
+    // 拖回去，让后面的「确定」仍选到 bxq测试省（后续断言依赖它）
+    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: colBox.x, y: colBox.y - 48 }] })
+    for (let i = 1; i <= 8; i += 1) {
+      await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: colBox.x, y: colBox.y - 48 + i * 6 }] })
+      await sleep(30)
+    }
+    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await sleep(2000)
+    console.log(`  拖回后各列：${JSON.stringify(await evaluate(`[...document.querySelectorAll('uni-picker-view-column')]
+      .map(c => [...c.querySelectorAll('.uni-picker-view-content > .uni-picker-item')].map(e => (e.innerText||'').trim()).filter(Boolean))`))}`)
+  }
+
   check('点到了地区选择器的完成', await clickSel('.uni-picker-action-confirm'))
   await sleep(2000)
   const addrAfter = String(await evaluate(`(document.querySelector('.bx-address')||{}).innerText || ''`))
   console.log(`  确定后控件文本：${JSON.stringify(addrAfter)}`)
   check('确定后控件显示所选地区名称', addrAfter.includes('bxq测试省'))
+  // 与**实际确认的标签**比对，而不是写死某一级（级联会把选中项带到更深的层级）
+  addrExpectedLabel = addrAfter.split('›')[0].split('/').pop().trim()
+  console.log(`  地址题期望展示的末级名称：${JSON.stringify(addrExpectedLabel)}`)
 
   addrItemNo = String(await evaluate(`(() => {
     let el = document.querySelector('.bx-address')
@@ -495,7 +583,7 @@ const addrRowText = String(await evaluate(`(() => {
 console.log(`  地址题行文本：${JSON.stringify(addrRowText.slice(0, 140))}`)
 if (addrItemNo) {
   check('地址题行不展示地区编号', !!addrRowText && !addrRowText.includes('bxq99'))
-  check('地址题行展示地区名称', addrRowText.includes('bxq测试省'))
+  check('地址题行展示地区名称', !!addrExpectedLabel && addrRowText.includes(addrExpectedLabel), `期望含「${addrExpectedLabel}」`)
 }
 
 const failed = checks.filter(c => !c.pass).length

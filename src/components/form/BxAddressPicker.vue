@@ -2,16 +2,27 @@
 /**
  * 地址级联选择
  *
- * 对应老工程 `item_type === '地址'`（组件 type=cascader，数据源 srvconfig_area_adj_select）。
- * 采用 uni-app 原生 `picker mode="multiSelector"`：三级联动、各端一致、无需自绘弹层。
- * 答案存地区编号（老工程 column=no），展示用 path_name。
+ * 对应老工程 `item_type === '地址'`：
+ * `{ type: 'cascader', srvInfo: { serviceName: 'srvconfig_area_adj_select',
+ *   appNo: 'config', isTree: true, column: 'no', showCol: 'path_name' } }`
+ *
+ * **`isTree: true` 是关键**：老工程一次取回**整张表**，由组件在客户端建树分层。
+ * 所以 `srvconfig_area_adj_select` 无条件返回整张表是有意的设计，不是数据没过滤。
+ *
+ * 我第一版实现把「无条件查询的结果」直接当成第一列 —— 省/市/区**全混在一列**，
+ * 用户可以把一个区选成「省」。现在改为：一次取回 → `buildAreaTree` 建树 →
+ * 换列时从内存取下级（不再逐级请求，级联也不再受网络时序影响）。
+ *
+ * 答案存地区编号（老工程 `column=no`），展示用 `path_name`。
  */
 
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
+import type { AreaNode } from '@/domain/questionnaire/addresses'
 
 import { computed, ref, watch } from 'vue'
 
 import { areaAdjSelect } from '@/api/config/area'
+import { buildAreaColumns, buildAreaTree } from '@/domain/questionnaire/addresses'
 import { BxError } from '@/utils/request'
 import { toast } from '@/utils/ui'
 
@@ -25,16 +36,22 @@ const props = withDefaults(defineProps<Props>(), { disabled: false })
 
 const emit = defineEmits<{ 'update:modelValue': [AnswerValue] }>()
 
-interface AreaOption {
-  no: string
-  name: string
-}
+/**
+ * 一次拉取的行数上限
+ *
+ * 老工程是整表建树，所以这里也要整表。**但整表可能被截断** ——
+ * 截断后界面会静默少掉一部分区县，而用户看不出区别，所以下面必须核对 `page.total`。
+ */
+const AREA_PAGE_SIZE = 5000
 
-/** 每级选项；至少保留一级，供 picker 渲染 */
-const columns = ref<AreaOption[][]>([[]])
+const tree = ref(buildAreaTree([]))
+/** 每列选项；至少保留一级，供 picker 渲染 */
+const columns = ref<AreaNode[][]>([[]])
 const indexes = ref<number[]>([0])
 const labels = ref<string[]>([])
 const loading = ref(false)
+/** 加载失败的原因（与「确实没有地区数据」必须区分开） */
+const errorMessage = ref('')
 
 const current = computed(() => {
   const value = props.modelValue
@@ -49,42 +66,25 @@ const display = computed(() => {
 })
 
 /**
- * 地区行 → 选项
+ * 按已选路径重算各列与各列索引
  *
- * 标签优先取 `path_name`（老工程的 `showCol`），但**必须回退到 `name` 而不是 `no`**：
- * 实测本环境 `path_name` 为 null（`path` 有值），而 `no` 是编号 ——
- * 回退到编号会让用户在下拉里看到「bxq99」这种编码。
- * 地区表的真实列是 `no`（编号）/ `name`（名称）/ `parent_no`（父编号）。
- */
-function toOptions(rows: Array<{ no?: string | null, name?: string | null, path_name?: string | null }>): AreaOption[] {
-  return rows
-    .map(row => ({ no: String(row.no ?? ''), name: String(row.path_name ?? row.name ?? row.no ?? '') }))
-    .filter(item => !!item.no)
-}
-
-/**
- * 每一级的加载序号
+ * **索引必须落在路径上，不能一律归零** —— 归零等于告诉 picker「第一列选的是索引 0」，
+ * 而第二列可能已经是另一个上级的下级，于是出现「省2 / 省的市」这种错配
+ * （实测确定后控件显示 `bxq测试省2 / bxq测试市A`）。
  *
- * picker 的 columnchange 在滑动过程中会高频触发，用户从「广东省」快速滑到「湖南省」时
- * 两次请求会并发。若先发的后返回，columns[level] 会被旧省份的下级列表覆盖，
- * 出现「选的是湖南、市列表却是广东的」这种错乱。所以同一级只认最新一次请求的结果。
+ * 最后一列是刚出现的下级，默认选第 0 项。
  */
-const levelTokens: number[] = []
-
-/** 加载第 level 级；parentNo 为空表示顶层；返回 null 表示结果已过期、调用方不要改 UI */
-async function loadLevel(level: number, parentNo?: string): Promise<AreaOption[] | null> {
-  const token = (levelTokens[level] ?? 0) + 1
-  levelTokens[level] = token
-
-  const envelope = await areaAdjSelect(parentNo)
-  const options = toOptions(envelope.data ?? [])
-
-  if (levelTokens[level] !== token) {
-    return null
-  }
-
-  columns.value[level] = options
-  return options
+function applyColumns(path: string[]): void {
+  const next = buildAreaColumns(tree.value, path)
+  columns.value = next
+  indexes.value = next.map((nodes, level) => {
+    const wanted = path[level]
+    if (!wanted) {
+      return 0
+    }
+    const index = nodes.findIndex(node => node.no === wanted)
+    return index >= 0 ? index : 0
+  })
 }
 
 async function init(): Promise<void> {
@@ -93,19 +93,81 @@ async function init(): Promise<void> {
   }
 
   loading.value = true
+  errorMessage.value = ''
   try {
-    await loadLevel(0)
+    const envelope = await areaAdjSelect(undefined, AREA_PAGE_SIZE)
+    const rows = envelope.data ?? []
+
+    // 截断检测：少了一部分区县而界面毫无提示，是最坏的一种失败
+    const total = Number(envelope.page?.total ?? 0)
+    if (total > rows.length) {
+      errorMessage.value = `地区数据不完整（${rows.length} / ${total}），请稍后重试`
+      toast(errorMessage.value)
+    }
+
+    tree.value = buildAreaTree(rows)
+    applyColumns([])
+
+    // 回填：已作答时把路径展开到对应层级
+    const saved = current.value
+    if (saved) {
+      const path = findPath(tree.value.roots, tree.value.childrenOf, String(saved))
+      if (path.length) {
+        applyColumns(path)
+        labels.value = path.map(no => labelOf(no))
+      }
+    }
   }
   catch (error) {
-    toast(error instanceof BxError ? error.message : '地区数据加载失败')
+    // 失败必须与「确实没有数据」区分开
+    errorMessage.value = error instanceof BxError ? error.message : '地区数据加载失败'
+    toast(errorMessage.value)
   }
   finally {
     loading.value = false
   }
 }
 
-/** 级联：换上一级就重载下一级 */
-async function onColumnChange(event: { detail: { column: number, value: number } }): Promise<void> {
+/** 从根开始找到目标编号的路径（含目标本身）；找不到返回空数组 */
+function findPath(
+  roots: AreaNode[],
+  childrenOf: (no: string) => AreaNode[],
+  target: string,
+): string[] {
+  const walk = (nodes: AreaNode[], trail: string[]): string[] => {
+    for (const node of nodes) {
+      const next = [...trail, node.no]
+      if (node.no === target) {
+        return next
+      }
+      const deeper = walk(childrenOf(node.no), next)
+      if (deeper.length) {
+        return deeper
+      }
+    }
+    return []
+  }
+  return walk(roots, [])
+}
+
+function labelOf(no: string): string {
+  const find = (nodes: AreaNode[]): string => {
+    for (const node of nodes) {
+      if (node.no === no) {
+        return node.label
+      }
+      const deeper = find(tree.value.childrenOf(node.no))
+      if (deeper) {
+        return deeper
+      }
+    }
+    return ''
+  }
+  return find(tree.value.roots) || no
+}
+
+/** 级联：换上一级就按内存里的树重算下级，不再发请求 */
+function onColumnChange(event: { detail: { column: number, value: number } }): void {
   const { column, value } = event.detail
   indexes.value[column] = value
 
@@ -114,31 +176,19 @@ async function onColumnChange(event: { detail: { column: number, value: number }
     return
   }
 
-  labels.value = labels.value.slice(0, column)
-  labels.value[column] = picked.name
+  /**
+   * 用「已选到当前级」的路径重算各列：更深层级自动截断
+   *
+   * **这里刻意不动 `labels`** —— `labels` 是「已确认」的展示文案。
+   * 滑动过程中就改它，用户**取消**后控件会显示一个从没确认过的选择。
+   * 确认时 `onConfirm` 会从 `columns` / `indexes` 重新算，不需要这里预置。
+   */
+  const path = columns.value
+    .slice(0, column + 1)
+    .map((nodes, level) => nodes[indexes.value[level] ?? 0]?.no ?? '')
+    .filter(Boolean)
 
-  // 截断更深层级，再加载下一级
-  columns.value = columns.value.slice(0, column + 1)
-  indexes.value = indexes.value.slice(0, column + 1)
-
-  try {
-    const next = await loadLevel(column + 1, picked.no)
-    // 结果已过期（用户又改了上级）：不要再调整列与索引，否则会与新的选择错配
-    if (!next) {
-      return
-    }
-    if (next.length === 0) {
-      // 没有下级：当前级即末级
-      columns.value = columns.value.slice(0, column + 1)
-    }
-    else {
-      indexes.value[column + 1] = 0
-      labels.value[column + 1] = next[0]!.name
-    }
-  }
-  catch {
-    // 下一级加载失败不影响已选层级
-  }
+  applyColumns(path)
 }
 
 function onConfirm(): void {
@@ -148,7 +198,7 @@ function onConfirm(): void {
     if (!picked) {
       break
     }
-    parts.push(picked.name)
+    parts.push(picked.label)
     if (level === columns.value.length - 1) {
       labels.value = parts
       emit('update:modelValue', picked.no)
@@ -157,9 +207,11 @@ function onConfirm(): void {
 }
 
 watch(() => props.field.key, () => {
+  tree.value = buildAreaTree([])
   columns.value = [[]]
   indexes.value = [0]
   labels.value = []
+  errorMessage.value = ''
   void init()
 }, { immediate: true })
 
@@ -180,7 +232,7 @@ const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
       mode="multiSelector"
       :range="columns"
       :value="indexes"
-      range-key="name"
+      range-key="label"
       :disabled="props.disabled || loading || !hasOptions"
       @columnchange="onColumnChange"
       @change="onConfirm"
