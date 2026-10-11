@@ -8,6 +8,7 @@
 import { onLoad } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import { recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
+import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 
@@ -24,6 +25,7 @@ import {
   toMergeAnswerMap,
 } from '@/domain/questionnaire'
 import { shouldShowRetryEntry, shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
+import { imageAnswerTargets } from '@/domain/questionnaire/images'
 import { answerUrl, coverUrl, suggestionUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
@@ -82,6 +84,7 @@ async function init(): Promise<void> {
   }
 
   await loadServerResult()
+  await loadAnswerImages()
 }
 
 /**
@@ -129,6 +132,7 @@ async function loadServerResult(): Promise<void> {
 
 /** 服务端 merge 的作答（含选项序号还原），用于与服务端统计保持一致 */
 const serverAnswerMap = computed(() => serverAnswersToAnswerMap(fields.value, serverAnswers.value))
+
 /**
  * 逐题作答（展示与判分共用同一个来源）
  *
@@ -138,6 +142,46 @@ const serverAnswerMap = computed(() => serverAnswersToAnswerMap(fields.value, se
  * 且逐题得分加不出顶部总分。
  */
 const answerMap = computed(() => mergeAnswerSources(serverAnswerMap.value, backfill.value))
+
+/**
+ * 图片题的作答值是**文件批次号**，回顾页必须先把它换成真实图片地址
+ *
+ * 不换的话，「我的作答」会直接显示 `20261011121039186100` 这种内部 ID ——
+ * 用户上传的是照片，看到的却是编号（实测确认，见验收清单）。
+ */
+const answerImages = ref<Record<string, string[]>>({})
+/** 至少有一条图片题的附件没查出来（网络/权限），用于给出解释而不是假装没有 */
+const answerImagesFailed = ref(false)
+
+async function loadAnswerImages(): Promise<void> {
+  const targets = imageAnswerTargets(
+    fields.value.map(field => ({ key: field.key, widget: field.widget, value: answerMap.value[field.key] })),
+  )
+  if (!targets.length) {
+    return
+  }
+
+  const grouped: Record<string, string[]> = {}
+  let failed = false
+
+  await Promise.all(targets.map(async ({ key, fileNo }) => {
+    try {
+      const envelope = await attachmentSelect({ fileNo })
+      const urls = (envelope.data ?? [])
+        .map(row => resolveFileUrl(row.fileurl))
+        .filter(Boolean)
+      if (urls.length) {
+        grouped[key] = [...(grouped[key] ?? []), ...urls]
+      }
+    }
+    catch {
+      failed = true
+    }
+  }))
+
+  answerImages.value = grouped
+  answerImagesFailed.value = failed
+}
 /**
  * 是否拿到了「用户作答」数据（任一来源）
  *
@@ -183,12 +227,24 @@ const rows = computed(() =>
       const correct = judged && detail.correct === true
       const unanswered = judged && detail.selected.length === 0
 
+      /**
+       * 展示与判分同源：选项题还原成选项文案，文本/数字题直接用原值。
+       *
+       * 图片题例外：它的作答值是**文件批次号**，展示原值就是给用户看内部 ID。
+       * 这里换成中性文案，真实图片由 `images` 渲染。
+       */
+      const raw = answerMap.value[field.key]
+      const hasValue = Array.isArray(raw) ? raw.length > 0 : String(raw ?? '').trim().length > 0
+      const mineText = field.widget === 'image'
+        ? (hasValue ? '已上传图片' : '')
+        : describeSelected(field, answerMap.value)
+
       return {
         key: field.key,
         title: formatQuestionTitle(field.index, field.label),
-        // 展示与判分同源：选项题还原成选项文案，文本/数字题直接用原值
-        mine: describeSelected(field, answerMap.value)
-          || (answersLoaded.value ? '未作答' : '暂无法获取'),
+        mine: mineText || (answersLoaded.value ? '未作答' : '暂无法获取'),
+        isImage: field.widget === 'image',
+        images: answerImages.value[field.key] ?? [],
         expected: describeAnswer(field),
         // 逐题结论：correct / wrong / unanswered / unjudged（无正确答案，不计分）
         verdict: !judged ? 'unjudged' : unanswered ? 'unanswered' : correct ? 'correct' : 'wrong',
@@ -304,7 +360,19 @@ function restart(): void {
             </view>
             <view class="r-item__line">
               <text class="r-item__key">我的作答</text>
-              <text class="r-item__value">{{ row.mine }}</text>
+              <view v-if="row.isImage" class="r-item__images">
+                <image
+                  v-for="(img, index) in row.images"
+                  :key="index"
+                  class="r-item__image"
+                  :src="img"
+                  mode="aspectFill"
+                />
+                <text v-if="row.images.length === 0" class="r-item__value">
+                  {{ row.mine }}{{ answerImagesFailed ? '（图片暂时读不到）' : '' }}
+                </text>
+              </view>
+              <text v-else class="r-item__value">{{ row.mine }}</text>
             </view>
             <view v-if="row.expected" class="r-item__line">
               <text class="r-item__key">正确答案</text>
@@ -528,6 +596,23 @@ function restart(): void {
 
 .r-item__value--right {
   color: var(--bx-success);
+}
+
+/* 图片题：作答值是文件批次号，必须先换成真实图片再展示 */
+.r-item__images {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.r-item__image {
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius);
 }
 
 .r-page__actions {

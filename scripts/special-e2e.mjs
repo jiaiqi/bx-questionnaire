@@ -442,6 +442,35 @@ const finalHash = String(await evaluate('location.hash.slice(0, 160)'))
 console.log(`  提交后 hash：${finalHash}`)
 check('提交后跳到结果页或详情页', finalHash.includes('result') || finalHash.includes('detail'))
 
+// ── 结果页的图片回显 ──────────────────────────────────────────
+// 图片题的作答值是**文件批次号**。回顾页若直接展示它，用户上传的是照片、
+// 看到的却是一串内部 ID（实测确认过）。所以要断言：渲染出 <image>，且**不出现批次号**。
+console.log('\n=== 结果页图片回显 ===')
+await sleep(4000)
+const resultImg = await evaluate(`(() => {
+  const imgs = [...document.querySelectorAll('uni-image.r-item__image')]
+  return {
+    count: imgs.length,
+    first: imgs.length ? (imgs[0].querySelector('img') || {}).getAttribute?.('src') || '' : '',
+    pageText: (document.body.innerText || '')
+  }
+})()`)
+console.log(`  结果页缩略图数：${resultImg?.count}  首个 src：${String(resultImg?.first || '').slice(0, 90)}`)
+check('结果页渲染出图片缩略图', (resultImg?.count || 0) > 0)
+check('缩略图走服务端下载地址', String(resultImg?.first || '').includes('/file/download'))
+// 图片题那一行的「我的作答」不能是批次号
+const imgRowText = String(await evaluate(`(() => {
+  const row = [...document.querySelectorAll('uni-view.r-item')].find(el => (el.innerText||'').includes('图片题'))
+  return row ? row.innerText : ''
+})()`))
+console.log(`  图片题行文本：${JSON.stringify(imgRowText.slice(0, 120))}`)
+check('图片题行不展示文件批次号', !!imgRowText && !/\d{20,}/.test(imgRowText))
+// 图片渲染出来时不该再显示文案；读不到时才用「已上传图片」兜底 —— 两者有其一即可
+check(
+  '图片题行有可见的作答表达（缩略图或「已上传图片」）',
+  (resultImg?.count || 0) > 0 || imgRowText.includes('已上传图片'),
+)
+
 const failed = checks.filter(c => !c.pass).length
 console.log(`\n== ${checks.length} 项检查，失败 ${failed} 项 ==`)
 ws.close()
