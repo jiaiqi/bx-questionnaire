@@ -17,6 +17,7 @@ import { computed, ref, watch } from 'vue'
 
 import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import { uploadAttachment } from '@/api/file/upload'
+import { resolveImageDisplay } from '@/domain/questionnaire/images'
 import { BxError } from '@/utils/request'
 import { toast } from '@/utils/ui'
 
@@ -62,11 +63,24 @@ const fileNos = computed<string[]>(() => {
 const rows = ref<BxAttachmentRow[]>([])
 const loading = ref(false)
 const uploading = ref(false)
+/** 附件查询失败（实测环境里 `srvfile_attachment_select` 返回「无权限访问」） */
+const loadError = ref(false)
+/**
+ * 刚上传成功的本地预览（blob URL）
+ *
+ * 为什么需要：上传端点和附件查询端点的权限是**分开**的 ——
+ * 实测 `/file/upload` 可用，但 `srvfile_attachment_select` 返回「无权限访问」。
+ * 于是「传上去了」和「看得见」是两件事：只靠服务端列表的话，
+ * 用户传完图界面还是「暂无图片」，会以为没传上而反复重传。
+ * 本地预览让「刚传了什么」立刻可见。
+ */
+const localPreviews = ref<string[]>([])
 
 async function loadRows(): Promise<void> {
   const list = fileNos.value
   if (!list.length) {
     rows.value = []
+    loadError.value = false
     return
   }
 
@@ -75,24 +89,49 @@ async function loadRows(): Promise<void> {
     // 附件服务的 `in` 条件语法未经验证，逐条用 eq 查询更稳妥
     const envelopes = await Promise.all(list.map(fileNo => attachmentSelect({ fileNo })))
     rows.value = envelopes.flatMap(envelope => envelope.data ?? [])
+    loadError.value = false
   }
   catch {
-    // 拿不到附件时保持空态，不影响整页作答
+    // 拿不到附件不影响整页作答，但**必须如实标记**，不能伪装成「没有图片」
     rows.value = []
+    loadError.value = true
   }
   finally {
     loading.value = false
   }
 }
 
-watch(fileNos, () => {
+/**
+ * 自己刚写进去的批次号
+ *
+ * 上传成功后要 `emit` 新批次号，而 watch 会因此触发；若不区分来源，
+ * 就会把刚建立的本地预览立刻清掉 —— 正是要避免的「传了却看不见」。
+ */
+let selfSetBatch = ''
+
+watch(fileNos, (next) => {
+  // 自己刚设的值：保留本地预览
+  if (next.length === 1 && next[0] === selfSetBatch) {
+    void loadRows()
+    return
+  }
+  // 作答值换了别的来源（切到只读详情、外部改写），本地预览不再对应当前值
+  localPreviews.value = []
   void loadRows()
 }, { immediate: true })
 
-const images = computed(() =>
-  rows.value
-    .map(row => ({ url: resolveFileUrl(row.fileurl), name: String(row.src_name ?? '') }))
-    .filter(item => item.url),
+const images = computed(() => {
+  const serverUrls = rows.value.map(row => resolveFileUrl(row.fileurl)).filter(Boolean)
+  // 服务端列表优先；读不到时退回本地预览（详见 resolveImageDisplay 的注释）
+  return resolveImageDisplay({ serverUrls, localUrls: localPreviews.value }).images
+})
+
+/** 有本地预览却读不到服务端列表 —— 需要向用户解释清楚，否则像是没传上 */
+const showLocalOnlyHint = computed(() =>
+  resolveImageDisplay({
+    serverUrls: rows.value.map(row => resolveFileUrl(row.fileurl)).filter(Boolean),
+    localUrls: localPreviews.value,
+  }).localOnly,
 )
 
 const reachLimit = computed(() => images.value.length >= maxCount.value)
@@ -150,7 +189,12 @@ async function onUpload(): Promise<void> {
         fileNo: batchNo || undefined,
       })
       batchNo = String(result.file_no ?? batchNo)
+      // 上传成功的本地预览（去重）
+      if (!localPreviews.value.includes(filePath)) {
+        localPreviews.value = [...localPreviews.value, filePath]
+      }
     }
+    selfSetBatch = batchNo
     emit('update:modelValue', batchNo)
     toast('图片上传成功')
   }
@@ -181,6 +225,7 @@ function onClear(): void {
     return
   }
   rows.value = []
+  localPreviews.value = []
   emit('update:modelValue', '')
 }
 </script>
@@ -192,7 +237,7 @@ function onClear(): void {
         v-for="(img, index) in images"
         :key="index"
         class="bx-image__item"
-        :src="img.url"
+        :src="img"
         mode="aspectFill"
       />
     </view>
@@ -202,6 +247,10 @@ function onClear(): void {
         {{ loading ? '图片加载中…' : '暂无图片' }}
       </text>
     </view>
+
+    <text v-if="showLocalOnlyHint" class="bx-image__hint">
+      以下为本机预览：附件列表暂时读不到（{{ loadError ? '附件查询无权限' : '服务未返回数据' }}），已上传的图片会随作答一起提交
+    </text>
 
     <view v-if="!disabled" class="bx-image__actions">
       <view
@@ -294,8 +343,15 @@ function onClear(): void {
   color: var(--bx-text-3);
 }
 
-.bx-image__clear {
-  margin-left: 10px;
+.bx-image__hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bx-warn);
+}
+
+.bx-image__clear {  margin-left: 10px;
   padding: 7px 14px;
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
