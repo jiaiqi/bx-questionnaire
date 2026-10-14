@@ -616,7 +616,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
    * 于是滚动到后半段时它会盖住当前题 —— 现网正是这个问题（第 4 题被操作栏压住）。
    * 留出一个 footer 的高度即可。
    */
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  padding-bottom: calc(100px + env(safe-area-inset-bottom));
 }
 
 .runner__state {
@@ -778,6 +778,15 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   position: sticky;
   bottom: 0;
   z-index: var(--bx-z-fixed);
+  /*
+   * 固定高度（含一行「草稿已自动保存」提示）。
+   *
+   * 提示按需出现：不预留高度时它一出现吸底栏就变高 24px，把当前视野里的选项
+   * 往下推、甚至盖住 —— 连续多选时用户可能点到提示条而不是选项。
+   * （端到端脚本的坐标点击正是被这一点打偏的：多选第 2 项距吸底栏只剩 3px。）
+   * 恒定高度比省下这 24px 重要。
+   */
+  min-height: calc(92px + env(safe-area-inset-bottom));
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background-color: var(--bx-surface);
   /* 向上的一条线表达「浮起」，不用阴影：阴影压在题目上会发脏 */
