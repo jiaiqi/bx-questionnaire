@@ -1,0 +1,26 @@
+/**
+ * 主题覆盖层
+ *
+ * 为什么单独一个文件，而不是写在 tokens.scss 末尾：
+ * `test/design-tokens.spec.ts` 用全局正则扫描 tokens.scss，**同名变量出现第二次时
+ * 后者覆盖前者**，于是「主题块里的 --bx-blue」会被当成令牌真值，与 uno.config.ts
+ * 比对时必然红。把它拆出来，tokens.scss 保持「每个变量只声明一次」。
+ *
+ * 只覆盖主色四件套 + 选中描边；语义色、字阶、间距、圆角与默认主题完全一致。
+ *
+ * 用法：
+ * - H5：给根节点加 `data-theme="health"`（`document.documentElement.dataset.theme = 'health'`）；
+ * - 小程序：由宿主给 page 节点加同名属性（小程序不支持 :root）。
+ *
+ * 之所以一处生效全站：组件引用的是 `--bx-primary`（别名），别名指向 `--bx-blue`，
+ * 因此主题只要覆盖 `--bx-blue*` 即可，连历史代码里的 `var(--bx-blue)` 也一起跟随。
+ */
+
+page[data-theme='health'],
+:root[data-theme='health'] {
+  --bx-blue: #0d9488;
+  --bx-blue-hover: #0b7f75;
+  --bx-blue-active: #096a62;
+  --bx-blue-soft: #ecfdf5;
+  --bx-primary-line: #99f6e4;
+}

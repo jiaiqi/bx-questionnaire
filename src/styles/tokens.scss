@@ -56,6 +56,8 @@ page,
    * display：登录页时钟与结果页分数；title：页面/卡片主标题；h2：题组标题；
    * body：题干与正文；sub：选项与辅助正文；caption：元信息（下限 12px）。
    */
+  --bx-font-hero: 40px;
+  --bx-leading-hero: 48px;
   --bx-font-display: 28px;
   --bx-leading-display: 36px;
   --bx-font-title: 20px;
@@ -81,8 +83,8 @@ page,
   /* ── 圆角：按语义分四档 ───────────────────────────────────────────
    * 此前令牌之外还散着 4 / 10 / 15 / 2px 与硬编码的 `12px 12px 0 0`。
    */
-  --bx-radius: 10px;
-  --bx-radius-card: 12px;
+  --bx-radius: 12px;
+  --bx-radius-card: 16px;
   --bx-radius-chip: 999px;
   --bx-radius-mark: 4px;
 
@@ -97,10 +99,13 @@ page,
   --bx-shadow-card: var(--bx-elev-1);
 
   /* ── 控件尺寸与交互 ───────────────────────────────────────────────
-   * 44px 此前手写 7 遍；禁用态透明度此前有 .4 / .45 / .5 / .6 四档。
+   * 48px 此前手写 7 遍的 44px；禁用态透明度此前有 .4 / .45 / .5 / .6 四档。
+   * 取 48 而不是 44：44 是 iOS 的下限，安卓是 48dp，问卷的选项与按钮都用同一档，
+   * 拇指落在选项上的容错更大。
    */
-  --bx-control-height: 44px;
+  --bx-control-height: 48px;
   --bx-control-height-sm: 32px;
+  --bx-navbar-height: 48px;
   --bx-disabled-opacity: 0.45;
   --bx-focus-ring: 2px solid var(--bx-blue);
 
@@ -116,6 +121,44 @@ page,
   --bx-z-overlay: 60;
   --bx-z-modal: 900;
 
-  /* 内容列宽：PC 端居中定宽，移动端全宽（由容器宽度决定布局，见 §5.4） */
-  --bx-content-width: 860px;
+  /* 内容列宽：PC 端居中定宽，移动端全宽（由容器宽度决定布局，见 §5.4）
+   * 860 → 720：作答页是单列表单，过宽会让题干的视线跨度变大（一行 40+ 汉字）；
+   * 720px 约等于 42 个汉字的舒适阅读宽度。管理侧另有自己的宽列宽，不走这个令牌。
+   */
+  --bx-content-width: 720px;
+
+  /* ── 语义主色别名（主题切换的唯一入口）────────────────────────────
+   * 组件一律引用 --bx-primary*，不要直接写 --bx-blue*。
+   * 主题块只覆盖 --bx-blue*，而 --bx-primary 是它的别名（CSS 变量动态解析），
+   * 因此「改一处、全站跟随」，连旧代码里的 --bx-blue* 也一起跟随。
+   *
+   * 别名不写十六进制，所以不必同步 uno.config.ts —— design-tokens.spec.ts
+   * 只比对「以 # 开头的颜色令牌」。
+   */
+  --bx-primary: var(--bx-blue);
+  --bx-primary-hover: var(--bx-blue-hover);
+  --bx-primary-active: var(--bx-blue-active);
+  --bx-primary-soft: var(--bx-blue-soft);
+  --bx-primary-line: #dce9ff;
+
+  /* ── 补充中性色 ───────────────────────────────────────────────────
+   * surface-2：输入框 / 只读区的底。此前这些地方直接用白色，与卡片糊在一起，
+   * 看不出「这里可以输入」。比 surface 深一档即可，不要深到像禁用。
+   * text-4：**只用于占位符与装饰**（白底 2.9:1），不得承载任何信息文字。
+   */
+  --bx-surface-2: #fafbfc;
+  --bx-text-4: #98a2b3;
+
+  /* ── 健康测评语义色 ───────────────────────────────────────────────
+   * 「健康分数 / 评估等级」用一个独立于品牌主色的色相表达：品牌主色将来
+   * 无论换成什么，健康语义都保持稳定。
+   */
+  --bx-health: #0d9488;
+  --bx-health-soft: #ecfdf5;
+  --bx-health-line: #99f6e4;
+
+  /* ── 吸底栏分隔 ───────────────────────────────────────────────────
+   * 吸底栏用「向上的一条线」表达浮起，而不是阴影：阴影压在内容上会发脏。
+   */
+  --bx-elev-sticky: 0 -1px 0 var(--bx-line);
 }

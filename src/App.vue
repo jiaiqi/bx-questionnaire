@@ -53,5 +53,6 @@ onLaunch(() => {
 
 <style lang="scss">
 @import './styles/tokens.scss';
+@import './styles/themes.scss';
 @import './styles/global.scss';
 </style>
