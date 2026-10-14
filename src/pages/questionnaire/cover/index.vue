@@ -45,8 +45,12 @@ function start(): void {
 <template>
   <view class="c-page">
     <view class="c-page__body bx-container">
-      <view v-if="loading" class="c-page__state">
-        <text class="c-page__state-text">正在加载…</text>
+      <!-- 骨架屏：保持布局稳定，比一行「正在加载…」更能说明内容马上来 -->
+      <view v-if="loading" class="c-skeleton" aria-busy="true">
+        <view class="c-skeleton__hero" />
+        <view class="c-skeleton__line c-skeleton__line--title" />
+        <view class="c-skeleton__line" />
+        <view class="c-skeleton__line c-skeleton__line--short" />
       </view>
 
       <BxEmpty
@@ -100,22 +104,46 @@ function start(): void {
 }
 
 .c-page__body {
-  padding-top: 40px;
+  padding-top: 24px;
   padding-bottom: 40px;
 }
 
-.c-page__state {
-  padding: 64px 0;
-  text-align: center;
+/* ── 加载骨架 ── */
+
+.c-skeleton {
+  padding: 28px 20px;
+  background-color: var(--bx-surface);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
-.c-page__state-text {
-  font-size: 14px;
-  color: var(--bx-text-3);
+.c-skeleton__hero {
+  height: 120px;
+  margin-bottom: 20px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius);
 }
+
+.c-skeleton__line {
+  height: 12px;
+  margin-top: 12px;
+  background-color: var(--bx-line-2);
+  border-radius: 6px;
+}
+
+.c-skeleton__line--title {
+  width: 56%;
+  height: 20px;
+}
+
+.c-skeleton__line--short {
+  width: 38%;
+}
+
+/* ── 主视觉 ── */
 
 .c-hero {
-  padding: 28px 20px;
+  padding: 24px 20px;
   background-color: var(--bx-surface);
   box-shadow: var(--bx-elev-1);
   border-radius: var(--bx-radius-card);
@@ -124,20 +152,21 @@ function start(): void {
 .c-hero__badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 10px;
   margin-bottom: 12px;
-  background-color: var(--bx-blue-soft);
-  border-radius: 4px;
+  background-color: var(--bx-primary-soft);
+  border-radius: var(--bx-radius-chip);
 }
 
 .c-hero__badge-text {
   font-size: 12px;
-  color: var(--bx-blue);
+  line-height: 16px;
+  color: var(--bx-primary);
 }
 
 .c-hero__title {
   display: block;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1.4;
   color: var(--bx-text);
@@ -145,36 +174,49 @@ function start(): void {
 
 .c-hero__desc {
   display: block;
-  margin-top: 12px;
-  font-size: 14px;
-  line-height: 1.7;
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--bx-text-2);
 }
 
+/* ── 信息网格：分格 + 竖线，比三个居中数字更有"数据"感 ── */
+
 .c-meta {
   display: flex;
-  padding: 16px 0;
-  margin-top: 8px;
+  margin-top: 12px;
+  overflow: hidden;
   background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
 }
 
 .c-meta__item {
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
+  min-width: 0;
+  padding: 16px 8px;
+  border-left: 1px solid var(--bx-line-2);
+}
+
+.c-meta__item:first-child {
+  border-left: 0;
 }
 
 .c-meta__value {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--bx-text);
+  /* 数字用等宽数字位，多个格子并排时不会左右跳 */
+  font-variant-numeric: tabular-nums;
 }
 
 .c-meta__label {
   margin-top: 4px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
 }
 
@@ -186,6 +228,7 @@ function start(): void {
   display: block;
   margin-top: 12px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
   text-align: center;
 }

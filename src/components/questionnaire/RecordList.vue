@@ -186,8 +186,9 @@ void fetchPage(true)
 
 <template>
   <view class="records">
-    <view v-if="visibleRows.length === 0 && loading" class="records__state">
-      <text class="records__state-text">正在加载记录…</text>
+    <!-- 加载：三条骨架保持布局稳定，比一行「正在加载记录…」更符合「内容马上来」 -->
+    <view v-if="visibleRows.length === 0 && loading" class="records__skeleton" aria-busy="true">
+      <view v-for="n in 3" :key="n" class="records__skeleton-row" />
     </view>
 
     <view v-else-if="visibleRows.length === 0 && failed" class="records__state">
@@ -291,9 +292,22 @@ void fetchPage(true)
 </template>
 
 <style lang="scss" scoped>
+/* 失败态容器：BxEmpty 自带内边距，这里只留按钮上方的呼吸空间 */
 .records__state {
-  padding: 64px 0;
-  text-align: center;
+  padding: 0 0 24px;
+}
+
+/* 加载骨架 */
+.records__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.records__skeleton-row {
+  height: 92px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius-card);
 }
 
 .records__retry {
@@ -303,45 +317,45 @@ void fetchPage(true)
   margin-top: 16px;
 }
 
-.records__state-text {
-  font-size: 14px;
-  color: var(--bx-text-3);
-}
-
+/* 列表容器化：一条分割线代替逐卡阴影 —— 记录是同质条目，不该每行都「浮」起来 */
 .records__list {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bx-surface);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .records__notice {
   padding: 10px 16px;
-  background-color: var(--bx-blue-soft);
+  background-color: var(--bx-primary-soft);
+  border-bottom: 1px solid var(--bx-primary-line);
 }
 
 .records__notice-text {
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-2);
 }
 
 .record {
-  padding: 14px 16px;
-  background-color: var(--bx-surface);
-  box-shadow: var(--bx-elev-1);
+  padding: 16px;
   cursor: pointer;
+}
+
+.record + .record {
+  border-top: 1px solid var(--bx-line-2);
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */
 .record:focus-visible {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: -2px;
 }
 
-.record:not(:first-child) {
-  margin-top: 1px;
-}
-
 .record--hover {
-  background-color: var(--bx-line-2);
+  background-color: var(--bx-surface-2);
 }
 
 .record__head {
@@ -352,6 +366,7 @@ void fetchPage(true)
 
 .record__title {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   font-size: 15px;
   font-weight: 500;
@@ -360,18 +375,24 @@ void fetchPage(true)
   text-overflow: ellipsis;
 }
 
+/* 状态做成胶囊徽章：纯彩色文字在长列表里几乎扫不出来 */
 .record__state {
   flex-shrink: 0;
   margin-left: 10px;
+  padding: 2px 9px;
   font-size: 12px;
+  line-height: 18px;
+  border-radius: var(--bx-radius-chip);
 }
 
 .record__state--done {
   color: var(--bx-success);
+  background-color: var(--bx-success-soft);
 }
 
 .record__state--pending {
   color: var(--bx-warn);
+  background-color: var(--bx-warn-soft);
 }
 
 .record__meta {
@@ -383,6 +404,7 @@ void fetchPage(true)
 .record__meta-text {
   margin-right: 12px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
 }
 
@@ -395,7 +417,8 @@ void fetchPage(true)
 
 .record__score {
   font-size: 13px;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .record__batch {
@@ -404,7 +427,8 @@ void fetchPage(true)
 }
 
 .records__more {
-  padding: 16px 0;
+  padding: 16px;
+  border-top: 1px solid var(--bx-line-2);
   text-align: center;
 }
 
@@ -415,8 +439,8 @@ void fetchPage(true)
 }
 
 .records__more-text:focus-visible {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--bx-radius-sm);
 }
 </style>

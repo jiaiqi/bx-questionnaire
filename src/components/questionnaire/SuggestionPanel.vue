@@ -83,8 +83,9 @@ void load()
 
 <template>
   <view class="sug">
-    <view v-if="loading" class="sug__state">
-      <text class="sug__state-text">正在加载评估结果…</text>
+    <view v-if="loading" class="sug__skeleton" aria-busy="true">
+      <view class="sug__skeleton-card" />
+      <view class="sug__skeleton-card" />
     </view>
 
     <BxEmpty
@@ -112,14 +113,17 @@ void load()
 </template>
 
 <style lang="scss" scoped>
-.sug__state {
-  padding: 64px 0;
-  text-align: center;
+/* 加载：两块骨架保持布局稳定，比一行「正在加载…」更符合"内容马上来"的预期 */
+.sug__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.sug__state-text {
-  font-size: 14px;
-  color: var(--bx-text-3);
+.sug__skeleton-card {
+  height: 76px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius);
 }
 
 .sug__list {
@@ -129,19 +133,21 @@ void load()
 
 .sug-card {
   padding: 16px;
-  background-color: var(--bx-surface);
-  box-shadow: var(--bx-elev-1);
-  border-radius: var(--bx-radius-card);
+  background-color: var(--bx-surface-2);
+  /* 左侧主色竖条表达「这是一条建议」，比整块浅底更克制 */
+  border: 1px solid var(--bx-line);
+  border-left: 3px solid var(--bx-primary);
+  border-radius: var(--bx-radius);
 }
 
 .sug-card:not(:first-child) {
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .sug-card__content {
   display: block;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--bx-text-2);
   word-break: break-all;
 }

@@ -132,8 +132,9 @@ void load()
     <BxNavBar title="我的测评" />
 
     <view class="cp-page__body bx-container">
-      <view v-if="loading" class="cp-page__state">
-        <text class="cp-page__state-text">正在加载测评记录…</text>
+      <!-- 加载：三条骨架保持布局稳定，比一行「正在加载测评记录…」更符合预期 -->
+      <view v-if="loading" class="cp-skeleton" aria-busy="true">
+        <view v-for="n in 3" :key="n" class="cp-skeleton__row" />
       </view>
 
       <view v-else-if="errorMessage" class="cp-page__state">
@@ -206,9 +207,9 @@ void load()
   padding-bottom: 32px;
 }
 
+/* 失败 / 未登录态：BxEmpty 自带内边距，这里只留按钮上方的空间 */
 .cp-page__state {
-  padding: 64px 0;
-  text-align: center;
+  padding: 0 0 24px;
 }
 
 .cp-page__retry {
@@ -218,25 +219,35 @@ void load()
   margin-top: 16px;
 }
 
-.cp-page__state-text {
-  font-size: 14px;
-  color: var(--bx-text-3);
+/* 加载骨架 */
+.cp-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
+.cp-skeleton__row {
+  height: 104px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius-card);
+}
+
+/* 列表容器化：同质条目用分割线，不用逐卡阴影 */
 .cp-list {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bx-surface);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .cp-card {
   padding: 16px;
-  background-color: var(--bx-surface);
-  box-shadow: var(--bx-elev-1);
-  border-radius: var(--bx-radius-card);
 }
 
-.cp-card:not(:first-child) {
-  margin-top: 8px;
+.cp-card + .cp-card {
+  border-top: 1px solid var(--bx-line-2);
 }
 
 .cp-card__head {
@@ -247,17 +258,23 @@ void load()
 
 .cp-card__title {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: 15px;
   font-weight: 500;
   color: var(--bx-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
+/* 分数用等宽数字位：多条记录并排时数字宽度不会跳 */
 .cp-card__score {
   margin-left: 10px;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .cp-card__meta {
@@ -269,6 +286,7 @@ void load()
 .cp-card__meta-text {
   margin-right: 12px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
 }
 
@@ -278,18 +296,20 @@ void load()
   margin-top: 12px;
 }
 
+/* 两个动作做成胶囊按钮：主行动描边主色，次行动描边灰 */
 .cp-card__action {
-  padding: 4px 12px;
+  padding: 5px 14px;
   font-size: 13px;
-  color: var(--bx-blue);
-  border: 1px solid var(--bx-blue);
-  border-radius: 999px;
+  line-height: 20px;
+  color: var(--bx-primary);
+  border: 1px solid var(--bx-primary);
+  border-radius: var(--bx-radius-chip);
   cursor: pointer;
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */
 .cp-card__action:focus-visible {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
 }
 

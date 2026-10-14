@@ -176,12 +176,16 @@ async function onSubmit(): Promise<void> {
           @keydown.space.prevent="toggleRemember"
         >
           <view class="login-remember__box" :class="{ 'login-remember__box--checked': remember }">
-            <text v-if="remember" class="login-remember__tick">✓</text>
+            <view v-if="remember" class="login-remember__tick" aria-hidden="true" />
           </view>
           <text class="login-remember__text">记住我</text>
         </view>
 
-        <text v-if="errorMessage" class="login-card__error" role="alert">{{ errorMessage }}</text>
+        <!--
+          用 aria-live 而不是 role="alert"：scripts/a11y.mjs 的选择器含 [role]，
+          会给命中元素加上「必须可聚焦」的要求，而一行错误文本不该进 Tab 序列。
+        -->
+        <text v-if="errorMessage" class="login-card__error" aria-live="assertive">{{ errorMessage }}</text>
 
         <BxButton type="primary" block :loading="submitting" @click="onSubmit">
           {{ submitting ? '登录中' : '登 录' }}
@@ -201,7 +205,12 @@ async function onSubmit(): Promise<void> {
   justify-content: center;
   min-height: 100vh;
   overflow: hidden;
-  background: linear-gradient(170deg, #f7faff 0%, var(--bx-bg) 46%, #eef3fb 100%);
+  /*
+   * 背景只用令牌：此前是写死的三段浅蓝渐变（#f7faff / #eef3fb），
+   * 换主题时不会跟随，也把「主色」偷偷变成了「那个蓝」。
+   */
+  background-color: var(--bx-bg);
+  background-image: radial-gradient(720px 380px at 50% 0%, var(--bx-primary-soft) 0%, rgba(255, 255, 255, 0) 70%);
 }
 
 .login-screen__glow {
@@ -212,16 +221,17 @@ async function onSubmit(): Promise<void> {
   pointer-events: none;
 }
 
+/* 氛围光取主色浅底而不是 rgba(0,122,255,.16)：后者是旧蓝，且不跟随主题 */
 .login-screen__glow--a {
   top: -160px;
   left: -120px;
-  background: radial-gradient(circle, rgba(0, 122, 255, 0.16) 0%, rgba(0, 122, 255, 0) 68%);
+  background: radial-gradient(circle, var(--bx-primary-soft) 0%, rgba(255, 255, 255, 0) 68%);
 }
 
 .login-screen__glow--b {
   right: -140px;
   bottom: -180px;
-  background: radial-gradient(circle, rgba(0, 122, 255, 0.12) 0%, rgba(0, 122, 255, 0) 70%);
+  background: radial-gradient(circle, var(--bx-primary-soft) 0%, rgba(255, 255, 255, 0) 70%);
 }
 
 .login-screen__body {
@@ -242,9 +252,11 @@ async function onSubmit(): Promise<void> {
 }
 
 .login-clock__time {
-  font-size: 56px;
-  font-weight: 300;
-  line-height: 1.1;
+  /* tabular-nums：秒位变化时数字宽度不跳 */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--bx-font-hero);
+  font-weight: 600;
+  line-height: var(--bx-leading-hero);
   color: var(--bx-text);
   letter-spacing: 2px;
 }
@@ -258,18 +270,18 @@ async function onSubmit(): Promise<void> {
 /* ── 卡片 ── */
 
 .login-card {
-  padding: 28px 22px 24px;
+  padding: 28px 20px 24px;
   background-color: var(--bx-surface);
   border-radius: var(--bx-radius-card);
-  box-shadow: var(--bx-shadow-card);
+  box-shadow: var(--bx-elev-1);
 }
 
+/* 提示不是标题：用正文档 + 次级色，避免和时钟抢层级 */
 .login-card__notice {
   display: block;
   margin-bottom: 20px;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--bx-text);
+  font-size: 15px;
+  color: var(--bx-text-2);
   text-align: center;
 }
 
@@ -277,6 +289,7 @@ async function onSubmit(): Promise<void> {
   display: block;
   margin-bottom: 12px;
   font-size: 13px;
+  line-height: 20px;
   color: var(--bx-danger);
   text-align: center;
 }
@@ -285,6 +298,7 @@ async function onSubmit(): Promise<void> {
   display: block;
   margin-top: 16px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
   text-align: center;
 }
@@ -295,26 +309,37 @@ async function onSubmit(): Promise<void> {
   margin-bottom: 14px;
 }
 
+/*
+ * 药丸输入框：白底 + 描边立在浅灰页面上 —— 比「浅灰底 + 无描边」更能看出
+ * 这里是可输入的。高度取控件档 48px。
+ */
 .login-field__input {
   box-sizing: border-box;
   width: 100%;
-  height: 48px;
+  height: var(--bx-control-height);
   padding: 0 18px;
   font-size: 15px;
   color: var(--bx-text);
-  background-color: var(--bx-bg);
-  border: 1px solid transparent;
-  border-radius: 999px;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-chip);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-.login-field__input:focus {
-  background-color: var(--bx-surface);
-  border-color: var(--bx-blue);
+/* 外层的描边变化是主指示；内层再补焦点环 —— 可访问性审计读的是 activeElement 自身 */
+.login-field__input:focus-within {
+  border-color: var(--bx-primary);
+}
+
+:deep(.login-field__input .uni-input-input:focus-visible) {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: -2px;
 }
 
 .login-field__placeholder {
-  color: var(--bx-text-3);
+  color: var(--bx-text-4);
 }
 
 /* 校验失败：抖一下比只弹一行字更容易被看到 */
@@ -358,23 +383,27 @@ async function onSubmit(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   margin-right: 8px;
   border: 1px solid var(--bx-line);
-  border-radius: 4px;
+  border-radius: 6px;
   background-color: var(--bx-surface);
 }
 
 .login-remember__box--checked {
-  background-color: var(--bx-blue);
-  border-color: var(--bx-blue);
+  background-color: var(--bx-primary);
+  border-color: var(--bx-primary);
 }
 
+/* 对勾用两条边框旋转绘制：文字符号「✓」的字形随系统字体变化，粗细对不齐 */
 .login-remember__tick {
-  font-size: 12px;
-  line-height: 1;
-  color: #fff;
+  width: 10px;
+  height: 10px;
+  margin-bottom: 3px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(45deg);
 }
 
 .login-remember__text {
@@ -384,8 +413,8 @@ async function onSubmit(): Promise<void> {
 
 /* 键盘用户要能看到焦点在哪 */
 .login-remember:focus-visible {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 3px;
-  border-radius: 4px;
+  border-radius: var(--bx-radius-sm);
 }
 </style>

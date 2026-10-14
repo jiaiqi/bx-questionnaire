@@ -154,7 +154,7 @@ function onNext(): void {
 }
 
 .si-card {
-  padding: 18px 16px;
+  padding: 20px 16px;
   background-color: var(--bx-surface);
   box-shadow: var(--bx-elev-1);
   border-radius: var(--bx-radius-card);
@@ -162,30 +162,34 @@ function onNext(): void {
 
 .si-card__title {
   display: block;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
+  line-height: 1.4;
   color: var(--bx-text);
 }
 
 .si-card__desc {
   display: block;
   margin-top: 8px;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--bx-text-2);
 }
 
+/* 表单与信息卡同为白底，靠 1px 描边区分层次 */
 .si-form {
-  margin-top: 8px;
+  margin-top: 12px;
+  overflow: hidden;
   background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
 }
 
 .si-field {
-  padding: 14px 16px;
+  padding: 16px;
 }
 
-.si-field:not(:first-child) {
+.si-field + .si-field {
   border-top: 1px solid var(--bx-line-2);
 }
 
@@ -194,24 +198,27 @@ function onNext(): void {
   align-items: center;
 }
 
+/* 标签用 sub 档：它是辅助信息，不该和用户填的内容抢注意力 */
 .si-field__label {
-  font-size: 14px;
-  color: var(--bx-text);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--bx-text-2);
 }
 
 .si-field__required {
-  margin-left: 4px;
-  font-size: 14px;
+  margin-left: 3px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--bx-danger);
 }
 
 .si-field__input {
   box-sizing: border-box;
   width: 100%;
-  height: 40px;
+  height: var(--bx-control-height);
   margin-top: 8px;
-  padding: 0 12px;
-  font-size: 14px;
+  padding: 0 14px;
+  font-size: 15px;
   color: var(--bx-text);
   background-color: var(--bx-bg);
   border: 1px solid var(--bx-line);
@@ -219,7 +226,7 @@ function onNext(): void {
 }
 
 .si-field__placeholder {
-  color: var(--bx-text-3);
+  color: var(--bx-text-4);
 }
 
 /*
@@ -236,8 +243,8 @@ function onNext(): void {
  *    所以要落到 uni-app 内部的 `.uni-input-input` 上。
  */
 :deep(.si-field__input .uni-input-input:focus-visible) {
-  border-color: var(--bx-blue);
-  outline: 2px solid var(--bx-blue);
+  border-color: var(--bx-primary);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 1px;
 }
 
@@ -249,6 +256,7 @@ function onNext(): void {
   display: block;
   margin-top: 10px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
   text-align: center;
 }

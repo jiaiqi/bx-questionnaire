@@ -43,8 +43,11 @@ const {
     <BxNavBar title="作答结果" :fallback-url="coverUrl(activityNo)" />
 
     <view class="r-page__body bx-container">
-      <view v-if="loading" class="r-page__state">
-        <text class="r-page__state-text">正在加载结果…</text>
+      <!-- 加载：骨架保持布局稳定，比一行「正在加载结果…」更符合预期 -->
+      <view v-if="loading" class="r-skeleton" aria-busy="true">
+        <view class="r-skeleton__hero" />
+        <view class="r-skeleton__row" />
+        <view class="r-skeleton__row" />
       </view>
 
       <BxEmpty
@@ -109,6 +112,7 @@ const {
                   class="r-item__image"
                   :src="img"
                   mode="aspectFill"
+                  :alt="`第 ${index + 1} 张作答图片`"
                 />
                 <text v-if="row.images.length === 0" class="r-item__value">
                   {{ row.mine }}{{ answerImagesFailed ? '（图片暂时读不到）' : '' }}
@@ -164,18 +168,27 @@ const {
   padding-bottom: 32px;
 }
 
-.r-page__state {
-  padding: 64px 0;
-  text-align: center;
+/* 加载骨架 */
+.r-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.r-page__state-text {
-  font-size: 14px;
-  color: var(--bx-text-3);
+.r-skeleton__hero {
+  height: 168px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius-card);
+}
+
+.r-skeleton__row {
+  height: 96px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius-card);
 }
 
 .r-card {
-  padding: 20px 16px;
+  padding: 24px 16px 20px;
   background-color: var(--bx-surface);
   box-shadow: var(--bx-elev-1);
   border-radius: var(--bx-radius-card);
@@ -183,8 +196,9 @@ const {
 
 .r-card__title {
   display: block;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  line-height: 1.4;
   color: var(--bx-text);
   text-align: center;
 }
@@ -193,22 +207,25 @@ const {
   display: block;
   margin-top: 14px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
   text-align: center;
 }
 
+/* 分数是这一页的主角：用 hero 档（40/48）+ 等宽数字位 */
 .r-score {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .r-score__value {
-  font-size: 40px;
+  font-size: var(--bx-font-hero);
   font-weight: 600;
-  line-height: 1;
-  color: var(--bx-blue);
+  line-height: var(--bx-leading-hero);
+  color: var(--bx-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .r-score__unit {
@@ -219,8 +236,10 @@ const {
 
 .r-verdict {
   display: block;
-  margin-top: 10px;
+  margin-top: 8px;
   font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
   text-align: center;
 }
 
@@ -232,54 +251,71 @@ const {
   color: var(--bx-danger);
 }
 
+/* 答对 / 答错 / 未答：分格 + 竖线，与封面页的信息网格同一套语言 */
 .r-stats {
   display: flex;
   margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius);
 }
 
 .r-stat {
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
+  min-width: 0;
+  padding: 12px 8px;
+  border-left: 1px solid var(--bx-line-2);
+}
+
+.r-stat:first-child {
+  border-left: 0;
 }
 
 .r-stat__value {
   font-size: 18px;
   font-weight: 600;
   color: var(--bx-text);
+  font-variant-numeric: tabular-nums;
 }
 
 .r-stat__label {
   margin-top: 2px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
 }
 
 .r-tip {
   padding: 12px 16px;
-  margin-top: 8px;
-  background-color: var(--bx-blue-soft);
-  border-radius: var(--bx-radius-card);
+  margin-top: 12px;
+  background-color: var(--bx-primary-soft);
+  border-radius: var(--bx-radius);
 }
 
 .r-tip__text {
   font-size: 13px;
-  line-height: 1.7;
-  color: var(--bx-blue-active);
+  line-height: 1.6;
+  color: var(--bx-primary-active);
 }
 
+/* 逐题回顾容器化：同质条目用分割线，不用逐条阴影 */
 .r-list {
-  margin-top: 8px;
+  margin-top: 12px;
+  overflow: hidden;
+  background-color: var(--bx-surface);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .r-item {
-  padding: 14px 16px;
-  background-color: var(--bx-surface);
+  padding: 16px;
 }
 
-.r-item:not(:first-child) {
-  margin-top: 1px;
+.r-item + .r-item {
+  border-top: 1px solid var(--bx-line-2);
 }
 
 .r-item__head {
@@ -289,28 +325,30 @@ const {
 
 .r-item__label {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--bx-text);
 }
 
 .r-badge {
   flex-shrink: 0;
-  padding: 1px 8px;
+  padding: 2px 9px;
   margin-left: 10px;
   font-size: 12px;
-  line-height: 1.6;
-  border-radius: 999px;
+  line-height: 18px;
+  border-radius: var(--bx-radius-chip);
 }
 
+/* 判定徽章改用语义令牌（此前是硬编码的 rgba(0,180,42,.1) 之类） */
 .r-badge--correct {
   color: var(--bx-success);
-  background-color: rgba(0, 180, 42, 0.1);
+  background-color: var(--bx-success-soft);
 }
 
 .r-badge--wrong {
   color: var(--bx-danger);
-  background-color: rgba(245, 63, 63, 0.1);
+  background-color: var(--bx-danger-soft);
 }
 
 .r-badge--unanswered {
@@ -320,19 +358,22 @@ const {
 
 .r-item__line {
   display: flex;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .r-item__key {
   flex-shrink: 0;
   width: 62px;
   font-size: 13px;
+  line-height: 20px;
   color: var(--bx-text-3);
 }
 
 .r-item__value {
   flex: 1;
+  min-width: 0;
   font-size: 13px;
+  line-height: 20px;
   color: var(--bx-text-2);
   word-break: break-all;
 }
@@ -355,7 +396,7 @@ const {
   width: 64px;
   height: 64px;
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-sm);
 }
 
 .r-page__actions {
