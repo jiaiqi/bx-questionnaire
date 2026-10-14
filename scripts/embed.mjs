@@ -22,13 +22,21 @@ import { mkdtempSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertBaseReachable, resolveBaseUrl } from './lib/base-url.mjs'
+import { CHROME } from './lib/chrome.mjs'
 
-const BASE = process.argv[2] || 'http://localhost:5174'
+const BASE = resolveBaseUrl()
+
+// 目标地址不可达就直接退出：否则脚本会在浏览器错误页上「通过」，是最危险的假绿
+await assertBaseReachable(BASE).catch((error) => {
+  console.error(`\n❌ ${error.message}\n`)
+  process.exit(1)
+})
+
 const DO_SUBMIT = process.argv.includes('--submit')
 const CDP_PORT = 9365
 const PARENT_PORT = 4183
 const ACTIVITY = '20261010100256000001'
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
 const ITEMS = {
   radio: 'q-20261010100256000002',

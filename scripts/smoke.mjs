@@ -14,9 +14,17 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertBaseReachable, resolveBaseUrl } from './lib/base-url.mjs'
+import { CHROME } from './lib/chrome.mjs'
 
-const BASE = process.argv[2] || 'http://localhost:5174'
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const BASE = resolveBaseUrl()
+
+// 目标地址不可达就直接退出：否则脚本会在浏览器错误页上「通过」，是最危险的假绿
+await assertBaseReachable(BASE).catch((error) => {
+  console.error(`\n❌ ${error.message}\n`)
+  process.exit(1)
+})
+
 const ACTIVITY_NO = '20261010100256000001'
 // 评估建议面板要求 activity_no + fill_batch_no 同时存在才请求（对齐老工程）
 const FILL_BATCH_NO = '4d5b54fb88144b53bd136776f6a383d3'
@@ -101,6 +109,19 @@ const PAGES = [
   {
     name: '可视化设计器（编辑已有问卷）',
     route: `/pages/editor/design/index?activity_no=${ACTIVITY_NO}`,
+    markers: RENDERED,
+  },
+  {
+    // 登录页：会话过期后由 App.vue reLaunch 到这里，白屏就等于用户再也登不回来
+    name: '登录页',
+    route: '/pages/login/index',
+    markers: RENDERED,
+  },
+  {
+    // 参数传递链路：会话过期跳转时要带上 reason 与回跳地址，
+    // 读不出来就会显示默认文案（曾出现中文提示以 `%E7%99%BB...` 原文显示）
+    name: '登录页（会话过期）',
+    route: '/pages/login/index?reason=expired&redirect=%2Fpages%2Feditor%2Flist%2Findex',
     markers: RENDERED,
   },
 ]

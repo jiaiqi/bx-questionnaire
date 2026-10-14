@@ -33,10 +33,18 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertBaseReachable, resolveBaseUrl } from './lib/base-url.mjs'
+import { CHROME } from './lib/chrome.mjs'
 
-const BASE = process.argv.find(a => a.startsWith('http')) || 'http://localhost:5174'
+const BASE = resolveBaseUrl()
+
+// 目标地址不可达就直接退出：否则脚本会在浏览器错误页上「通过」，是最危险的假绿
+await assertBaseReachable(BASE).catch((error) => {
+  console.error(`\n❌ ${error.message}\n`)
+  process.exit(1)
+})
+
 const ACTIVITY = (process.argv.find(a => a.startsWith('--activity=')) || '').split('=')[1] || '20261011113133000003'
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9375
 
 // 1×1 真实 PNG

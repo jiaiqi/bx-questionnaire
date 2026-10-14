@@ -24,6 +24,7 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { CHROME } from './lib/chrome.mjs'
 
 const BASE = process.argv[2] || 'http://localhost:4180'
 const ACTIVITY_NO = '20261010100256000001'
@@ -41,7 +42,6 @@ const ROUTES = [
   { name: '我的测评', path: '/pages/questionnaire/couple/couple', expect: '我的测评' },
 ]
 
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const PORT = 9339
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))

@@ -18,9 +18,17 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertBaseReachable, resolveBaseUrl } from './lib/base-url.mjs'
+import { CHROME } from './lib/chrome.mjs'
 
-const BASE = process.env.BX_BASE || 'http://localhost:5173'
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const BASE = resolveBaseUrl()
+
+// 目标地址不可达就直接退出：否则脚本会在浏览器错误页上「通过」，是最危险的假绿
+await assertBaseReachable(BASE).catch((error) => {
+  console.error(`\n❌ ${error.message}\n`)
+  process.exit(1)
+})
+
 const PORT = 9381
 const ACTIVITY_NO = process.env.BX_ACTIVITY_NO || '20261011154728000005'
 const sleep = ms => new Promise(r => setTimeout(r, ms))

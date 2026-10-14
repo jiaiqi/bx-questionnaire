@@ -17,9 +17,17 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { assertBaseReachable, resolveBaseUrl } from './lib/base-url.mjs'
+import { CHROME } from './lib/chrome.mjs'
 
-const BASE = process.env.BX_BASE || 'http://localhost:5173'
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const BASE = resolveBaseUrl()
+
+// 目标地址不可达就直接退出：否则脚本会在浏览器错误页上「通过」，是最危险的假绿
+await assertBaseReachable(BASE).catch((error) => {
+  console.error(`\n❌ ${error.message}\n`)
+  process.exit(1)
+})
+
 const PORT = 9376
 
 /** 视口：与用户要求一致 —— 浏览器 PC / 移动端都要看，小程序另有竖屏与横屏 */
