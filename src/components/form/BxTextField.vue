@@ -40,6 +40,7 @@ function onInput(event: { detail: { value: string } }): void {
       v-if="isTextarea"
       :aria-label="props.field.label"
       class="bx-text__control bx-text__control--area"
+      :class="{ 'bx-text__control--disabled': props.disabled }"
       :value="text"
       :disabled="props.disabled"
       :maxlength="props.maxlength"
@@ -51,6 +52,7 @@ function onInput(event: { detail: { value: string } }): void {
       v-else
       :aria-label="props.field.label"
       class="bx-text__control"
+      :class="{ 'bx-text__control--disabled': props.disabled }"
       :value="text"
       :disabled="props.disabled"
       :type="isNumber ? 'digit' : 'text'"
@@ -69,12 +71,18 @@ function onInput(event: { detail: { value: string } }): void {
   position: relative;
 }
 
+/*
+ * 输入框
+ *
+ * 底色比卡片深一档（--bx-bg）+ 1px 描边：只靠描边时，白卡片里的输入区在
+ * 低亮度屏幕上几乎看不到边界。
+ */
 .bx-text__control {
   box-sizing: border-box;
   width: 100%;
-  height: 44px;
-  padding: 0 12px;
-  font-size: 14px;
+  height: var(--bx-control-height);
+  padding: 0 14px;
+  font-size: 15px;
   color: var(--bx-text);
   background-color: var(--bx-bg);
   border: 1px solid var(--bx-line);
@@ -82,13 +90,20 @@ function onInput(event: { detail: { value: string } }): void {
 }
 
 .bx-text__control--area {
-  height: 96px;
-  padding: 10px 12px 24px;
+  height: auto;
+  min-height: 96px;
+  /* 底部留出计数器的位置，避免最后一行被压在计数文字下面 */
+  padding: 12px 14px 26px;
   line-height: 1.6;
 }
 
+.bx-text__control--disabled {
+  cursor: not-allowed;
+  opacity: var(--bx-disabled-opacity);
+}
+
 .bx-text__placeholder {
-  color: var(--bx-text-3);
+  color: var(--bx-text-4);
 }
 
 /*
@@ -104,18 +119,21 @@ function onInput(event: { detail: { value: string } }): void {
  * `input` 改写成 `uni-input`（外层自定义元素），而真正被聚焦的是内层原生 input，
  * 写 `input` 编译出来是 `uni-input:focus-visible`，永远不会触发。
  * 真实结构：UNI-INPUT > DIV.uni-input-wrapper > INPUT.uni-input-input
+ *
+ * 也刻意不改成「外层 :focus-within 光晕」：可访问性审计读的是 document.activeElement
+ * 自身的 outline / box-shadow，焦点环画在外层会被判成「不可见」。
  */
 :deep(.bx-text__control .uni-input-input:focus-visible),
 :deep(.bx-text__control .uni-textarea-textarea:focus-visible) {
-  border-color: var(--bx-blue);
-  outline: 2px solid var(--bx-blue);
+  border-color: var(--bx-primary);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 1px;
 }
 
 .bx-text__counter {
   position: absolute;
-  right: 10px;
-  bottom: 6px;
+  right: 12px;
+  bottom: 8px;
   font-size: 12px;
   color: var(--bx-text-3);
 }

@@ -139,6 +139,21 @@ watch(() => props.field.key, () => {
   draft.value = []
   visible.value = false
 }, { immediate: true })
+
+/**
+ * 键盘激活
+ *
+ * 这个组件里有三处可点击的 <view>（选择入口 / 选项行 / 确定），用 <view> 渲染的元素
+ * 天然不可聚焦 —— 键盘用户连题都答不了。统一走这一个入口，避免三处各写一遍
+ * Enter / Space 判断（老工程正是「同一件事抄三遍，改一处漏两处」）。
+ */
+function keyboardActivate(event: KeyboardEvent, action: () => void): void {
+  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+    return
+  }
+  event.preventDefault()
+  action()
+}
 </script>
 
 <template>
@@ -146,18 +161,30 @@ watch(() => props.field.key, () => {
     <view
       class="bx-ref__control"
       :class="{ 'bx-ref__control--disabled': props.disabled }"
+      role="button"
+      tabindex="0"
+      :aria-label="props.field.label"
       @click="open"
+      @keydown="keyboardActivate($event, open)"
     >
       <text v-if="display" class="bx-ref__text">{{ display }}</text>
       <text v-else class="bx-ref__placeholder">请选择</text>
-      <text class="bx-ref__arrow">›</text>
+      <view class="bx-ref__arrow" aria-hidden="true" />
     </view>
 
     <view v-if="visible" class="bx-ref__mask" @click="visible = false">
       <view class="bx-ref__panel" @click.stop>
         <view class="bx-ref__head">
           <text class="bx-ref__title">{{ props.field.label }}</text>
-          <text class="bx-ref__close" @click="visible = false">关闭</text>
+          <text
+            class="bx-ref__close"
+            role="button"
+            tabindex="0"
+            @click="visible = false"
+            @keydown="keyboardActivate($event, () => { visible = false })"
+          >
+            关闭
+          </text>
         </view>
 
         <scroll-view class="bx-ref__list" scroll-y>
@@ -178,16 +205,31 @@ watch(() => props.field.key, () => {
             :key="option.value"
             class="bx-ref__item"
             :class="{ 'bx-ref__item--active': draft.includes(option.value) }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="draft.includes(option.value) ? 'true' : 'false'"
             @click="toggle(option.value)"
+            @keydown="keyboardActivate($event, () => toggle(option.value))"
           >
             <text class="bx-ref__item-label">{{ option.label }}</text>
-            <text v-if="draft.includes(option.value)" class="bx-ref__item-check">✓</text>
+            <!-- 对勾同样用 CSS 画：文字符号「✓」的字形随字体变化 -->
+            <view
+              v-if="draft.includes(option.value)"
+              class="bx-ref__item-check"
+              aria-hidden="true"
+            />
           </view>
         </scroll-view>
 
         <view class="bx-ref__foot">
           <text class="bx-ref__hint">{{ props.field.multi ? '可多选' : '单选' }}</text>
-          <view class="bx-ref__confirm" @click="confirm">
+          <view
+            class="bx-ref__confirm"
+            role="button"
+            tabindex="0"
+            @click="confirm"
+            @keydown="keyboardActivate($event, confirm)"
+          >
             <text class="bx-ref__confirm-text">确定</text>
           </view>
         </view>
@@ -207,34 +249,47 @@ watch(() => props.field.key, () => {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: var(--bx-control-height);
+  padding: 12px 14px;
   background-color: var(--bx-bg);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
+  cursor: pointer;
+}
+
+.bx-ref__control:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
 .bx-ref__control--disabled {
+  cursor: not-allowed;
   opacity: var(--bx-disabled-opacity);
 }
 
 .bx-ref__text {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  font-size: 15px;
   color: var(--bx-text);
 }
 
 .bx-ref__placeholder {
   flex: 1;
-  font-size: 14px;
-  color: var(--bx-text-3);
+  min-width: 0;
+  font-size: 15px;
+  color: var(--bx-text-4);
 }
 
+/* 右向箭头用两条边框旋转绘制（文字符号字形随系统字体变化，小程序又不支持 <svg>） */
 .bx-ref__arrow {
-  margin-left: 8px;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--bx-text-3);
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: 10px;
+  border-top: 1.5px solid var(--bx-text-3);
+  border-right: 1.5px solid var(--bx-text-3);
+  transform: rotate(45deg);
 }
 
 .bx-ref__mask {
@@ -243,11 +298,11 @@ watch(() => props.field.key, () => {
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 900;
+  z-index: var(--bx-z-modal);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.45);
+  background-color: rgba(16, 24, 40, 0.45);
 }
 
 .bx-ref__panel {
@@ -257,26 +312,33 @@ watch(() => props.field.key, () => {
   max-height: 70vh;
   padding-bottom: env(safe-area-inset-bottom);
   background-color: var(--bx-surface);
-  border-radius: 12px 12px 0 0;
+  border-radius: var(--bx-radius-card) var(--bx-radius-card) 0 0;
 }
 
 .bx-ref__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 16px;
   border-bottom: 1px solid var(--bx-line-2);
 }
 
 .bx-ref__title {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--bx-text);
 }
 
 .bx-ref__close {
-  font-size: 14px;
-  color: var(--bx-text-3);
+  padding: 4px;
+  font-size: 15px;
+  color: var(--bx-primary);
+  cursor: pointer;
+}
+
+.bx-ref__close:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
 .bx-ref__list {
@@ -297,31 +359,46 @@ watch(() => props.field.key, () => {
   display: block;
   margin-top: 12px;
   font-size: 13px;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
+  cursor: pointer;
 }
 
 .bx-ref__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 13px 16px;
+  min-height: var(--bx-control-height);
+  padding: 12px 16px;
   border-bottom: 1px solid var(--bx-line-2);
+  cursor: pointer;
+}
+
+.bx-ref__item:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: -2px;
 }
 
 .bx-ref__item--active {
-  background-color: var(--bx-blue-soft);
+  background-color: var(--bx-primary-soft);
 }
 
 .bx-ref__item-label {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  font-size: 15px;
   color: var(--bx-text);
 }
 
+/* 对勾：两条边框旋转绘制；旋转后的视觉中心偏下，上移 3px 才落在行中央 */
 .bx-ref__item-check {
-  margin-left: 10px;
-  font-size: 14px;
-  color: var(--bx-blue);
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-bottom: 3px;
+  margin-left: 12px;
+  border-right: 2px solid var(--bx-primary);
+  border-bottom: 2px solid var(--bx-primary);
+  transform: rotate(45deg);
 }
 
 .bx-ref__foot {
@@ -338,13 +415,24 @@ watch(() => props.field.key, () => {
 }
 
 .bx-ref__confirm {
-  padding: 8px 22px;
-  background-color: var(--bx-blue);
-  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 24px;
+  background-color: var(--bx-primary);
+  border-radius: var(--bx-radius);
+  cursor: pointer;
+}
+
+.bx-ref__confirm:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
 .bx-ref__confirm-text {
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   color: #fff;
 }
 </style>

@@ -24,6 +24,21 @@ export function formatQuestionTitle(
 }
 
 /**
+ * 去掉后端标题里自带的序号前缀
+ *
+ * `formatQuestionTitle` 是「保证有序号」，这里是它的反面：新版的题干旁边有一个
+ * 独立的序号胶囊，如果标题里再带「1. 」，就会渲染成「① 1. 您的姓名」。
+ *
+ * 只剥离**开头**的一段「数字 + 分隔符」，因此「工作年限（年）」「2026 年度计划」
+ * 这类标题不受影响 —— 后者虽然以数字开头，但数字后面不是 `.、)）」而是「年」。
+ */
+export function stripQuestionTitleIndex(label: string | null | undefined): string {
+  return String(label ?? '')
+    .trim()
+    .replace(/^\d+\s*[.、)）]\s*/, '')
+}
+
+/**
  * 时间展示格式化
  *
  * 后端返回的是「2026-10-10 10:03:10」这种字符串，只做字符串切片，

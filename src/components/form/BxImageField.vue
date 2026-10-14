@@ -301,7 +301,7 @@ function onClear(): void {
   <view class="bx-image">
     <view v-if="images.length" class="bx-image__list">
       <view v-for="(img, index) in images" :key="index" class="bx-image__cell">
-        <image class="bx-image__item" :src="img" mode="aspectFill" />
+        <image class="bx-image__item" :src="img" mode="aspectFill" :alt="`第 ${index + 1} 张已上传的图片`" />
         <view
           v-if="!disabled"
           class="bx-image__remove"
@@ -310,9 +310,7 @@ function onClear(): void {
           tabindex="0"
           @click="onRemove(index)"
         >
-          <text class="bx-image__remove-text">
-            ×
-          </text>
+          <view class="bx-image__remove-text" aria-hidden="true" />
         </view>
       </view>
     </view>
@@ -388,21 +386,49 @@ function onClear(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
   background-color: var(--bx-text);
   border-radius: 50%;
 }
 
+.bx-image__remove:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
+/* 叉号用两条线交叉绘制：文字符号「×」的字形随系统字体变化，粗细对不齐 */
 .bx-image__remove-text {
-  font-size: 14px;
-  line-height: 1;
-  color: #FFFFFF;
+  position: relative;
+  width: 10px;
+  height: 10px;
+}
+
+.bx-image__remove-text::before,
+.bx-image__remove-text::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: #fff;
+  border-radius: 1px;
+}
+
+.bx-image__remove-text::before {
+  transform: rotate(45deg);
+}
+
+.bx-image__remove-text::after {
+  transform: rotate(-45deg);
 }
 
 .bx-image__empty {
-  padding: 14px 12px;
-  background-color: var(--bx-bg);
+  padding: 14px;
+  background-color: var(--bx-surface-2);
   border: 1px dashed var(--bx-line);
   border-radius: var(--bx-radius);
 }
@@ -415,22 +441,32 @@ function onClear(): void {
 .bx-image__actions {
   display: flex;
   align-items: center;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .bx-image__upload {
-  padding: 7px 14px;
-  border: 1px solid var(--bx-blue);
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  cursor: pointer;
+  border: 1px solid var(--bx-primary);
   border-radius: var(--bx-radius);
 }
 
+.bx-image__upload:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
 .bx-image__upload--disabled {
+  cursor: not-allowed;
   border-color: var(--bx-line);
 }
 
 .bx-image__upload-text {
-  font-size: 13px;
-  color: var(--bx-blue);
+  font-size: 14px;
+  color: var(--bx-primary);
 }
 
 .bx-image__upload--disabled .bx-image__upload-text {
@@ -445,14 +481,24 @@ function onClear(): void {
   color: var(--bx-warn);
 }
 
-.bx-image__clear {  margin-left: 10px;
-  padding: 7px 14px;
+.bx-image__clear {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  margin-left: 10px;
+  padding: 0 16px;
+  cursor: pointer;
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
 }
 
+.bx-image__clear:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
 .bx-image__clear-text {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--bx-text-2);
 }
 

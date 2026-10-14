@@ -82,11 +82,11 @@ function emitValue(next: string, part: 'date' | 'time'): void {
       :disabled="props.disabled"
       @change="onDateChange"
     >
-      <view class="bx-picker">
+      <view class="bx-picker" :class="{ 'bx-picker--disabled': props.disabled }">
         <text :class="datePart ? 'bx-picker__value' : 'bx-picker__placeholder'">
           {{ datePart || '请选择日期' }}
         </text>
-        <text class="bx-picker__arrow">›</text>
+        <view class="bx-picker__arrow" aria-hidden="true" />
       </view>
     </picker>
 
@@ -96,11 +96,11 @@ function emitValue(next: string, part: 'date' | 'time'): void {
       :disabled="props.disabled"
       @change="onTimeChange"
     >
-      <view class="bx-picker">
+      <view class="bx-picker" :class="{ 'bx-picker--disabled': props.disabled }">
         <text :class="timePart ? 'bx-picker__value' : 'bx-picker__placeholder'">
           {{ timePart || '请选择时间' }}
         </text>
-        <text class="bx-picker__arrow">›</text>
+        <view class="bx-picker__arrow" aria-hidden="true" />
       </view>
     </picker>
   </view>
@@ -114,11 +114,11 @@ function emitValue(next: string, part: 'date' | 'time'): void {
     :disabled="props.disabled"
     @change="onDateChange"
   >
-    <view class="bx-picker">
+    <view class="bx-picker" :class="{ 'bx-picker--disabled': props.disabled }">
       <text :class="text ? 'bx-picker__value' : 'bx-picker__placeholder'">
         {{ text || (isTime ? '请选择时间' : '请选择日期') }}
       </text>
-      <text class="bx-picker__arrow">›</text>
+      <view class="bx-picker__arrow" aria-hidden="true" />
     </view>
   </picker>
 </template>
@@ -133,29 +133,45 @@ function emitValue(next: string, part: 'date' | 'time'): void {
   flex: 1;
 }
 
+/* 与 BxTextField 同一套：灰底 + 1px 描边 + 48px 高 */
 .bx-picker {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
-  padding: 0 12px;
+  height: var(--bx-control-height);
+  padding: 0 14px;
   background-color: var(--bx-bg);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
 }
 
+.bx-picker--disabled {
+  cursor: not-allowed;
+  opacity: var(--bx-disabled-opacity);
+}
+
 .bx-picker__value {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--bx-text);
 }
 
 .bx-picker__placeholder {
-  font-size: 14px;
-  color: var(--bx-text-3);
+  font-size: 15px;
+  color: var(--bx-text-4);
 }
 
+/*
+ * 右向箭头用两条边框旋转绘制，不用「›」文字符号：
+ * 文字符号的字形随系统字体变化（iOS / Android / 微信 PC 端粗细与角度都不同），
+ * 而 <svg> 在微信小程序里不被支持。
+ */
 .bx-picker__arrow {
-  font-size: 18px;
-  color: var(--bx-text-3);
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: 10px;
+  border-top: 1.5px solid var(--bx-text-3);
+  border-right: 1.5px solid var(--bx-text-3);
+  transform: rotate(45deg);
 }
 </style>

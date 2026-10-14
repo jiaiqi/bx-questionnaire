@@ -242,7 +242,8 @@ const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
         <text v-else class="bx-address__placeholder">
           {{ loading ? '正在加载地区…' : (hasOptions ? '请选择地区' : '暂无地区数据') }}
         </text>
-        <text class="bx-address__arrow">›</text>
+        <!-- 箭头用 CSS 绘制：文字符号「›」的字形随系统字体变化，<svg> 在小程序里不可用 -->
+        <view class="bx-address__arrow" aria-hidden="true" />
       </view>
     </picker>
   </view>
@@ -259,33 +260,39 @@ const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: var(--bx-control-height);
+  padding: 12px 14px;
   background-color: var(--bx-bg);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
 }
 
 .bx-address__control--disabled {
+  cursor: not-allowed;
   opacity: var(--bx-disabled-opacity);
 }
 
 .bx-address__text {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  font-size: 15px;
   color: var(--bx-text);
 }
 
 .bx-address__placeholder {
   flex: 1;
-  font-size: 14px;
-  color: var(--bx-text-3);
+  min-width: 0;
+  font-size: 15px;
+  color: var(--bx-text-4);
 }
 
 .bx-address__arrow {
-  margin-left: 8px;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--bx-text-3);
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: 10px;
+  border-top: 1.5px solid var(--bx-text-3);
+  border-right: 1.5px solid var(--bx-text-3);
+  transform: rotate(45deg);
 }
 </style>
