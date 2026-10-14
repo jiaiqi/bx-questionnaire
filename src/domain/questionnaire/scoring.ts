@@ -114,11 +114,14 @@ export function describeSelected(field: QuestionField, answers: AnswerMap): stri
     return labels.length > 0 ? labels.join('、') : selected.join('、')
   }
   /**
-   * 图片题给中性文案，**绝不拼路径**
+   * 图片题给中性文案，**绝不拼批次号**
    *
-   * 作答值是文件路径列表（改造前是批次号），拼出来是
-   * `/20261011/.../x.jpg、/20261011/.../y.jpg` 这种内部地址 ——
-   * 与「展示批次号」是同一类问题，只是更难看。真实图片由结果页渲染缩略图。
+   * 作答值是**批次号列表**（一个元素一张图，见 `images.ts`），拼出来是
+   * `20261011165001000057、20261011165001000058` 这种内部编号 ——
+   * 用户看不懂，也不该看到。真实图片由结果页渲染缩略图。
+   *
+   * 顺带记一笔：作答值里**存不了文件路径**（图片题的 `option_value` 上限约 50 字符，
+   * 实测路径必报 `Data truncation`），所以这里不是「懒得拼」而是「拼不出来」。
    */
   if (field.widget === 'image') {
     return `已上传 ${selected.length} 张图片`

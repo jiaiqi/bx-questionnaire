@@ -40,18 +40,10 @@ export default defineConfig({
       },
     },
   },
-  shortcuts: {
-    // 问卷卡片
-    'bx-card': 'bg-bx-surface rounded-xl',
-    // 主按钮 / 次按钮
-    'bx-btn': 'flex items-center justify-center rounded-lg text-15px font-500',
-    'bx-btn-primary': 'bx-btn bg-bx-blue text-white',
-    'bx-btn-ghost': 'bx-btn bg-bx-surface text-bx-text',
-    // 题目题干
-    'bx-question-title': 'text-15px font-500 leading-relaxed text-bx-text',
-    // 辅助文字
-    'bx-hint': 'text-12px text-bx-text-3',
-  },
+  // 这里刻意不定义 shortcuts：此前有一组 `bx-card` / `bx-btn-*` 组合类，
+  // 但全工程零引用 —— 组件样式统一写在各自的 <style lang="scss"> 里并走
+  // tokens.scss 的 CSS 变量（便于运行时主题覆盖），不再叠加第二套类名体系。
+  // 将来确实要用组合类时再加回来，但请同时写使用点，避免又变成死配置。
   transformers: [
     transformerDirectives(),
     transformerVariantGroup(),
