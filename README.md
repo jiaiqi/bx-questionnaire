@@ -10,7 +10,7 @@
 | 状态 | Pinia |
 | 样式 | UnoCSS + 原生 SCSS（设计令牌驱动） |
 | 脚手架 | `@uni-helper/unh`（create-uni `custom` 模板） |
-| 测试 | Vitest（561 项） |
+| 测试 | Vitest（678 项自洽用例 + 7 项真实网关集成，后者单独跑） |
 | 校验 | vue-tsc + ESLint |
 
 `pages.json` 与 `manifest.json` 是**构建产物**，由根目录的 `pages.config.ts` / `manifest.config.ts` 生成；
@@ -20,14 +20,15 @@
 
 ```
 ├── src/
-│   ├── api/                 # 按应用分组的接口封装（daq / file / config）
-│   ├── components/          # base（基础组件）/ form（题型）/ questionnaire（业务组件）
-│   ├── composables/         # useQuestionnaire / useDraft / useSubmit 等
+│   ├── api/                 # 按应用分组的接口封装（daq / file / config / sso 登录）
+│   ├── components/          # base（基础组件）/ form（题型）/ questionnaire（业务）/ auth（登录界面）
+│   ├── composables/         # useQuestionnaire / useDraft / useSubmit / useLogin 等
 │   ├── domain/questionnaire # 纯逻辑：题型映射、序列化、校验、计分
 │   ├── pages/questionnaire/ # 10 个作答侧页面
 │   ├── pages/editor/        # 2 个管理侧页面（问卷列表 / 可视化设计器）
+│   ├── pages/login/         # 1 个登录页（会话过期后 reLaunch 到这里）
 │   ├── stores/              # session 等
-│   └── utils/               # request（请求层）/ storage / query（页面参数解析）
+│   └── utils/               # request（请求层）/ crypto（RSA）/ storage / query（页面参数解析）
 ├── scripts/                 # 探测与联调脚本 + mutation.mjs（变异测试）+ smoke.mjs（页面冒烟）+ e2e.mjs（端到端交互）+ editor-e2e.mjs（设计器界面级保存链路）+ perf.mjs（首屏性能基线）+ a11y.mjs（可访问性审计）+ scan-dist.mjs（产物安全扫描）+ check-mp.mjs（小程序产物校验）+ check-conditional.mjs（条件编译剥离验证）+ find-dead-exports.mjs（死代码扫描）+ a11y.mjs（可访问性审计）+ check-overflow.mjs（验证冒烟溢出检测有效），均不参与打包
 ├── test/                    # 单元测试 + 集成测试（含 env-config.spec.ts：环境变量配置回归防护、directives/aria-label.spec.ts：可访问性指令）
 ├── pages.config.ts          # 路由配置源
@@ -46,7 +47,8 @@ pnpm dev mp-weixin   # 微信小程序，产物在 dist/dev/mp-weixin
 常用校验：
 
 ```bash
-pnpm test            # 561 项测试
+pnpm test            # 678 项自洽用例（不依赖网络与票据，可直接进 CI）
+pnpm test:integration # 7 项真实网关集成（只读，需有效联调票据；过期会直接提示换票命令）
 pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑（当前 210 变异 / 存活 0）
@@ -56,8 +58,45 @@ pnpm a11y            # 可访问性审计：可读名称 / 图片 alt / 真实 T
 pnpm e2e             # 端到端交互：真实作答 → 暂存草稿 → 提交（默认不提交，加 --submit）
 pnpm embed           # iframe 嵌入通信：跨域父页面真嵌一次，断言 FORM_READY/RESIZE/ADD_SUCCESS 到达（默认不提交，加 --submit）
 pnpm editor:e2e      # 可视化设计器界面级保存链路：改标题 → 点保存 → 服务端查回来确认（会真写服务端，跑完还原）
+pnpm login:e2e       # 登录链路端到端：真实账号登录 → 校验票据写入与回跳（凭据走环境变量，需先 pnpm dev h5）
 pnpm build h5        # 产物 dist/build/h5
 pnpm build mp-weixin # 产物 dist/build/mp-weixin
+```
+
+### 持续集成
+
+`.github/workflows/ci.yml` 在 push / PR 时依次执行：`build h5` → `type-check` → `lint` → `test`。
+
+- **必须先构建**：`pages.json`、`manifest.json`、`auto-imports.d.ts`、`components.d.ts` 都是构建期生成物且被 gitignore，干净检出时并不存在，而 `tsconfig` 依赖 `auto-imports.d.ts` 提供自动导入（`ref` / `computed` / `uni.*` / `defineStore`）的类型 —— 不先构建，`vue-tsc` 会报满屏 `Cannot find name`。
+- **真实网关集成测试刻意不进 CI**：`pnpm test:integration` 需要内网网关可达与有效票据，属人工联调动作。默认 `pnpm test` 的 678 项不依赖网络与票据。
+- CI 只跑**不需要浏览器**的部分。`smoke` / `e2e` / `a11y` / `perf` 等 CDP 脚本依赖本机 Chrome 与 dev server，仍在本地执行。
+
+### CDP 脚本的目标地址
+
+`smoke` / `e2e` / `a11y` / `embed` / `special-e2e` / `check-overflow` / `screenshot` / `editor:e2e` / `login:e2e`
+九个连 dev server 的脚本共用 `scripts/lib/base-url.mjs` 解析目标地址，优先级：
+
+1. 命令行里的完整地址：`node scripts/smoke.mjs http://localhost:5173`
+2. 环境变量 `BX_BASE`
+3. 默认 `http://localhost:5173`（**与 `pnpm dev h5` 一致**）
+
+两点值得说明：
+
+- 此前六个脚本各自写死 `5174`，与 dev server 默认的 `5173` 不一致 —— 默认执行时连不上，
+  最坏的情况是**在浏览器错误页上「通过」**。统一到 5173 后，默认执行才有意义。
+- 脚本启动时先探测地址可达性，**不可达直接退出并给出启动命令**，不再让浏览器去渲染错误页。
+  （`perf` 连的是 `pnpm serve:dist` 的产物服务，默认 `4180`，属另一条链路，未并入。）
+
+### CDP 脚本的 Chrome 路径
+
+十个脚本共用 `scripts/lib/chrome.mjs` 定位浏览器，按 Windows / macOS / Linux 的常见路径依次探测（Windows 上含 Edge 兜底）。
+装在非默认位置时用环境变量显式指定，找不到时会直接给出设置示例而不是 `spawn ENOENT`：
+
+```bash
+# PowerShell
+$env:BX_CHROME_PATH = "D:\Chrome\chrome.exe"
+# bash
+export BX_CHROME_PATH=/opt/google/chrome/chrome
 ```
 
 ## 环境变量
@@ -137,6 +176,42 @@ pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具�
 
 布局策略：`.bx-container` 固定最大宽度 `--bx-content-width`（860px）居中，窄屏自动铺满，
 左右内边距 16px（≥760px 时 24px）。
+
+## 登录
+
+登录页（`/pages/login/index`）是**锁屏式全屏界面**：整屏铺满、顶部时钟、药丸输入框、
+校验失败抖动、回车即提交。会话过期时由请求层统一 `reLaunch` 到这里，并带上回跳地址。
+
+契约与 `scripts/bx-login.mjs` 同源（已实测）：
+
+| 步骤 | 请求 |
+| --- | --- |
+| 取公钥 | `POST {gateway}/sso/select/srvsso_user_pwd_sign_select` → `data.public_key` |
+| 登录 | `POST {gateway}/sso/operate/srvuser_login`，body `[{ serviceName, data: [{ user_no, pwd: RSA(pwd), enc: 'RSA', terminal_type: 'PC' }] }]` |
+| 取票据 | `response[0].response.bx_auth_ticket`，用户信息在同层的 `login_user_info` |
+
+几处刻意的取舍：
+
+- **RSA 自己实现**（`src/utils/crypto/rsa.ts`，PKCS#1 v1.5 + BigInt）：`jsencrypt` 依赖
+  `window`，小程序端跑不起来。实现刻意**不写 BigInt 字面量** —— `vite.config.ts` 的
+  `build.target` 是 `es6`，esbuild 遇到字面量会直接终止构建。正确性由单测保证：
+  用 `node:crypto` 的私钥把前端密文解回来（不是断言「输出是个 base64」）。
+- **不做自动重登**：登录接口连续失败会**锁号 1 小时**，所以只在收到 `0011` 时跳登录页，
+  绝不静默重试；`useLogin` 另有结构性防重（提交中直接拒绝第二次调用，不只靠按钮 disabled）。
+- **会话过期只清登录态，不动批次号**：用户可能正在答题，清掉 `fill_batch_no`
+  会让已经答了一半的内容变成一条新记录。
+- **回跳地址做白名单校验**：`redirect` 来自 URL，只接受本应用内的相对路径，
+  挡掉 `//evil.com` 这类开放重定向。
+
+### 端到端验证
+
+```bash
+BX_USER=<账号> BX_PWD=<密码> pnpm login:e2e   # 需先 pnpm dev h5
+```
+
+真实浏览器打开登录页 → 输入账号密码 → 点登录，然后校验**票据是否写入本地存储**
+与**回跳地址是否生效**。凭据只从环境变量读、脚本只打印票据长度不打印内容；
+失败时打印页面上的错误原文，且**不做任何重试** —— 登录接口连续失败会锁号 1 小时。
 
 ## 接口约定
 
