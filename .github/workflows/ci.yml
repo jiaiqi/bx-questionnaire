@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    name: 类型检查 · Lint · 单测
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 显式固定 pnpm 版本：**刻意不在 package.json 写 `packageManager` 字段** ——
+      # pnpm 12 会把自身各平台的二进制包（@pnpm/exe.*）一并写进 lockfile，
+      # 实测造成 +158 行与依赖无关的膨胀。
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.5.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      # `pages.json` / `manifest.json` / `auto-imports.d.ts` / `components.d.ts`
+      # 都是构建期生成物且被 gitignore —— 干净检出时并不存在，而 tsconfig 依赖
+      # `auto-imports.d.ts` 提供自动导入（ref / computed / uni.* / defineStore）的类型。
+      # 不先构建一次，`vue-tsc` 会报满屏 "Cannot find name"。
+      - name: 生成构建期类型声明
+        run: pnpm build h5
+
+      - name: 类型检查
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      # 真实网关集成测试（pnpm test:integration）刻意不进 CI：
+      # 它需要内网网关可达与有效联调票据，属于人工联调动作。
+      # 其余 554 项用例不依赖网络与票据。
+      - name: 单测
+        run: pnpm test

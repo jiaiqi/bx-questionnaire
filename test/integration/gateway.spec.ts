@@ -10,7 +10,7 @@
  * 运行：确保 .env.local 内有 VITE_BX_TICKET，然后 pnpm test
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { initViewSelect } from '@/api/daq/activity'
 import { recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
@@ -56,6 +56,35 @@ const ACTIVITY_NO = '20260513185113000009'
 const RECORD_ACTIVITY_NO = '20261010100256000001'
 
 describe.skipIf(!ticket)('真实网关集成 · 只读', () => {
+  /**
+   * 票据有效性预检
+   *
+   * `skipIf` 只看票据**是否存在**，过期票据同样会让用例执行 —— 此时 7 条用例
+   * 各自报 `0011 需要登录访问`，读的人得自己推断「是票据过期还是代码坏了」。
+   * 这里主动探一次**需要登录态**的服务（`record_reply_merge_select`），
+   * 把票据问题在入口处一次说清，并给出换票命令。
+   *
+   * 用不存在的批次号探测是刻意的：票据有效时它只返回空结果，
+   * 不会因为「查不到数据」被误判成票据失效。
+   */
+  beforeAll(async () => {
+    try {
+      await recordReplyMergeSelect({ fillBatchNo: '00000000000000000000000000000000' })
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('需要登录访问') || message.includes('0011')) {
+        throw new Error(
+          `联调票据已过期或无效：${message}\n`
+          + '请先换票（票据约 1.5 小时滑动过期）：\n'
+          + '  BX_USER=<账号> BX_PWD=<密码> node scripts/bx-login.mjs --write\n'
+          + '换票后重跑：pnpm test:integration',
+        )
+      }
+      // 其它错误（例如服务端对空批次号的业务校验）与票据无关，不阻断后续用例
+    }
+  })
+
   it('网关可达且票据有效（裸请求层）', async () => {
     const envelope = await bxSelect({
       serviceName: 'srvdaq_init_view_select',
