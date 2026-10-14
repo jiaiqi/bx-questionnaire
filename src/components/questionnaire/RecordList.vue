@@ -326,6 +326,7 @@ void fetchPage(true)
 .record {
   padding: 14px 16px;
   background-color: var(--bx-surface);
+  box-shadow: var(--bx-elev-1);
   cursor: pointer;
 }
 

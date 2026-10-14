@@ -110,6 +110,7 @@ const period = computed(() => {
   padding: 12px 14px;
   margin-bottom: 10px;
   background-color: var(--bx-surface);
+  box-shadow: var(--bx-elev-1);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
 }

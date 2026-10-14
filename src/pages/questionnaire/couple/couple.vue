@@ -231,6 +231,7 @@ void load()
 .cp-card {
   padding: 16px;
   background-color: var(--bx-surface);
+  box-shadow: var(--bx-elev-1);
   border-radius: var(--bx-radius-card);
 }
 

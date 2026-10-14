@@ -117,6 +117,7 @@ function start(): void {
 .c-hero {
   padding: 28px 20px;
   background-color: var(--bx-surface);
+  box-shadow: var(--bx-elev-1);
   border-radius: var(--bx-radius-card);
 }
 
