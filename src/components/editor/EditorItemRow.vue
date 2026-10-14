@@ -15,6 +15,7 @@ import type { EditorItem } from '@/domain/editor'
 import { computed } from 'vue'
 
 import { typeHasOptions } from '@/domain/editor'
+import { stripQuestionTitleIndex } from '@/domain/questionnaire'
 
 interface Props {
   item: EditorItem
@@ -60,7 +61,14 @@ const meta = computed(() => {
   return parts.join(' · ')
 })
 
-const title = computed(() => props.item.title.trim() || '未命名题目')
+/**
+ * 标题
+ *
+ * 后端 `item_title` 常自带「1. 」前缀，而这一行左侧已经有独立的序号列 ——
+ * 不剥离就会把同一个序号显示两遍（序号列一次、标题里一次）。与作答页的
+ * BxQuestionItem 走同一个函数，避免两处对同一件事给出两种处理。
+ */
+const title = computed(() => stripQuestionTitleIndex(props.item.title) || '未命名题目')
 </script>
 
 <template>
