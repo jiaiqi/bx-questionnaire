@@ -61,7 +61,12 @@ function onKeydown(event: KeyboardEvent): void {
         @click="goBack"
         @keydown="onKeydown"
       >
-        <text class="bx-navbar__arrow">‹</text>
+        <!--
+          返回箭头用 CSS 边框画，不用「‹」文字符号：文字符号的字形随系统字体变化，
+          在 iOS / Android / 微信 PC 端粗细与角度都不一致。
+          也不用 <svg>：微信小程序不支持该标签（详见 BxEmpty 的同一处说明）。
+        -->
+        <view class="bx-navbar__arrow" aria-hidden="true" />
       </view>
     </view>
     <text class="bx-navbar__title">{{ props.title }}</text>
@@ -75,17 +80,17 @@ function onKeydown(event: KeyboardEvent): void {
 .bx-navbar {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--bx-z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
+  height: var(--bx-navbar-height);
   padding-top: var(--status-bar-height, 0);
   background-color: var(--bx-surface);
 }
 
 .bx-navbar--border {
-  border-bottom: 1px solid var(--bx-line-2);
+  border-bottom: 1px solid var(--bx-line);
 }
 
 .bx-navbar__side {
@@ -98,33 +103,38 @@ function onKeydown(event: KeyboardEvent): void {
   justify-content: flex-end;
 }
 
+/* 44px：图标只有 10px，但点击区必须够大 —— 返回是最高频的误触位 */
 .bx-navbar__back {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
   border-radius: var(--bx-radius);
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */
 .bx-navbar__back:focus-visible {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: -2px;
 }
 
 .bx-navbar__arrow {
-  font-size: 26px;
-  line-height: 1;
-  color: var(--bx-text);
+  width: 10px;
+  height: 10px;
+  /* 视觉居中：旋转后的箭头在几何上会偏右，左移一点才落在正中 */
+  margin-left: 3px;
+  border-bottom: 2px solid var(--bx-text);
+  border-left: 2px solid var(--bx-text);
+  transform: rotate(45deg);
 }
 
 .bx-navbar__title {
   flex: 1;
   overflow: hidden;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   color: var(--bx-text);
   text-align: center;
   white-space: nowrap;

@@ -7,13 +7,19 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  height: 3,
+  // 2px：进度条是「背景状态」而不是主角，细一点就不会和题干抢注意力
+  height: 2,
 })
 
 const safePercent = computed(() => Math.min(100, Math.max(0, props.percent)))
 </script>
 
 <template>
+  <!--
+    刻意不给 role="progressbar"：进度是「第 N 题 / 共 M 题」这行可见文字承载的，
+    屏幕阅读器读那行即可；给这个纯矩形加 role 反而会在可访问性审计里被要求
+    可读名称与 tabindex（一个不该被 Tab 到的装饰元素）。
+  -->
   <view class="bx-progress" :style="{ height: `${props.height}px` }">
     <view class="bx-progress__bar" :style="{ width: `${safePercent}%` }" />
   </view>
@@ -28,7 +34,15 @@ const safePercent = computed(() => Math.min(100, Math.max(0, props.percent)))
 
 .bx-progress__bar {
   height: 100%;
-  background-color: var(--bx-blue);
-  transition: width 400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  background-color: var(--bx-primary);
+  /* 右端圆角：进度条推进时不会出现硬切的直角 */
+  border-radius: 0 var(--bx-radius-mark) var(--bx-radius-mark) 0;
+  transition: width var(--bx-duration-slow) var(--bx-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bx-progress__bar {
+    transition: none;
+  }
 }
 </style>

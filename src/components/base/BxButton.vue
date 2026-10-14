@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 interface Props {
-  type?: 'primary' | 'ghost' | 'text'
+  type?: 'primary' | 'ghost' | 'text' | 'danger'
   size?: 'normal' | 'small'
   block?: boolean
   disabled?: boolean
@@ -67,7 +67,11 @@ function onKeydown(event: KeyboardEvent): void {
     @click="onClick"
     @keydown="onKeydown"
   >
-    <text v-if="props.loading" class="bx-button__loading">···</text>
+    <!--
+      加载态用真 spinner 而不是「···」：三个点读起来像「省略」，而且宽度会跳。
+      文案保留在插槽里，只多出一个 16px 的环，按钮宽度不抖。
+    -->
+    <view v-if="props.loading" class="bx-button__loading" aria-hidden="true" />
     <slot />
   </view>
 </template>
@@ -77,17 +81,21 @@ function onKeydown(event: KeyboardEvent): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
-  padding: 0 18px;
+  height: var(--bx-control-height);
+  padding: 0 20px;
   font-size: 15px;
   font-weight: 500;
+  line-height: 1;
+  /* 所有变体都带同宽的透明边框：primary 与 ghost 的盒模型一致，并排时不差 1px */
+  border: 1px solid transparent;
   border-radius: var(--bx-radius);
   /* 可点击元素要有手型光标，否则用户看不出它能点（实测原来是 auto） */
   cursor: pointer;
-}
-
-.bx-button--disabled {
-  cursor: not-allowed;
+  transition:
+    background-color var(--bx-duration-base) var(--bx-ease-out),
+    border-color var(--bx-duration-base) var(--bx-ease-out),
+    color var(--bx-duration-base) var(--bx-ease-out),
+    opacity var(--bx-duration-base) var(--bx-ease-out);
 }
 
 /*
@@ -96,7 +104,7 @@ function onKeydown(event: KeyboardEvent): void {
  * `.bx-button` 本身就在 <uni-view> 上，不需要 :deep()。
  */
 .bx-button:focus-visible {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
 }
 
@@ -105,39 +113,95 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .bx-button--small {
-  height: 36px;
-  padding: 0 14px;
-  font-size: 14px;
+  height: var(--bx-control-height-sm);
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: var(--bx-radius-sm);
 }
 
 .bx-button--primary {
   color: #fff;
-  background-color: var(--bx-blue);
+  background-color: var(--bx-primary);
 }
 
 .bx-button--ghost {
-  color: var(--bx-text);
+  color: var(--bx-text-2);
   background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
+  border-color: var(--bx-line);
+}
+
+.bx-button--danger {
+  color: var(--bx-danger);
+  background-color: var(--bx-surface);
+  border-color: var(--bx-danger-line);
 }
 
 .bx-button--text {
   height: auto;
   padding: 0;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
   background-color: transparent;
 }
 
+/*
+ * 按下反馈
+ *
+ * hover-class 在小程序端是「按住」态，在 H5 端是鼠标悬停 —— 两端共用同一个类。
+ * 统一改背景/描边而不是整体 opacity：半透明会让白字压在蓝底上显脏。
+ */
 .bx-button--hover {
-  opacity: 0.86;
+  opacity: 0.9;
+}
+
+.bx-button--primary.bx-button--hover {
+  background-color: var(--bx-primary-hover);
+  opacity: 1;
+}
+
+.bx-button--ghost.bx-button--hover {
+  color: var(--bx-primary);
+  background-color: var(--bx-primary-soft);
+  border-color: var(--bx-primary-line);
+  opacity: 1;
+}
+
+.bx-button--danger.bx-button--hover {
+  background-color: var(--bx-danger-soft);
+  opacity: 1;
+}
+
+.bx-button--text.bx-button--hover {
+  background-color: var(--bx-primary-soft);
+  opacity: 1;
 }
 
 .bx-button--disabled {
+  cursor: not-allowed;
   opacity: var(--bx-disabled-opacity);
 }
 
 .bx-button__loading {
-  margin-right: 6px;
-  letter-spacing: 1px;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: bx-button-spin 700ms linear infinite;
+}
+
+/* 浅底按钮上的转环要换成深色，否则白环压在白底上完全看不见 */
+.bx-button--ghost .bx-button__loading,
+.bx-button--danger .bx-button__loading,
+.bx-button--text .bx-button__loading {
+  border-color: var(--bx-line);
+  border-top-color: currentColor;
+}
+
+@keyframes bx-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
