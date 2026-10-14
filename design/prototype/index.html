@@ -1,0 +1,2227 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="brand">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bx-questionnaire · UI/UX 设计原型 v2</title>
+<!--
+  bx-questionnaire 整站 UI/UX 重设计原型（单文件、可交互、可键盘操作）
+  设计系统唯一真源：design-system/bx-questionnaire/MASTER.md
+  后端接口零变更：本原型所有文案与字段名均来自现有 src/api 与 src/domain。
+  说明：原型用 :has() 表达选中态以便纯静态预览；落地到 uni-app/小程序时改用 class 绑定。
+-->
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   1. 设计令牌（与 src/styles/tokens.scss 同源，落地时以那边为准）
+   ══════════════════════════════════════════════════════════════════ */
+:root{
+  /* 品牌主色（主题 A） */
+  --bx-primary:#0067DB; --bx-primary-hover:#0059BD; --bx-primary-active:#004DA3;
+  --bx-primary-soft:#EFF5FF; --bx-primary-line:#DCE9FF;
+  /* 中性 */
+  --bx-bg:#F5F7FA; --bx-surface:#FFFFFF; --bx-surface-2:#FAFBFC;
+  --bx-text:#101828; --bx-text-2:#475467; --bx-text-3:#667085; --bx-text-4:#98A2B3;
+  --bx-line:#E4E7EC; --bx-line-2:#F2F4F7;
+  /* 语义 */
+  --bx-danger:#D92C2C; --bx-danger-soft:#FEF1F1; --bx-danger-line:#F5C2C2;
+  --bx-success:#0F7B2F; --bx-success-soft:#EAF7EE; --bx-success-line:#B7E0C2;
+  --bx-warn:#C2410C; --bx-warn-soft:#FDF3E7; --bx-warn-line:#F0D0AE;
+  --bx-health:#0D9488; --bx-health-soft:#ECFDF5; --bx-health-line:#99F6E4;
+  /* 形状 */
+  --bx-radius-card:16px; --bx-radius:12px; --bx-radius-sm:8px; --bx-radius-chip:999px;
+  --bx-elev-1:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);
+  --bx-elev-2:0 4px 12px rgba(16,24,40,.08);
+  --bx-elev-3:0 12px 32px rgba(16,24,40,.14);
+  --bx-elev-sticky:0 -1px 0 var(--bx-line);
+  /* 运动 */
+  --bx-duration-fast:120ms; --bx-duration-base:180ms; --bx-duration-slow:280ms;
+  --bx-ease-out:cubic-bezier(.22,.61,.36,1); --bx-ease-in-out:cubic-bezier(.4,0,.2,1);
+  /* 字体 */
+  --bx-font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","Noto Sans SC","Source Han Sans SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+  --bx-font-num:"SF Pro Display",Inter,"Helvetica Neue",Arial,sans-serif;
+  /* 尺寸 */
+  --bx-navbar-height:48px; --bx-control-height:48px; --bx-control-height-sm:32px;
+  --bx-content-width:720px; --bx-content-wide:1200px;
+}
+/* 主题 B：健康青（测评场景） */
+:root[data-theme="health"]{
+  --bx-primary:#0D9488; --bx-primary-hover:#0B7F75; --bx-primary-active:#096A62;
+  --bx-primary-soft:#ECFDF5; --bx-primary-line:#99F6E4;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   2. 原型外壳（不属于设计系统，仅用于在浏览器里浏览各屏）
+   ══════════════════════════════════════════════════════════════════ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--bx-font-sans); color:var(--bx-text); background:#0F172A;
+  -webkit-font-smoothing:antialiased; font-size:15px; line-height:1.7;
+}
+.proto{display:grid; grid-template-columns:264px 1fr; grid-template-rows:56px 1fr; height:100vh}
+.proto-bar{
+  grid-column:1/-1; display:flex; align-items:center; gap:16px; padding:0 20px;
+  background:#111C33; color:#E2E8F0; border-bottom:1px solid #1E293B;
+}
+.proto-bar .brand{display:flex; align-items:center; gap:10px; font-weight:600; letter-spacing:.2px}
+.proto-bar .brand small{font-weight:400; color:#8FA3BF; font-size:12px}
+.proto-bar .spacer{flex:1}
+.seg{display:inline-flex; background:#1B2740; border:1px solid #24314D; border-radius:10px; padding:2px}
+.seg button{
+  appearance:none; border:0; background:transparent; color:#9FB2CE; cursor:pointer;
+  font:inherit; font-size:12px; padding:5px 12px; border-radius:8px;
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out), color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.seg button:hover{color:#E2E8F0}
+.seg button[aria-pressed="true"]{background:#2B3B5C; color:#fff}
+.proto-note{font-size:12px; color:#8FA3BF}
+.proto-nav{
+  background:#0F172A; border-right:1px solid #1E293B; overflow:auto; padding:14px 10px 40px;
+}
+.proto-nav h4{
+  margin:14px 10px 6px; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+  color:#64748B; font-weight:600;
+}
+.proto-nav a{
+  display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px;
+  color:#B6C6DE; text-decoration:none; font-size:13px; cursor:pointer;
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out), color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.proto-nav a:hover{background:#17223A; color:#fff}
+.proto-nav a[aria-current="true"]{background:#1D2B48; color:#fff; font-weight:500}
+.proto-nav a .dot{width:6px;height:6px;border-radius:50%;background:#334975;flex:none}
+.proto-nav a[aria-current="true"] .dot{background:var(--bx-primary)}
+.proto-stage{
+  overflow:auto; padding:24px; display:flex; justify-content:center; align-items:flex-start;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #1B2942 0%, #0F172A 60%);
+}
+.frame{
+  background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.45);
+  border:1px solid #1E293B;
+}
+.frame--desktop{width:1440px; height:900px}
+.frame--desktop-sm{width:1180px; height:820px}
+.frame--mobile{width:375px; height:812px; border-radius:34px; border:8px solid #0B1220}
+.frame .viewport{height:100%; overflow-y:auto; overflow-x:hidden; background:var(--bx-bg); position:relative}
+.frame--mobile .viewport{border-radius:26px}
+.viewport{display:flex;flex-direction:column}
+.screen{display:none}
+.screen.is-active{display:flex;flex-direction:column;flex:1 0 auto}
+
+/* ══════════════════════════════════════════════════════════════════
+   3. 设计系统组件（落地到 src/components 时一一对应）
+   ══════════════════════════════════════════════════════════════════ */
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
+:where(a,button,input,label,[tabindex]):focus-visible{
+  outline:2px solid var(--bx-primary); outline-offset:2px; border-radius:6px;
+}
+
+/* 3.1 导航栏 */
+.navbar{
+  position:sticky; top:0; z-index:10; height:var(--bx-navbar-height); flex:none;
+  display:flex; align-items:center; padding:0 4px;
+  background:var(--bx-surface); border-bottom:1px solid transparent;
+  transition:border-color var(--bx-duration-base) var(--bx-ease-out);
+}
+.navbar.is-scrolled{border-bottom-color:var(--bx-line)}
+.navbar__title{
+  flex:1; min-width:0; text-align:center; font-size:17px; font-weight:600; color:var(--bx-text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 8px;
+}
+.navbar__action{
+  appearance:none;border:0;background:transparent;cursor:pointer;flex:none;
+  font:inherit;font-size:15px;color:var(--bx-primary);padding:0 12px;height:44px;
+  display:flex;align-items:center;gap:4px;
+  transition:color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.navbar__action:hover{color:var(--bx-primary-hover)}
+.icon-btn{
+  appearance:none;border:0;background:transparent;cursor:pointer;color:var(--bx-text-2);
+  width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--bx-radius);
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out),color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.icon-btn:hover{background:var(--bx-line-2); color:var(--bx-text)}
+.icon{
+  width:20px;height:20px;flex:none;display:block;
+  fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;
+}
+.icon--16{width:16px;height:16px}
+.icon--18{width:18px;height:18px}
+.icon--sm{width:14px;height:14px}
+.icon--32{width:32px;height:32px}
+
+/* 3.2 进度 */
+.progress{position:sticky;top:var(--bx-navbar-height);z-index:9;flex:none;background:var(--bx-surface);padding:0 0 10px}
+.progress__track{height:2px;background:var(--bx-line-2);overflow:hidden}
+.progress__bar{height:100%;background:var(--bx-primary);border-radius:0 2px 2px 0;transition:width var(--bx-duration-slow) var(--bx-ease-out)}
+.progress__meta{display:flex;justify-content:space-between;align-items:baseline;padding:8px 16px 0;font-size:12px;color:var(--bx-text-3)}
+.progress__meta b{font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;font-weight:600;color:var(--bx-text-2)}
+.progress__meta .answered{color:var(--bx-text-3)}
+.progress__meta .answered.is-done{color:var(--bx-success)}
+
+/* 3.3 版面容器 */
+.container{width:100%;max-width:var(--bx-content-width);margin:0 auto;padding:16px 16px 0}
+.container--wide{max-width:var(--bx-content-wide)}
+/* 原型里的响应式按"画布宽度"切换，而不是浏览器视口：frame 模拟设备时 media query 看的是真实视口，会失真 */
+.frame--desktop .viewport .container{padding:20px 24px 0}
+.page-foot{height:calc(88px + env(safe-area-inset-bottom,0px))}
+
+/* 3.4 卡片 */
+.card{
+  background:var(--bx-surface); border:1px solid var(--bx-line); border-radius:var(--bx-radius-card);
+  box-shadow:var(--bx-elev-1);
+}
+.card--flat{box-shadow:none}
+.card__head{padding:20px 20px 14px;border-bottom:1px solid var(--bx-line-2)}
+.card__body{padding:20px}
+.frame--desktop .viewport .card__head{padding:24px 28px 16px}
+.frame--desktop .viewport .card__body{padding:24px 28px}
+/* 题组：题目之间用分割线，而不是各自成卡（修掉"盒子山"） */
+.qgroup{background:var(--bx-surface);border:1px solid var(--bx-line);border-radius:var(--bx-radius-card);box-shadow:var(--bx-elev-1);overflow:hidden}
+.qgroup__title{
+  display:flex;align-items:center;gap:8px;padding:18px 20px 14px;font-size:12px;font-weight:600;
+  letter-spacing:.06em;color:var(--bx-text-3);
+}
+.qgroup__title::after{content:"";flex:1;height:1px;background:var(--bx-line-2)}
+.qitem{padding:20px;border-top:1px solid var(--bx-line-2)}
+.qitem:first-of-type{border-top:0}
+.frame--desktop .viewport .qitem{padding:22px 28px}
+.qitem.is-invalid{background:linear-gradient(0deg,var(--bx-danger-soft),var(--bx-danger-soft))}
+
+/* 3.5 题目 */
+.qhead{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
+.qno{
+  flex:none;min-width:22px;height:22px;padding:0 6px;border-radius:var(--bx-radius-sm);
+  background:var(--bx-primary-soft);color:var(--bx-primary);
+  font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;
+  font-size:12px;font-weight:600;line-height:22px;text-align:center;margin-top:2px;
+}
+.qtitle{font-size:17px;line-height:26px;font-weight:600;color:var(--bx-text)}
+.qreq{color:var(--bx-danger);margin-left:2px;font-weight:400}
+.qopt-tag{font-size:12px;font-weight:400;color:var(--bx-text-3);margin-left:6px}
+.qdesc{font-size:13px;line-height:20px;color:var(--bx-text-3);margin-top:6px}
+.qbody{margin-left:32px}
+
+/* 3.6 选项（问卷产品最核心的控件） */
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{
+  display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 14px;
+  border:1px solid var(--bx-line);border-radius:var(--bx-radius);background:var(--bx-surface);
+  cursor:pointer;position:relative;
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out),
+             border-color var(--bx-duration-fast) var(--bx-ease-out),
+             box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+.opt:hover{border-color:var(--bx-primary-line);background:var(--bx-primary-soft)}
+.opt:has(input:checked){border-color:var(--bx-primary);background:var(--bx-primary-soft);box-shadow:inset 0 0 0 1px var(--bx-primary)}
+.opt:has(input:focus-visible){outline:2px solid var(--bx-primary);outline-offset:2px}
+.opt:has(input:disabled){opacity:.45;cursor:not-allowed}
+.opt input{position:absolute;opacity:0;width:0;height:0}
+.opt__text{font-size:15px;line-height:25px;color:var(--bx-text-2);transition:color var(--bx-duration-fast) var(--bx-ease-out)}
+.opt:has(input:checked) .opt__text{color:var(--bx-text);font-weight:500}
+.opt__mark{
+  flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--bx-text-4);
+  background:var(--bx-surface);display:grid;place-items:center;color:#fff;
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out),
+             border-color var(--bx-duration-fast) var(--bx-ease-out),
+             box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+.opt:has(input:checked) .opt__mark{
+  background:var(--bx-primary);border-color:var(--bx-primary);box-shadow:inset 0 0 0 3px #fff;
+}
+.opt--check .opt__mark{border-radius:6px}
+.opt--check:has(input:checked) .opt__mark{box-shadow:none}
+.opt--check .opt__mark .icon{opacity:0;transform:scale(.7);transition:opacity var(--bx-duration-fast) var(--bx-ease-out),transform var(--bx-duration-fast) var(--bx-ease-out)}
+.opt--check:has(input:checked) .opt__mark .icon{opacity:1;transform:scale(1)}
+.opt__hint{margin-left:auto;font-size:12px;color:var(--bx-text-3)}
+/* 其他项：选中后展开输入 */
+.opt--other{flex-wrap:wrap}
+.opt--other .opt__input{
+  flex-basis:100%;margin:6px 0 2px 32px;max-width:calc(100% - 32px);
+}
+.opt__input{
+  display:none;width:100%;height:40px;padding:0 12px;font:inherit;font-size:14px;
+  color:var(--bx-text);background:var(--bx-surface);border:1px solid var(--bx-line);
+  border-radius:var(--bx-radius-sm);
+}
+.opt--other:has(input:checked) .opt__input{display:block}
+
+/* 3.7 输入控件 */
+.field{display:block}
+.input,.textarea{
+  width:100%;font-family:inherit;font-size:15px;line-height:24px;color:var(--bx-text);
+  background:var(--bx-surface-2);border:1px solid var(--bx-line);border-radius:var(--bx-radius);
+  padding:11px 14px;min-height:48px;
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out),
+             border-color var(--bx-duration-fast) var(--bx-ease-out),
+             box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+.input::placeholder,.textarea::placeholder{color:var(--bx-text-4)}
+.input:hover,.textarea:hover{border-color:#D3D8E0}
+.input:focus,.textarea:focus{
+  outline:none;background:var(--bx-surface);border-color:var(--bx-primary);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--bx-primary) 14%,transparent);
+}
+.textarea{min-height:96px;resize:vertical}
+.input[readonly]{background:var(--bx-surface-2);color:var(--bx-text-2);cursor:default}
+.input.is-invalid,.textarea.is-invalid{border-color:var(--bx-danger-line);background:var(--bx-danger-soft)}
+.input-wrap{position:relative}
+.input-wrap .input{padding-right:40px}
+.input-unit{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--bx-text-3)}
+.picker{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+  min-height:48px;padding:11px 14px;background:var(--bx-surface-2);border:1px solid var(--bx-line);
+  border-radius:var(--bx-radius);font-size:15px;color:var(--bx-text);cursor:pointer;font-family:inherit;text-align:left;
+  transition:border-color var(--bx-duration-fast) var(--bx-ease-out),background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.picker:hover{border-color:var(--bx-primary-line);background:var(--bx-primary-soft)}
+.picker.is-placeholder{color:var(--bx-text-4)}
+.counter{display:block;text-align:right;font-size:12px;color:var(--bx-text-3);margin-top:6px;font-variant-numeric:tabular-nums}
+.help{font-size:12px;line-height:18px;color:var(--bx-text-3);margin-top:6px}
+.err{
+  display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;line-height:20px;
+  color:var(--bx-danger);
+}
+/* 上传 */
+.upload{display:flex;gap:12px;flex-wrap:wrap}
+.upload__add{
+  width:88px;height:88px;border:1px dashed var(--bx-line);border-radius:var(--bx-radius);
+  background:var(--bx-surface-2);display:grid;place-items:center;gap:4px;cursor:pointer;color:var(--bx-text-3);
+  font-size:12px;transition:border-color var(--bx-duration-fast) var(--bx-ease-out),color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.upload__add:hover{border-color:var(--bx-primary);color:var(--bx-primary)}
+.thumb{width:88px;height:88px;border-radius:var(--bx-radius);border:1px solid var(--bx-line);position:relative;overflow:hidden;background:var(--bx-surface-2)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* 3.8 按钮 */
+.btn{
+  appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:var(--bx-control-height);padding:0 20px;border-radius:var(--bx-radius);
+  font-family:inherit;font-size:15px;font-weight:500;line-height:1;cursor:pointer;border:1px solid transparent;
+  transition:background-color var(--bx-duration-base) var(--bx-ease-out),
+             border-color var(--bx-duration-base) var(--bx-ease-out),
+             color var(--bx-duration-base) var(--bx-ease-out),opacity var(--bx-duration-base) var(--bx-ease-out);
+}
+.btn--primary{background:var(--bx-primary);color:#fff}
+.btn--primary:hover{background:var(--bx-primary-hover)}
+.btn--primary:active{background:var(--bx-primary-active)}
+.btn--secondary{background:var(--bx-surface);color:var(--bx-text-2);border-color:var(--bx-line)}
+.btn--secondary:hover{border-color:var(--bx-primary-line);color:var(--bx-primary);background:var(--bx-primary-soft)}
+.btn--ghost{background:transparent;color:var(--bx-primary);padding:0 12px}
+.btn--ghost:hover{background:var(--bx-primary-soft)}
+.btn--danger{background:var(--bx-surface);color:var(--bx-danger);border-color:var(--bx-danger-line)}
+.btn--danger:hover{background:var(--bx-danger-soft)}
+.btn--sm{min-height:var(--bx-control-height-sm);padding:0 12px;font-size:13px;border-radius:var(--bx-radius-sm)}
+.btn--block{width:100%}
+.btn:disabled,.btn[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
+.btn--primary:disabled:hover{background:var(--bx-primary)}
+.spinner{
+  width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff;animation:spin .7s linear infinite;flex:none;
+}
+.spinner--dark{border-color:var(--bx-line);border-top-color:var(--bx-primary)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 3.9 吸底操作栏 */
+.bottombar{
+  position:sticky;bottom:0;z-index:8;margin-top:auto;display:flex;gap:12px;align-items:center;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+  background:color-mix(in srgb,var(--bx-surface) 92%,transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top:1px solid var(--bx-line);
+}
+.bottombar .btn--primary{flex:1}
+.bottombar__aside{flex:none;font-size:12px;color:var(--bx-text-3)}
+/* 桌面画布：操作区与进度文字跟随内容列宽，避免按钮被拉成整屏宽 */
+.frame--desktop .viewport .bottombar{
+  padding-left:calc((100% - var(--bx-content-width)) / 2 + 24px);
+  padding-right:calc((100% - var(--bx-content-width)) / 2 + 24px);
+}
+.frame--desktop .viewport .bottombar .btn--secondary{flex:none;width:120px}
+.frame--desktop .viewport .progress__meta{max-width:var(--bx-content-width);margin:0 auto;padding-left:24px;padding-right:24px}
+
+/* 3.10 提示条 / 徽章 / 分割 */
+.alert{
+  display:flex;gap:10px;align-items:flex-start;padding:14px 16px;border-radius:var(--bx-radius);
+  font-size:13px;line-height:20px;border:1px solid transparent;
+}
+.alert--danger{background:var(--bx-danger-soft);border-color:var(--bx-danger-line);color:var(--bx-text)}
+.alert--success{background:var(--bx-success-soft);border-color:var(--bx-success-line)}
+.alert--warn{background:var(--bx-warn-soft);border-color:var(--bx-warn-line)}
+.alert--info{background:var(--bx-primary-soft);border-color:var(--bx-primary-line)}
+.alert__title{font-weight:600;color:var(--bx-text);margin-bottom:4px;font-size:14px}
+.alert ul{margin:4px 0 0;padding-left:18px}
+.alert a{color:var(--bx-primary);text-decoration:underline;text-underline-offset:2px}
+.badge{
+  display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:var(--bx-radius-chip);
+  font-size:12px;line-height:1;border:1px solid transparent;white-space:nowrap;
+}
+.badge--neutral{background:var(--bx-line-2);color:var(--bx-text-2);border-color:var(--bx-line)}
+.badge--primary{background:var(--bx-primary-soft);color:var(--bx-primary);border-color:var(--bx-primary-line)}
+.badge--success{background:var(--bx-success-soft);color:var(--bx-success);border-color:var(--bx-success-line)}
+.badge--warn{background:var(--bx-warn-soft);color:var(--bx-warn);border-color:var(--bx-warn-line)}
+.badge--danger{background:var(--bx-danger-soft);color:var(--bx-danger);border-color:var(--bx-danger-line)}
+.badge--health{background:var(--bx-health-soft);color:var(--bx-health);border-color:var(--bx-health-line)}
+.divider{height:1px;background:var(--bx-line);border:0;margin:16px 0}
+
+/* 3.11 文本工具类 */
+.t-display{font-size:32px;line-height:40px;font-weight:600;font-family:var(--bx-font-num);font-variant-numeric:tabular-nums}
+.t-title{font-size:22px;line-height:30px;font-weight:600}
+.t-h2{font-size:17px;line-height:26px;font-weight:600}
+.t-body{font-size:15px;line-height:25px;color:var(--bx-text-2)}
+.t-sub{font-size:13px;line-height:20px;color:var(--bx-text-2)}
+.t-cap{font-size:12px;line-height:18px;color:var(--bx-text-3)}
+.t-num{font-family:var(--bx-font-num);font-variant-numeric:tabular-nums}
+.muted{color:var(--bx-text-3)}
+.stack-8>*+*{margin-top:8px}
+.stack-12>*+*{margin-top:12px}
+.stack-16>*+*{margin-top:16px}
+.stack-24>*+*{margin-top:24px}
+.row{display:flex;align-items:center;gap:12px}
+.row--between{justify-content:space-between}
+.grow{flex:1;min-width:0}
+.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 3.12 空态 / 骨架 / 载入 */
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 24px;gap:6px}
+.empty__art{width:112px;height:112px;margin-bottom:10px;color:var(--bx-line)}
+.empty__title{font-size:15px;color:var(--bx-text-2);font-weight:500}
+.empty__desc{font-size:13px;color:var(--bx-text-3);max-width:280px}
+.skel{background:linear-gradient(90deg,var(--bx-line-2) 25%,#E9EDF3 37%,var(--bx-line-2) 63%);background-size:400% 100%;animation:shine 1.4s ease infinite;border-radius:8px}
+@keyframes shine{0%{background-position:100% 0}100%{background-position:0 0}}
+.skel--line{height:12px;margin:10px 0}
+.skel--title{height:18px;width:52%;margin-bottom:14px}
+
+/* 3.13 列表 */
+.list{background:var(--bx-surface);border:1px solid var(--bx-line);border-radius:var(--bx-radius-card);overflow:hidden;box-shadow:var(--bx-elev-1)}
+.list__item{
+  display:flex;align-items:center;gap:14px;padding:16px 20px;border-top:1px solid var(--bx-line-2);
+  cursor:pointer;transition:background-color var(--bx-duration-fast) var(--bx-ease-out);position:relative;
+}
+.list__item:first-child{border-top:0}
+.list__item:hover{background:var(--bx-surface-2)}
+.list__main{flex:1;min-width:0}
+.list__title{font-size:15px;font-weight:500;color:var(--bx-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list__meta{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:12px;color:var(--bx-text-3);flex-wrap:wrap}
+.list__meta .sep{width:3px;height:3px;border-radius:50%;background:var(--bx-text-4)}
+.score-pill{
+  flex:none;font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;font-weight:600;
+  font-size:17px;color:var(--bx-primary);min-width:44px;text-align:right;
+}
+
+/* 3.14 分数环（结果页） */
+.score-ring{width:168px;height:168px;position:relative;margin:0 auto}
+.score-ring svg{transform:rotate(-90deg);display:block}
+.score-ring__track{fill:none;stroke:var(--bx-line-2);stroke-width:12}
+.score-ring__val{fill:none;stroke:var(--bx-health);stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset 900ms var(--bx-ease-out)}
+.score-ring__center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.score-ring__num{font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;font-size:40px;line-height:44px;font-weight:600;color:var(--bx-text)}
+.bar-row{display:grid;grid-template-columns:84px 1fr 44px;align-items:center;gap:12px;font-size:13px;color:var(--bx-text-2)}
+.bar{height:8px;border-radius:var(--bx-radius-chip);background:var(--bx-line-2);overflow:hidden}
+.bar__fill{height:100%;border-radius:var(--bx-radius-chip);background:var(--bx-primary);transition:width 700ms var(--bx-ease-out)}
+.bar-row__num{text-align:right;font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;color:var(--bx-text)}
+.tip{
+  display:flex;gap:12px;padding:14px 16px;border-radius:var(--bx-radius);background:var(--bx-surface-2);
+  border:1px solid var(--bx-line);border-left:3px solid var(--bx-primary);font-size:14px;line-height:22px;color:var(--bx-text-2);
+}
+
+/* 3.15 登录（锁屏式） */
+.lock{
+  flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:48px 24px;background:
+    radial-gradient(900px 420px at 50% -8%,var(--bx-primary-soft) 0%,transparent 70%),
+    var(--bx-bg);
+}
+.lock__clock{font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;font-size:56px;line-height:60px;font-weight:600;color:var(--bx-text)}
+.lock__date{font-size:14px;color:var(--bx-text-3);margin-top:8px}
+.lock__form{width:100%;max-width:340px;margin-top:40px;display:flex;flex-direction:column;gap:12px}
+.lock__avatar{
+  width:64px;height:64px;border-radius:50%;background:var(--bx-surface);border:1px solid var(--bx-line);
+  display:grid;place-items:center;color:var(--bx-primary);margin:0 auto 8px;box-shadow:var(--bx-elev-1);
+}
+.pill-input{
+  width:100%;height:48px;border-radius:var(--bx-radius-chip);border:1px solid var(--bx-line);
+  background:var(--bx-surface);padding:0 20px;font:inherit;font-size:15px;color:var(--bx-text);
+  transition:border-color var(--bx-duration-fast) var(--bx-ease-out),box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+.pill-input::placeholder{color:var(--bx-text-4)}
+.pill-input:focus{outline:none;border-color:var(--bx-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--bx-primary) 14%,transparent)}
+.shake{animation:shake 420ms var(--bx-ease-in-out)}
+@keyframes shake{
+  10%,90%{transform:translateX(-2px)} 20%,80%{transform:translateX(4px)}
+  30%,50%,70%{transform:translateX(-7px)} 40%,60%{transform:translateX(7px)}
+}
+
+/* 3.16 管理侧（PC）表格 */
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.table thead th{
+  text-align:left;font-size:12px;font-weight:600;color:var(--bx-text-3);letter-spacing:.04em;
+  padding:12px 16px;background:var(--bx-surface-2);border-bottom:1px solid var(--bx-line);white-space:nowrap;
+}
+.table tbody td{padding:14px 16px;border-bottom:1px solid var(--bx-line-2);vertical-align:middle}
+.table tbody tr{transition:background-color var(--bx-duration-fast) var(--bx-ease-out)}
+.table tbody tr:hover{background:var(--bx-surface-2)}
+.table tbody tr:hover .row-actions{opacity:1}
+.row-actions{display:flex;gap:4px;justify-content:flex-end;opacity:0;transition:opacity var(--bx-duration-fast) var(--bx-ease-out)}
+.cover-thumb{
+  width:56px;height:56px;border-radius:var(--bx-radius-sm);background:var(--bx-primary-soft);
+  border:1px solid var(--bx-primary-line);display:grid;place-items:center;color:var(--bx-primary);flex:none;
+}
+/* 设计器三栏 */
+/* 管理侧应用框架 */
+.app-header{
+  display:flex;align-items:center;gap:16px;height:56px;padding:0 24px;flex:none;
+  background:var(--bx-surface);border-bottom:1px solid var(--bx-line);
+}
+.app-header__logo{
+  width:28px;height:28px;border-radius:8px;background:var(--bx-primary);color:#fff;
+  display:grid;place-items:center;flex:none;
+}
+.app-main{flex:1;min-height:0;overflow-y:auto;padding:20px 32px 48px;width:100%;max-width:1264px;margin:0 auto}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:8px 0 16px}
+.page-head h2{margin:0;font-size:22px;line-height:30px;font-weight:600}
+.page-head p{margin:4px 0 0;font-size:13px;color:var(--bx-text-3)}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:14px}
+.searchbox{position:relative;width:260px}
+.searchbox .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--bx-text-4)}
+.searchbox .input{padding-left:38px;min-height:38px;background:var(--bx-surface)}
+.chip{
+  appearance:none;border:1px solid var(--bx-line);background:var(--bx-surface);color:var(--bx-text-2);
+  font:inherit;font-size:13px;height:34px;padding:0 14px;border-radius:var(--bx-radius-chip);cursor:pointer;
+  white-space:nowrap;flex:none;
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out),border-color var(--bx-duration-fast) var(--bx-ease-out),color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.chip:hover{border-color:var(--bx-primary-line);color:var(--bx-primary);background:var(--bx-primary-soft)}
+.chip[aria-pressed="true"]{background:var(--bx-primary);border-color:var(--bx-primary);color:#fff}
+.pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:16px 4px 0;font-size:13px;color:var(--bx-text-3)}
+.pager__btn{
+  appearance:none;border:1px solid var(--bx-line);background:var(--bx-surface);color:var(--bx-text-2);
+  width:32px;height:32px;border-radius:8px;cursor:pointer;display:grid;place-items:center;
+}
+.pager__btn:hover{border-color:var(--bx-primary-line);color:var(--bx-primary)}
+.pager__btn[aria-current="true"]{background:var(--bx-primary);border-color:var(--bx-primary);color:#fff}
+.workspace{display:grid;grid-template-columns:320px minmax(0,1fr) 360px;flex:1;min-height:0;background:var(--bx-bg)}
+.pane{background:var(--bx-surface);border-right:1px solid var(--bx-line);overflow-y:auto;min-height:0}
+.pane:last-child{border-right:0;border-left:1px solid var(--bx-line);background:var(--bx-surface-2)}
+.pane__head{
+  position:sticky;top:0;z-index:2;background:var(--bx-surface);padding:16px 20px 12px;
+  border-bottom:1px solid var(--bx-line);display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.pane__title{font-size:14px;font-weight:600}
+.pane__body{padding:16px 20px 32px}
+.qrow{
+  display:flex;align-items:center;gap:10px;height:56px;padding:0 12px;border-radius:var(--bx-radius);
+  border:1px solid transparent;cursor:grab;transition:background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.qrow:hover{background:var(--bx-surface-2)}
+.qrow.is-selected{background:var(--bx-primary-soft);border-color:var(--bx-primary-line)}
+.qrow__no{width:18px;text-align:center;font-size:12px;color:var(--bx-text-3);font-variant-numeric:tabular-nums;flex:none}
+.qrow__main{flex:1;min-width:0}
+.qrow__title{font-size:14px;color:var(--bx-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrow__meta{font-size:12px;color:var(--bx-text-3);margin-top:2px;display:flex;gap:6px;align-items:center}
+.qrow__tools{display:flex;gap:2px;opacity:0;transition:opacity var(--bx-duration-fast) var(--bx-ease-out)}
+.qrow:hover .qrow__tools,.qrow.is-selected .qrow__tools{opacity:1}
+.ph{width:100%;max-width:340px;margin:0 auto;height:100%;background:var(--bx-surface);border:1px solid var(--bx-line);border-radius:24px;box-shadow:var(--bx-elev-1);overflow:hidden;display:flex;flex-direction:column}
+.ph__bar{height:32px;background:var(--bx-surface-2);border-bottom:1px solid var(--bx-line);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--bx-text-3)}
+.ph__body{flex:1;overflow-y:auto;padding:14px}
+.field-row{margin-bottom:14px}
+.field-row label{display:block;font-size:13px;font-weight:500;color:var(--bx-text-2);margin-bottom:6px}
+.field-row .hint{font-size:12px;color:var(--bx-text-3);margin-top:5px}
+.seg-ctl{display:inline-flex;background:var(--bx-line-2);border-radius:10px;padding:3px}
+.seg-ctl button{
+  appearance:none;border:0;background:transparent;font:inherit;font-size:13px;color:var(--bx-text-2);
+  padding:6px 14px;border-radius:8px;cursor:pointer;transition:background-color var(--bx-duration-fast) var(--bx-ease-out),color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.seg-ctl button[aria-pressed="true"]{background:var(--bx-surface);color:var(--bx-text);font-weight:500;box-shadow:var(--bx-elev-1)}
+
+/* 3.17 原型内的小注记 */
+.anno{
+  display:flex;gap:8px;align-items:flex-start;margin:10px 20px 0;padding:10px 12px;border-radius:10px;
+  background:#FFFBF0;border:1px dashed #E9C46A;font-size:12px;line-height:19px;color:#7A5A12;
+}
+.anno b{color:#5C430C}
+.screen-head{padding:16px 20px 0}
+.screen-head h3{margin:0 0 4px;font-size:18px;font-weight:600}
+.screen-head p{margin:0;font-size:13px;color:var(--bx-text-3)}
+
+/* ══════════════════════════════════════════════════════════════════
+   4. 页面级样式
+   ══════════════════════════════════════════════════════════════════ */
+
+/* 4.1 问卷封面 */
+.cover{padding:8px 0 24px}
+.cover__hero{
+  position:relative;height:180px;border-radius:var(--bx-radius-card);overflow:hidden;
+  background:linear-gradient(135deg,var(--bx-primary-soft) 0%,#F7FAFF 55%,#FFF 100%);
+  border:1px solid var(--bx-primary-line);display:grid;place-items:center;margin-bottom:20px;
+}
+.cover__hero-art{color:var(--bx-primary);opacity:.5}
+.cover__hero .badge{position:absolute;top:12px;left:12px}
+.cover__title{font-size:22px;line-height:30px;font-weight:600;color:var(--bx-text);margin:0 0 10px}
+.cover__desc{font-size:15px;line-height:25px;color:var(--bx-text-2);margin:0}
+.meta-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bx-line);
+  border:1px solid var(--bx-line);border-radius:var(--bx-radius);overflow:hidden;margin-top:20px;
+}
+.meta-grid__cell{background:var(--bx-surface);padding:14px 12px;text-align:center}
+.meta-grid__k{font-size:12px;color:var(--bx-text-3);margin-bottom:4px}
+.meta-grid__v{font-size:17px;font-weight:600;color:var(--bx-text);font-family:var(--bx-font-num);font-variant-numeric:tabular-nums}
+.meta-grid__v small{font-size:12px;font-weight:400;color:var(--bx-text-3);font-family:var(--bx-font-sans);margin-left:3px}
+
+/* 4.2 步骤 / 记录 */
+.step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--bx-text-3)}
+.step__no{
+  width:20px;height:20px;border-radius:50%;border:1px solid var(--bx-line);display:grid;place-items:center;
+  font-family:var(--bx-font-num);font-size:11px;background:var(--bx-surface);
+}
+.step--on .step__no{background:var(--bx-primary);border-color:var(--bx-primary);color:#fff;font-weight:600}
+.step--on{color:var(--bx-text);font-weight:500}
+.record__state{flex:none}
+.record__score{
+  font-family:var(--bx-font-num);font-variant-numeric:tabular-nums;font-weight:600;font-size:22px;line-height:1;
+  color:var(--bx-text);
+}
+.record__score small{font-size:12px;font-weight:400;color:var(--bx-text-3);margin-left:2px}
+.timeline{display:flex;flex-direction:column;gap:4px}
+.timeline__row{display:flex;gap:8px;font-size:12px;color:var(--bx-text-3)}
+.timeline__k{width:64px;flex:none}
+
+/* 4.3 结果 / 测评 */
+.hero-result{
+  background:var(--bx-surface);border:1px solid var(--bx-line);border-radius:var(--bx-radius-card);
+  padding:28px 20px 24px;text-align:center;box-shadow:var(--bx-elev-1);
+}
+.hero-result__label{font-size:13px;color:var(--bx-text-3);margin-bottom:14px}
+.hero-result__foot{margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.review-item{padding:16px 20px;border-top:1px solid var(--bx-line-2)}
+.review-item:first-child{border-top:0}
+.review-item__q{font-size:14px;line-height:22px;color:var(--bx-text-2);display:flex;gap:8px}
+.review-item__a{font-size:15px;line-height:24px;color:var(--bx-text);margin-top:8px;font-weight:500}
+.review-item.is-wrong .review-item__a{color:var(--bx-danger)}
+.review-item.is-right .review-item__a{color:var(--bx-success)}
+
+/* 4.4 底部弹层（引用选择器 / 类型选择器） */
+.mask{position:absolute;inset:0;background:rgba(16,24,40,.45);z-index:60}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:61;background:var(--bx-surface);
+  border-radius:var(--bx-radius-card) var(--bx-radius-card) 0 0;box-shadow:var(--bx-elev-3);
+  max-height:70%;display:flex;flex-direction:column;
+}
+.sheet__head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bx-line-2)}
+.sheet__title{font-size:16px;font-weight:600}
+.sheet__body{overflow-y:auto;padding:8px 0}
+.sheet__foot{padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--bx-line-2)}
+.sheet__item{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;min-height:48px;
+  cursor:pointer;font-size:15px;color:var(--bx-text-2);
+  transition:background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+.sheet__item:hover{background:var(--bx-surface-2)}
+.sheet__item.is-active{background:var(--bx-primary-soft);color:var(--bx-primary);font-weight:500}
+.sheet__item .icon{opacity:0}
+.sheet__item.is-active .icon{opacity:1}
+
+/* 4.5 轻提示 */
+.toast{
+  position:absolute;left:50%;bottom:88px;transform:translateX(-50%);z-index:70;
+  background:rgba(16,24,40,.9);color:#fff;font-size:13px;line-height:20px;
+  padding:10px 16px;border-radius:var(--bx-radius);display:flex;align-items:center;gap:8px;
+  box-shadow:var(--bx-elev-3);max-width:80%;
+}
+
+/* 4.6 设计系统总览辅助 */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px}
+.swatch{border:1px solid var(--bx-line);border-radius:var(--bx-radius);overflow:hidden;background:var(--bx-surface)}
+.swatch__chip{height:52px}
+.swatch__meta{padding:8px 10px;font-size:11px;line-height:16px;color:var(--bx-text-3)}
+.swatch__meta b{display:block;font-size:12px;color:var(--bx-text);font-weight:500}
+.spec-row{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:center;padding:12px 0;border-bottom:1px solid var(--bx-line-2)}
+.spec-row:last-child{border-bottom:0}
+.spec-row__k{font-size:12px;color:var(--bx-text-3);font-family:var(--bx-font-num)}
+.spec-block{background:var(--bx-surface);border:1px solid var(--bx-line);border-radius:var(--bx-radius-card);padding:20px;box-shadow:var(--bx-elev-1)}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.section-title{display:flex;align-items:center;gap:10px;margin:28px 0 12px;font-size:14px;font-weight:600;color:var(--bx-text)}
+.section-title::after{content:"";flex:1;height:1px;background:var(--bx-line)}
+.section-title .badge{margin-left:0}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:7px 0;border-bottom:1px dashed var(--bx-line-2)}
+.kv:last-child{border-bottom:0}
+.kv__k{color:var(--bx-text-3)}
+.kv__v{color:var(--bx-text);text-align:right}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<!-- 图标 sprite（Lucide 风格线性图标，统一 1.75 描边；禁止用 emoji / 文字符号当图标） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="i-chevron-left"><path d="M15 18l-6-6 6-6"/></g>
+    <g id="i-chevron-right"><path d="M9 18l6-6-6-6"/></g>
+    <g id="i-check"><path d="M20 6L9 17l-5-5"/></g>
+    <g id="i-x"><path d="M18 6L6 18M6 6l12 12"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+    <g id="i-alert"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></g>
+    <g id="i-check-circle"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></g>
+    <g id="i-info"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></g>
+    <g id="i-clock"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g>
+    <g id="i-calendar"><rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></g>
+    <g id="i-map-pin"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></g>
+    <g id="i-image"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l4.5-4.5 3.5 3.5 3-3L20 17"/></g>
+    <g id="i-upload"><path d="M12 16V4M8 8l4-4 4 4M4 17v2.5A1.5 1.5 0 005.5 21h13a1.5 1.5 0 001.5-1.5V17"/></g>
+    <g id="i-list"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></g>
+    <g id="i-file-text"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></g>
+    <g id="i-layers"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></g>
+    <g id="i-edit"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></g>
+    <g id="i-trash"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2"/></g>
+    <g id="i-arrow-up"><path d="M12 19V5M6 11l6-6 6 6"/></g>
+    <g id="i-arrow-down"><path d="M12 5v14M18 13l-6 6-6-6"/></g>
+    <g id="i-grip"><circle cx="9" cy="6" r="1.2"/><circle cx="9" cy="12" r="1.2"/><circle cx="9" cy="18" r="1.2"/><circle cx="15" cy="6" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="15" cy="18" r="1.2"/></g>
+    <g id="i-save"><path d="M5 3.5h11L20.5 8v12.5a1 1 0 01-1 1h-14a1 1 0 01-1-1v-16a1 1 0 011-1z"/><path d="M8 3.5v6h7v-6M8 21v-6h8v6"/></g>
+    <g id="i-eye"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></g>
+    <g id="i-user"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5a7.5 7.5 0 0115 0"/></g>
+    <g id="i-lock"><rect x="4.5" y="10" width="15" height="10.5" rx="2.5"/><path d="M8 10V7.5a4 4 0 018 0V10"/></g>
+    <g id="i-activity"><path d="M3 12h4l3 8 4-16 3 8h4"/></g>
+    <g id="i-chart"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></g>
+    <g id="i-search"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></g>
+    <g id="i-shield"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.4-7.5 9.5-4.3-1.1-7.5-4.9-7.5-9.5V6L12 3z"/></g>
+    <g id="i-refresh"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4.5V11h-6.5"/></g>
+    <g id="i-inbox"><path d="M4 13h4l1.5 3h5L16 13h4"/><path d="M5.5 4.5h13l1.5 8.5v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5z"/></g>
+  </defs>
+</svg>
+
+<div class="proto">
+  <header class="proto-bar">
+    <div class="brand">
+      <svg class="icon icon--18" aria-hidden="true"><use href="#i-layers"/></svg>
+      bx-questionnaire <small>UI/UX 设计原型 v2 · 后端接口零变更</small>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="设备">
+      <button type="button" data-device="mobile" aria-pressed="true">移动 390</button>
+      <button type="button" data-device="desktop" aria-pressed="false">桌面 1440</button>
+    </div>
+    <div class="seg" role="group" aria-label="主题">
+      <button type="button" data-theme-btn="brand" aria-pressed="true">品牌蓝</button>
+      <button type="button" data-theme-btn="health" aria-pressed="false">健康青</button>
+    </div>
+    <span class="proto-note" id="proto-note">作答侧 · 问卷封面</span>
+  </header>
+
+  <nav class="proto-nav" aria-label="原型场景">
+    <h4>作答侧（survey）</h4>
+    <a data-screen="cover" aria-current="true"><span class="dot"></span>10.1 问卷封面</a>
+    <a data-screen="survey"><span class="dot"></span>10.2 作答页（主流程）</a>
+    <a data-screen="survey-error"><span class="dot"></span>10.3 校验失败 · 错误摘要</a>
+    <a data-screen="submit-info"><span class="dot"></span>10.4 提交信息</a>
+    <a data-screen="result"><span class="dot"></span>10.5 提交成功</a>
+    <h4>记录与测评</h4>
+    <a data-screen="history"><span class="dot"></span>11.1 作答记录</a>
+    <a data-screen="assessment"><span class="dot"></span>11.2 测评结果看板</a>
+    <a data-screen="couple"><span class="dot"></span>11.3 我的测评</a>
+    <h4>账户</h4>
+    <a data-screen="login"><span class="dot"></span>12.1 登录（锁屏式）</a>
+    <h4>管理侧（editor）</h4>
+    <a data-screen="editor-list"><span class="dot"></span>13.1 问卷列表</a>
+    <a data-screen="editor-design"><span class="dot"></span>13.2 可视化设计器</a>
+    <h4>设计系统</h4>
+    <a data-screen="system"><span class="dot"></span>14.1 令牌与组件总览</a>
+    <a data-screen="states"><span class="dot"></span>14.2 空态 / 加载 / 异常</a>
+  </nav>
+
+  <main class="proto-stage" id="stage">
+    <div class="frame frame--mobile" id="frame">
+      <div class="viewport" id="viewport">
+        <!-- ═══════════ 10.1 问卷封面 ═══════════ -->
+        <section class="screen" id="screen-cover" data-label="作答侧 · 10.1 问卷封面（pages/questionnaire/cover）">
+          <header class="navbar">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">问卷</div>
+            <button class="navbar__action" type="button">记录</button>
+          </header>
+          <div class="container cover">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>封面从"一段文字 + 一个按钮"升级为「主视觉 → 标题描述 → 信息网格 → 答题说明 → 主行动」的清晰阅读路径；把开始前的三项关键预期（题量 / 预计耗时 / 作答次数）前置到信息网格（耗时由题量在前端估算，不改接口），降低作答焦虑。字段全部来自 <code>srvdaq_init_view_select</code>。</div>
+            </div>
+
+            <div class="cover__hero">
+              <span class="badge badge--success"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-activity"/></svg>进行中</span>
+              <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="cover__hero-art" aria-hidden="true"><use href="#i-file-text"/></svg>
+            </div>
+
+            <h1 class="cover__title">员工满意度调查（演示问卷）</h1>
+            <p class="cover__desc">这是一份演示问卷，用于查看各题型的实际效果，作答不会用于统计。</p>
+
+            <div class="meta-grid">
+              <div class="meta-grid__cell"><div class="meta-grid__k">题目数量</div><div class="meta-grid__v">11<small>题</small></div></div>
+              <div class="meta-grid__cell"><div class="meta-grid__k">预计耗时</div><div class="meta-grid__v">3<small>分钟</small></div></div>
+              <div class="meta-grid__cell"><div class="meta-grid__k">作答次数</div><div class="meta-grid__v">1<small>次</small></div></div>
+            </div>
+
+            <div class="alert alert--info" style="margin-top:16px">
+              <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-primary)"><use href="#i-info"/></svg>
+              <div>
+                <div class="alert__title">答题说明</div>
+                请根据实际情况作答，答案没有对错；中途可点「暂存草稿」，下次打开同一链接可继续。
+              </div>
+            </div>
+
+            <div class="alert alert--warn" style="margin-top:12px">
+              <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-warn)"><use href="#i-clock"/></svg>
+              <div>本问卷将于 <b class="t-num">2026-12-31 23:59</b> 结束，请在截止前完成。</div>
+            </div>
+
+            <div class="page-foot"></div>
+          </div>
+          <div class="bottombar">
+            <button class="btn btn--primary btn--block" type="button">开始作答</button>
+          </div>
+        </section>
+
+        <!-- ═══════════ 10.2 作答页 ═══════════ -->
+        <section class="screen" id="screen-survey" data-label="作答侧 · 10.2 作答页（QuestionnaireRunner · 核心屏）">
+          <header class="navbar">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">员工满意度调查（演示问卷）</div>
+            <button class="navbar__action" type="button">记录</button>
+          </header>
+          <div class="progress">
+            <div class="progress__track"><div class="progress__bar" style="width:36%"></div></div>
+            <div class="progress__meta">
+              <span>第 <b>5</b> 题 / 共 <b>11</b> 题</span>
+              <span class="answered">已答 <b>4</b> · 剩余 7 题</span>
+            </div>
+          </div>
+
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>① 顶部吸顶进度条 + 题号计数（旧版无任何进度提示）；② 题目用「序号胶囊 + 分割线」组织在同一容器内，取代 11 张同权重白卡堆叠；③ 选项升级为整行可点按钮（≥48px），选中态 = 蓝浅底 + 蓝描边 + 实心圆点；④ 吸底栏预留滚动区高度，修掉旧版按钮压住第 4 题的缺陷。</div>
+            </div>
+
+            <div class="card card--flat" style="margin-top:12px">
+              <div class="card__head">
+                <div class="t-h2">员工满意度调查（演示问卷）</div>
+                <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap">
+                  <span class="t-cap">共 11 题 · 已答 4 · 1 次</span>
+                  <span class="badge badge--warn">草稿已暂存</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="qgroup" style="margin-top:12px">
+              <!-- 1 文本（选填） -->
+              <div class="qitem" id="q-1">
+                <div class="qhead">
+                  <span class="qno">1</span>
+                  <div class="grow"><div class="qtitle">您的姓名<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody"><input class="input" type="text" placeholder="请输入" maxlength="200" aria-label="您的姓名"></div>
+              </div>
+
+              <!-- 2 单选（必答，已答） -->
+              <div class="qitem" id="q-2">
+                <div class="qhead">
+                  <span class="qno">2</span>
+                  <div class="grow"><div class="qtitle">您所在的部门<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必答</span></div></div>
+                </div>
+                <div class="qbody">
+                  <div class="opts" role="radiogroup" aria-label="您所在的部门">
+                    <label class="opt"><input type="radio" name="q2" value="技术部"><span class="opt__mark"></span><span class="opt__text">技术部</span></label>
+                    <label class="opt"><input type="radio" name="q2" value="产品部" checked><span class="opt__mark"></span><span class="opt__text">产品部</span></label>
+                    <label class="opt"><input type="radio" name="q2" value="市场部"><span class="opt__mark"></span><span class="opt__text">市场部</span></label>
+                    <label class="opt"><input type="radio" name="q2" value="职能部"><span class="opt__mark"></span><span class="opt__text">职能部</span></label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3 数字（必答） -->
+              <div class="qitem" id="q-3">
+                <div class="qhead">
+                  <span class="qno">3</span>
+                  <div class="grow"><div class="qtitle">您在本公司的工作年限（年）<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必答</span></div></div>
+                </div>
+                <div class="qbody">
+                  <div class="input-wrap">
+                    <input class="input" type="text" inputmode="decimal" placeholder="请输入" maxlength="20" aria-label="您在本公司的工作年限（年）">
+                    <span class="input-unit">年</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4 时间日期 -->
+              <div class="qitem" id="q-4">
+                <div class="qhead">
+                  <span class="qno">4</span>
+                  <div class="grow"><div class="qtitle">您的入职日期<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody">
+                  <button class="picker is-placeholder" type="button">
+                    <span>请选择日期</span>
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 5 单选（已答） -->
+              <div class="qitem" id="q-5">
+                <div class="qhead">
+                  <span class="qno">5</span>
+                  <div class="grow"><div class="qtitle">您对当前工作的整体满意度<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必答</span></div></div>
+                </div>
+                <div class="qbody">
+                  <div class="opts" role="radiogroup" aria-label="您对当前工作的整体满意度">
+                    <label class="opt"><input type="radio" name="q5" value="非常满意"><span class="opt__mark"></span><span class="opt__text">非常满意</span></label>
+                    <label class="opt"><input type="radio" name="q5" value="比较满意" checked><span class="opt__mark"></span><span class="opt__text">比较满意</span></label>
+                    <label class="opt"><input type="radio" name="q5" value="一般"><span class="opt__mark"></span><span class="opt__text">一般</span></label>
+                    <label class="opt"><input type="radio" name="q5" value="不太满意"><span class="opt__mark"></span><span class="opt__text">不太满意</span></label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 6 多选（必答，已选 2） -->
+              <div class="qitem" id="q-6">
+                <div class="qhead">
+                  <span class="qno">6</span>
+                  <div class="grow">
+                    <div class="qtitle">您认为公司在哪些方面做得好？<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必答</span></div>
+                    <div class="qdesc">多选题 · 可选择多项</div>
+                  </div>
+                </div>
+                <div class="qbody">
+                  <div class="opts" role="group" aria-label="您认为公司在哪些方面做得好？">
+                    <label class="opt opt--check"><input type="checkbox" name="q6" value="团队氛围" checked><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">团队氛围</span></label>
+                    <label class="opt opt--check"><input type="checkbox" name="q6" value="薪酬福利"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">薪酬福利</span></label>
+                    <label class="opt opt--check"><input type="checkbox" name="q6" value="成长空间" checked><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">成长空间</span></label>
+                    <label class="opt opt--check"><input type="checkbox" name="q6" value="工作生活平衡"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">工作生活平衡</span></label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 7 单选 -->
+              <div class="qitem" id="q-7">
+                <div class="qhead">
+                  <span class="qno">7</span>
+                  <div class="grow"><div class="qtitle">您愿意推荐朋友来本公司工作吗？<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody">
+                  <div class="opts" role="radiogroup" aria-label="您愿意推荐朋友来本公司工作吗？">
+                    <label class="opt"><input type="radio" name="q7" value="非常愿意"><span class="opt__mark"></span><span class="opt__text">非常愿意</span></label>
+                    <label class="opt"><input type="radio" name="q7" value="比较愿意"><span class="opt__mark"></span><span class="opt__text">比较愿意</span></label>
+                    <label class="opt"><input type="radio" name="q7" value="说不好"><span class="opt__mark"></span><span class="opt__text">说不好</span></label>
+                    <label class="opt"><input type="radio" name="q7" value="不愿意"><span class="opt__mark"></span><span class="opt__text">不愿意</span></label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 8 地址 -->
+              <div class="qitem" id="q-8">
+                <div class="qhead">
+                  <span class="qno">8</span>
+                  <div class="grow"><div class="qtitle">您的工作地点所在地区<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody">
+                  <button class="picker is-placeholder" type="button">
+                    <span class="row" style="gap:8px"><svg class="icon icon--16" aria-hidden="true"><use href="#i-map-pin"/></svg>请选择地区</span>
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 9 图片 -->
+              <div class="qitem" id="q-9">
+                <div class="qhead">
+                  <span class="qno">9</span>
+                  <div class="grow">
+                    <div class="qtitle">上传一张您的工作环境照片<span class="qopt-tag">选填</span></div>
+                    <div class="qdesc">最多 9 张，支持 jpg / png</div>
+                  </div>
+                </div>
+                <div class="qbody">
+                  <div class="upload">
+                    <button class="upload__add" type="button">
+                      <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>
+                      <span>上传图片</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 10 引用 -->
+              <div class="qitem" id="q-10">
+                <div class="qhead">
+                  <span class="qno">10</span>
+                  <div class="grow"><div class="qtitle">请选择一份您参与过的问卷<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody">
+                  <button class="picker is-placeholder" type="button">
+                    <span>请选择</span>
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 11 文本域 -->
+              <div class="qitem" id="q-11">
+                <div class="qhead">
+                  <span class="qno">11</span>
+                  <div class="grow"><div class="qtitle">您对公司的建议<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody">
+                  <textarea class="textarea" placeholder="请输入" maxlength="200" aria-label="您对公司的建议"></textarea>
+                  <span class="counter">0/200</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="page-foot"></div>
+          </div>
+
+          <div class="bottombar">
+            <button class="btn btn--secondary" type="button" style="flex:none;width:112px">暂存草稿</button>
+            <button class="btn btn--primary" type="button">提交问卷</button>
+          </div>
+        </section>
+
+        <!-- ═══════════ 10.3 校验失败 ═══════════ -->
+        <section class="screen" id="screen-survey-error" data-label="作答侧 · 10.3 校验失败：错误摘要 + 行内错误（新增能力）">
+          <header class="navbar is-scrolled">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">员工满意度调查（演示问卷）</div>
+            <button class="navbar__action" type="button">记录</button>
+          </header>
+          <div class="progress">
+            <div class="progress__track"><div class="progress__bar" style="width:64%"></div></div>
+            <div class="progress__meta">
+              <span>第 <b>8</b> 题 / 共 <b>11</b> 题</span>
+              <span class="answered">已答 <b>7</b> · 剩 3 道必填未答</span>
+            </div>
+          </div>
+
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>提交失败时先给<b>可聚焦的错误摘要</b>（<code>role="alert" tabindex="-1"</code>），每条锚点直达题目，同时保留行内错误——旧版只有 toast + 行内红字，长问卷里用户找不到出错位置。</div>
+            </div>
+
+            <div class="alert alert--danger" role="alert" tabindex="-1" style="margin-top:12px">
+              <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-danger)"><use href="#i-alert"/></svg>
+              <div>
+                <div class="alert__title">还有 3 道必填题未作答</div>
+                <ul>
+                  <li><a href="#q-3">第 3 题 · 您在本公司的工作年限（年）</a></li>
+                  <li><a href="#q-6">第 6 题 · 您认为公司在哪些方面做得好？</a></li>
+                  <li><a href="#q-10">第 10 题 · 请选择一份您参与过的问卷</a></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="qgroup" style="margin-top:16px">
+              <div class="qitem is-invalid" id="q-3">
+                <div class="qhead">
+                  <span class="qno">3</span>
+                  <div class="grow"><div class="qtitle">您在本公司的工作年限（年）<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必答</span></div></div>
+                </div>
+                <div class="qbody">
+                  <div class="input-wrap">
+                    <input class="input is-invalid" type="text" inputmode="decimal" placeholder="请输入" aria-invalid="true" aria-describedby="err-3">
+                    <span class="input-unit">年</span>
+                  </div>
+                  <div class="err" id="err-3" role="alert"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-alert"/></svg>此题为必答题，请填写</div>
+                </div>
+              </div>
+
+              <div class="qitem is-invalid" id="q-6">
+                <div class="qhead">
+                  <span class="qno">6</span>
+                  <div class="grow">
+                    <div class="qtitle">您认为公司在哪些方面做得好？<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必答</span></div>
+                    <div class="qdesc">多选题 · 可选择多项</div>
+                  </div>
+                </div>
+                <div class="qbody">
+                  <div class="opts" role="group" aria-label="您认为公司在哪些方面做得好？">
+                    <label class="opt opt--check"><input type="checkbox"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">团队氛围</span></label>
+                    <label class="opt opt--check"><input type="checkbox"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">薪酬福利</span></label>
+                    <label class="opt opt--check"><input type="checkbox"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">成长空间</span></label>
+                  </div>
+                  <div class="err" role="alert"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-alert"/></svg>此题为必答题，请至少选择一项</div>
+                </div>
+              </div>
+
+              <div class="qitem" id="q-10">
+                <div class="qhead">
+                  <span class="qno">10</span>
+                  <div class="grow"><div class="qtitle">请选择一份您参与过的问卷<span class="qopt-tag">选填</span></div></div>
+                </div>
+                <div class="qbody">
+                  <button class="picker is-placeholder" type="button">
+                    <span>请选择</span>
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="page-foot"></div>
+          </div>
+
+          <div class="toast">
+            <svg class="icon icon--16" aria-hidden="true"><use href="#i-alert"/></svg>
+            还有 3 道必填题未作答
+          </div>
+          <div class="bottombar">
+            <button class="btn btn--secondary" type="button" style="flex:none;width:112px">暂存草稿</button>
+            <button class="btn btn--primary" type="button">提交问卷</button>
+          </div>
+        </section>
+
+        <!-- ═══════════ 10.4 提交信息 ═══════════ -->
+        <section class="screen" id="screen-submit-info" data-label="作答侧 · 10.4 提交信息（pages/questionnaire/index/submitInfo）">
+          <header class="navbar">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">填写信息</div>
+            <span></span>
+          </header>
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>三个字段（单位 / 姓名 / 手机号）写回 <code>result_submit</code> 的 <code>extra</code>，字段名与校验规则保持不变（手机号 <code>/^1[3-9]\d{9}$/</code>）；把"这一步为什么存在"讲清楚，避免用户以为又要注册。</div>
+            </div>
+
+            <div class="stack-16" style="margin-top:12px">
+              <div class="step"><span class="step__no">1</span><span>填写信息</span><span style="color:var(--bx-text-4)">›</span><span>开始作答</span></div>
+
+              <div class="card">
+                <div class="card__head">
+                  <div class="t-h2">请先登记您的信息</div>
+                  <div class="t-cap" style="margin-top:4px">信息仅用于本次统计，不会对外公开</div>
+                </div>
+                <div class="card__body stack-16">
+                  <div class="field">
+                    <label class="t-sub" style="display:block;margin-bottom:6px;color:var(--bx-text-2)">单位<span class="qreq" aria-hidden="true">*</span><span class="sr-only">必填</span></label>
+                    <input class="input" type="text" placeholder="请输入所在单位" maxlength="60" aria-label="单位">
+                  </div>
+                  <div class="field">
+                    <label class="t-sub" style="display:block;margin-bottom:6px;color:var(--bx-text-2)">姓名</label>
+                    <input class="input" type="text" placeholder="请输入姓名" maxlength="30" aria-label="姓名">
+                  </div>
+                  <div class="field">
+                    <label class="t-sub" style="display:block;margin-bottom:6px;color:var(--bx-text-2)">手机号</label>
+                    <input class="input" type="text" inputmode="numeric" placeholder="请输入 11 位手机号" maxlength="11" aria-label="手机号">
+                    <div class="help">用于结果查询，不会发送短信</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="page-foot"></div>
+          </div>
+          <div class="bottombar">
+            <button class="btn btn--primary btn--block" type="button">下一步，开始作答</button>
+          </div>
+        </section>
+
+        <!-- ═══════════ 10.5 提交成功 / 作答结果 ═══════════ -->
+        <section class="screen" id="screen-result" data-label="作答侧 · 10.5 提交成功与逐题回顾（pages/questionnaire/index/result）">
+          <header class="navbar is-scrolled">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">作答结果</div>
+            <span></span>
+          </header>
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>把「提交成功」和「得分回顾」合成一条清晰的纵向叙事：结果 → 确认 → 逐题明细 → 后续动作。分数只在服务端返回 <code>score</code> 时渲染（<code>hasScore</code> 语义不变）。</div>
+            </div>
+
+            <div class="hero-result" style="margin-top:12px">
+              <div class="hero-result__label">本次得分</div>
+              <div class="t-display" style="font-size:56px;line-height:60px;color:var(--bx-primary)">86<span style="font-size:20px;color:var(--bx-text-3);margin-left:4px">/ 100</span></div>
+              <div class="hero-result__foot">
+                <span class="badge badge--success"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check-circle"/></svg>已通过 · 及格线 60</span>
+                <div class="t-cap">提交时间 2026-10-14 11:32 · 批次号 <span class="t-num">B20261014113207</span></div>
+              </div>
+            </div>
+
+            <div class="alert alert--success" style="margin-top:16px">
+              <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-success)"><use href="#i-check-circle"/></svg>
+              <div>
+                <div class="alert__title">提交成功</div>
+                感谢您的参与，作答已记录。通过原链接可随时回到本页查看。
+              </div>
+            </div>
+
+            <div class="section-title">逐题回顾</div>
+            <div class="card card--flat" style="overflow:hidden">
+              <div class="review-item">
+                <div class="review-item__q"><span class="t-num muted">1</span><span>您的姓名</span></div>
+                <div class="review-item__a">张三</div>
+              </div>
+              <div class="review-item">
+                <div class="review-item__q"><span class="t-num muted">2</span><span>您所在的部门</span></div>
+                <div class="review-item__a">产品部</div>
+              </div>
+              <div class="review-item">
+                <div class="review-item__q"><span class="t-num muted">3</span><span>您在本公司的工作年限（年）</span></div>
+                <div class="review-item__a">3.5 年</div>
+              </div>
+              <div class="review-item is-right">
+                <div class="review-item__q"><span class="t-num muted">5</span><span>您对当前工作的整体满意度</span></div>
+                <div class="review-item__a">比较满意 <span class="badge badge--success" style="margin-left:6px">得分 10</span></div>
+              </div>
+              <div class="review-item is-wrong">
+                <div class="review-item__q"><span class="t-num muted">6</span><span>您认为公司在哪些方面做得好？</span></div>
+                <div class="review-item__a">团队氛围、成长空间 <span class="badge badge--danger" style="margin-left:6px">应选 3 项</span></div>
+              </div>
+              <div class="review-item">
+                <div class="review-item__q"><span class="t-num muted">9</span><span>上传一张您的工作环境照片</span></div>
+                <div class="review-item__a row" style="gap:10px">
+                  <span class="thumb" style="width:64px;height:64px;display:grid;place-items:center;color:var(--bx-text-4);margin:0">
+                    <svg class="icon" aria-hidden="true"><use href="#i-image"/></svg>
+                  </span>
+                  <span class="t-cap">1 张（点按查看大图）</span>
+                </div>
+              </div>
+              <div class="review-item">
+                <div class="review-item__q"><span class="t-num muted">11</span><span>您对公司的建议</span></div>
+                <div class="review-item__a" style="font-weight:400;color:var(--bx-text-2)">希望增加弹性办公与下午茶频次。</div>
+              </div>
+            </div>
+
+            <div class="alert alert--warn" style="margin-top:16px">
+              <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-warn)"><use href="#i-image"/></svg>
+              <div>部分图片暂时读不到，稍后重试可恢复显示。</div>
+            </div>
+
+            <div class="stack-12" style="margin-top:24px">
+              <button class="btn btn--primary btn--block" type="button">查看评估结果</button>
+              <button class="btn btn--secondary btn--block" type="button">
+                <svg class="icon icon--16" aria-hidden="true"><use href="#i-refresh"/></svg>重新测试
+              </button>
+              <button class="btn btn--ghost btn--block" type="button">返回问卷封面</button>
+            </div>
+            <div style="height:32px"></div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 11.1 作答记录 ═══════════ -->
+        <section class="screen" id="screen-history" data-label="记录 · 11.1 作答记录（RecordList / questionnaire history）">
+          <header class="navbar">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">作答记录</div>
+            <span></span>
+          </header>
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>把「状态 / 分数 / 时间 / 批次号」压成一条可扫读的信息带；未完成记录给「继续作答」这一可行动作。数据来自 <code>srvdaq_record_reply_select</code>（该服务<b>不接受 order</b>，且必须带 <code>condition</code>）。</div>
+            </div>
+
+            <div class="list" style="margin-top:12px">
+              <div class="list__item">
+                <div class="list__main">
+                  <div class="row" style="gap:8px">
+                    <span class="badge badge--success">已完成</span>
+                    <span class="t-cap">2026-10-14 11:32</span>
+                  </div>
+                  <div class="list__meta" style="margin-top:6px">
+                    <span>用时 4 分 12 秒</span><span class="sep"></span>
+                    <span>批次 <span class="t-num">B20261014113207</span></span>
+                  </div>
+                </div>
+                <div style="text-align:right">
+                  <div class="record__score">86<small>/100</small></div>
+                  <svg class="icon icon--16" style="margin:6px 0 0 auto;color:var(--bx-text-4)" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                </div>
+              </div>
+
+              <div class="list__item">
+                <div class="list__main">
+                  <div class="row" style="gap:8px">
+                    <span class="badge badge--warn">未完成</span>
+                    <span class="t-cap">2026-10-13 18:05</span>
+                  </div>
+                  <div class="list__meta" style="margin-top:6px">
+                    <span>已答 6 / 11 题</span><span class="sep"></span><span>草稿已保存</span>
+                  </div>
+                </div>
+                <button class="btn btn--secondary btn--sm" type="button">继续作答</button>
+              </div>
+
+              <div class="list__item">
+                <div class="list__main">
+                  <div class="row" style="gap:8px">
+                    <span class="badge badge--success">已完成</span>
+                    <span class="t-cap">2026-10-12 09:47</span>
+                  </div>
+                  <div class="list__meta" style="margin-top:6px">
+                    <span>用时 3 分 02 秒</span><span class="sep"></span>
+                    <span>批次 <span class="t-num">B20261012094711</span></span>
+                  </div>
+                </div>
+                <div style="text-align:right">
+                  <div class="record__score">92<small>/100</small></div>
+                  <svg class="icon icon--16" style="margin:6px 0 0 auto;color:var(--bx-text-4)" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="t-cap" style="text-align:center;padding:20px 0">
+              <span class="row" style="justify-content:center;gap:8px">
+                <span class="spinner spinner--dark"></span>正在加载更多…
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 11.2 测评结果 ═══════════ -->
+        <section class="screen" id="screen-assessment" data-label="记录 · 11.2 测评结果（assessmentResult + SuggestionPanel）">
+          <header class="navbar is-scrolled">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">评估结果</div>
+            <span></span>
+          </header>
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>分数环承担"一眼可读"的职责（tabular 数字 + 900ms 一次到位，reduced-motion 下直接显示）；建议文案来自 <code>srvdaq_activity_sug_select</code> 的 <code>sug_desc</code>（后端已按区间筛好），前端不再二次过滤。</div>
+            </div>
+
+            <div class="hero-result" style="margin-top:12px">
+              <div class="hero-result__label">您的健康测评得分</div>
+              <div class="score-ring">
+                <svg width="168" height="168" viewBox="0 0 168 168" aria-hidden="true">
+                  <circle class="score-ring__track" cx="84" cy="84" r="72"></circle>
+                  <circle class="score-ring__val" cx="84" cy="84" r="72" stroke-dasharray="452.4" stroke-dashoffset="63.3"></circle>
+                </svg>
+                <div class="score-ring__center">
+                  <span class="score-ring__num">86</span>
+                  <span class="t-cap">总分 100</span>
+                </div>
+              </div>
+              <div class="hero-result__foot">
+                <span class="badge badge--health"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-shield"/></svg>状态良好</span>
+                <div class="t-cap">评估时间 2026-10-14 11:32</div>
+              </div>
+            </div>
+
+            <div class="section-title">评估建议</div>
+            <div class="stack-12">
+              <div class="tip">
+                <svg class="icon icon--18" aria-hidden="true" style="margin-top:2px;color:var(--bx-primary)"><use href="#i-info"/></svg>
+                <div><b>整体表现良好。</b>作息与运动习惯较为稳定，建议继续保持每周 3 次以上的中等强度运动。</div>
+              </div>
+              <div class="tip">
+                <svg class="icon icon--18" aria-hidden="true" style="margin-top:2px;color:var(--bx-primary)"><use href="#i-info"/></svg>
+                <div><b>需要关注：睡眠时长。</b>近期入睡时间偏晚，建议固定在 23:00 前入睡，并减少睡前屏幕使用。</div>
+              </div>
+              <div class="tip">
+                <svg class="icon icon--18" aria-hidden="true" style="margin-top:2px;color:var(--bx-primary)"><use href="#i-info"/></svg>
+                <div><b>饮食结构建议。</b>可适当增加蔬菜与优质蛋白摄入，减少高糖饮品。</div>
+              </div>
+            </div>
+
+            <div class="section-title">逐题明细</div>
+            <div class="card card--flat" style="overflow:hidden">
+              <div class="review-item is-right">
+                <div class="review-item__q"><span class="t-num muted">1</span><span>近两周的睡眠质量</span></div>
+                <div class="review-item__a">较好 <span class="badge badge--success" style="margin-left:6px">8 / 10</span></div>
+              </div>
+              <div class="review-item is-right">
+                <div class="review-item__q"><span class="t-num muted">2</span><span>每周运动次数</span></div>
+                <div class="review-item__a">3 次及以上 <span class="badge badge--success" style="margin-left:6px">10 / 10</span></div>
+              </div>
+              <div class="review-item is-wrong">
+                <div class="review-item__q"><span class="t-num muted">3</span><span>每日平均睡眠时长</span></div>
+                <div class="review-item__a">6 小时以下 <span class="badge badge--danger" style="margin-left:6px">4 / 10</span></div>
+              </div>
+            </div>
+
+            <div class="alert alert--info" style="margin-top:16px">
+              <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-primary)"><use href="#i-info"/></svg>
+              <div>本结果仅用于健康参考，不作为医学诊断依据。如有不适请及时就医。</div>
+            </div>
+
+            <div class="stack-12" style="margin-top:24px">
+              <button class="btn btn--primary btn--block" type="button">
+                <svg class="icon icon--16" aria-hidden="true"><use href="#i-refresh"/></svg>重新测评
+              </button>
+              <button class="btn btn--secondary btn--block" type="button">查看逐题作答</button>
+            </div>
+            <div style="height:32px"></div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 11.3 我的测评 ═══════════ -->
+        <section class="screen" id="screen-couple" data-label="记录 · 11.3 我的测评（pages/questionnaire/couple）">
+          <header class="navbar">
+            <button class="icon-btn" type="button" aria-label="返回"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">我的测评</div>
+            <button class="navbar__action" type="button">刷新</button>
+          </header>
+          <div class="container">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>同一活动取<b>最近一次</b>完成记录聚合成一条，避免同题多次作答刷屏；主行动是「查看结果」，次行动「查看作答」降为 ghost。未登录态改为可操作的引导（见 14.2）。</div>
+            </div>
+
+            <div class="list" style="margin-top:12px">
+              <div class="list__item">
+                <div class="cover-thumb"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></div>
+                <div class="list__main">
+                  <div class="list__title">员工健康测评（2026 年度）</div>
+                  <div class="list__meta">
+                    <span>最近完成 2026-10-14 11:32</span><span class="sep"></span><span>共 2 次</span>
+                  </div>
+                </div>
+                <div style="text-align:right">
+                  <div class="record__score" style="color:var(--bx-health)">86<small>/100</small></div>
+                  <div class="row" style="gap:4px;justify-content:flex-end;margin-top:4px">
+                    <button class="btn btn--ghost btn--sm" type="button">查看作答</button>
+                    <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="list__item">
+                <div class="cover-thumb"><svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg></div>
+                <div class="list__main">
+                  <div class="list__title">员工满意度调查（演示问卷）</div>
+                  <div class="list__meta">
+                    <span>最近完成 2026-10-12 09:47</span><span class="sep"></span><span>共 1 次</span>
+                  </div>
+                </div>
+                <div style="text-align:right">
+                  <div class="record__score">92<small>/100</small></div>
+                  <div class="row" style="gap:4px;justify-content:flex-end;margin-top:4px">
+                    <button class="btn btn--ghost btn--sm" type="button">查看作答</button>
+                    <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="list__item">
+                <div class="cover-thumb"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+                <div class="list__main">
+                  <div class="list__title">职业病危害因素接触情况调查</div>
+                  <div class="list__meta">
+                    <span>最近完成 2026-09-28 15:20</span><span class="sep"></span><span>共 1 次</span>
+                  </div>
+                </div>
+                <div style="text-align:right">
+                  <div class="record__score">—</div>
+                  <div class="row" style="gap:4px;justify-content:flex-end;margin-top:4px">
+                    <button class="btn btn--ghost btn--sm" type="button">查看作答</button>
+                    <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="t-cap" style="text-align:center;padding:20px 0">仅显示当前登录账号下的测评记录</div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 12.1 登录 ═══════════ -->
+        <section class="screen" id="screen-login" data-label="账户 · 12.1 登录（LoginScreen · 锁屏式）">
+          <div class="lock">
+            <div class="lock__clock">11:53</div>
+            <div class="lock__date">2026 年 10 月 14 日 星期三</div>
+
+            <div class="lock__form">
+              <div class="lock__avatar"><svg class="icon icon--32" aria-hidden="true"><use href="#i-lock"/></svg></div>
+              <div class="t-cap" style="text-align:center;margin-bottom:8px">登录已过期，请重新登录后继续作答</div>
+
+              <label class="sr-only" for="lg-user">账号</label>
+              <input class="pill-input" id="lg-user" type="text" placeholder="请输入账号" value="jiaqi" autocomplete="username">
+              <label class="sr-only" for="lg-pwd">密码</label>
+              <input class="pill-input" id="lg-pwd" type="password" placeholder="请输入密码" autocomplete="current-password">
+
+              <label class="row" style="gap:8px;font-size:13px;color:var(--bx-text-2);cursor:pointer;padding:2px 4px">
+                <input type="checkbox" checked style="width:16px;height:16px;accent-color:var(--bx-primary)">
+                <span>记住账号（仅记账号，不记密码）</span>
+              </label>
+
+              <button class="btn btn--primary btn--block" type="button">登 录</button>
+
+              <div class="t-cap" style="text-align:center">连续登录失败会锁定账号 1 小时，请确认后再提交</div>
+            </div>
+
+            <div class="anno" style="max-width:560px;margin-top:40px">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>保留锁屏式的空间感与"回车即提交"，但把氛围光收敛为一条极浅的品牌色晕染；失败时输入框抖动 420ms 并同步给出 <code>role="alert"</code> 文案。接口链路不变：<code>srvsso_user_pwd_sign_select</code> 取公钥 → <code>srvuser_login</code>（RSA 加密，<b>绝不做自动重登</b>）。</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 13.1 问卷列表（PC） ═══════════ -->
+        <section class="screen" id="screen-editor-list" data-canvas="desktop" data-label="管理侧 · 13.1 问卷列表（pages/editor/list · 启动页）">
+          <header class="app-header">
+            <div class="app-header__logo"><svg class="icon icon--18" aria-hidden="true"><use href="#i-layers"/></svg></div>
+            <div class="row" style="gap:8px">
+              <b style="font-size:15px">百想问卷</b>
+              <span class="badge badge--neutral">管理后台</span>
+            </div>
+            <div class="spacer grow"></div>
+            <div class="row" style="gap:8px">
+              <button class="icon-btn" type="button" aria-label="刷新"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+              <span class="row" style="gap:8px;font-size:13px;color:var(--bx-text-2)">
+                <span class="cover-thumb" style="width:28px;height:28px;border-radius:50%"><svg class="icon icon--16" aria-hidden="true"><use href="#i-user"/></svg></span>
+                jiaqi
+              </span>
+            </div>
+          </header>
+
+          <div class="app-main">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>列表从"卡片流"改为<b>可扫读的数据表</b>：封面缩略图、标题 + 关键字、分类、题目数、作答次数、状态一列一眼扫完；操作按钮 hover 才显形，减少视觉噪音。状态徽章改用语义令牌（旧版硬编码 <code>rgba(0,180,42,.1)</code> 等）。接口仍为 <code>srvdaq_activity_cfg_select</code>（服务端分页 10/页，<b>不接受 order</b>）。</div>
+            </div>
+
+            <div class="page-head">
+              <div>
+                <h2>问卷管理</h2>
+                <p>共 4 份问卷 · 最近更新 2026-10-14 11:32</p>
+              </div>
+              <div class="row" style="gap:10px">
+                <div class="searchbox">
+                  <svg class="icon icon--16" aria-hidden="true"><use href="#i-search"/></svg>
+                  <input class="input" type="search" placeholder="搜索问卷标题或关键字" aria-label="搜索问卷">
+                </div>
+                <button class="btn btn--primary" type="button" style="min-height:40px">
+                  <svg class="icon icon--16" aria-hidden="true"><use href="#i-plus"/></svg>新建问卷
+                </button>
+              </div>
+            </div>
+
+            <div class="toolbar">
+              <button class="chip" type="button" aria-pressed="true">全部</button>
+              <button class="chip" type="button" aria-pressed="false">进行中</button>
+              <button class="chip" type="button" aria-pressed="false">未开始</button>
+              <button class="chip" type="button" aria-pressed="false">已结束</button>
+            </div>
+
+            <div class="card card--flat" style="overflow:hidden">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:72px">封面</th>
+                    <th>问卷标题</th>
+                    <th style="width:180px">分类</th>
+                    <th style="width:88px">题目</th>
+                    <th style="width:88px">作答</th>
+                    <th style="width:112px">状态</th>
+                    <th style="width:160px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><div class="cover-thumb"><svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg></div></td>
+                    <td>
+                      <div style="font-weight:500">员工满意度调查（演示问卷）</div>
+                      <div class="t-cap" style="margin-top:2px">关键字：演示、员工满意度</div>
+                    </td>
+                    <td><span class="badge badge--neutral">自测</span><div class="t-cap" style="margin-top:4px">DAQ202409230006</div></td>
+                    <td class="t-num">11</td>
+                    <td class="t-num">3</td>
+                    <td><span class="badge badge--success">进行中</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn btn--ghost btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-edit"/></svg>编辑</button>
+                        <button class="btn btn--ghost btn--sm" type="button">作答</button>
+                        <button class="btn btn--ghost btn--sm" type="button" style="color:var(--bx-danger)"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><div class="cover-thumb"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></div></td>
+                    <td>
+                      <div style="font-weight:500">员工健康测评（2026 年度）</div>
+                      <div class="t-cap" style="margin-top:2px">关键字：健康、测评</div>
+                    </td>
+                    <td><span class="badge badge--health">评估</span><div class="t-cap" style="margin-top:4px">DAQ202409230002</div></td>
+                    <td class="t-num">24</td>
+                    <td class="t-num">128</td>
+                    <td><span class="badge badge--success">进行中</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn btn--ghost btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-edit"/></svg>编辑</button>
+                        <button class="btn btn--ghost btn--sm" type="button">作答</button>
+                        <button class="btn btn--ghost btn--sm" type="button" style="color:var(--bx-danger)"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><div class="cover-thumb"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></div></td>
+                    <td>
+                      <div style="font-weight:500">职业病危害因素接触情况调查</div>
+                      <div class="t-cap" style="margin-top:2px">关键字：职业健康</div>
+                    </td>
+                    <td><span class="badge badge--neutral">反馈</span><div class="t-cap" style="margin-top:4px">DAQ202409230001</div></td>
+                    <td class="t-num">18</td>
+                    <td class="t-num">64</td>
+                    <td><span class="badge badge--neutral">已结束</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn btn--ghost btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-edit"/></svg>编辑</button>
+                        <button class="btn btn--ghost btn--sm" type="button">作答</button>
+                        <button class="btn btn--ghost btn--sm" type="button" style="color:var(--bx-danger)"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><div class="cover-thumb" style="background:var(--bx-line-2);border-color:var(--bx-line);color:var(--bx-text-4)"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg></div></td>
+                    <td>
+                      <div style="font-weight:500">新员工入职问卷</div>
+                      <div class="t-cap" style="margin-top:2px">关键字：入职</div>
+                    </td>
+                    <td><span class="badge badge--neutral">反馈</span><div class="t-cap" style="margin-top:4px">DAQ202409230009</div></td>
+                    <td class="t-num">12</td>
+                    <td class="t-num">0</td>
+                    <td><span class="badge badge--warn">未开始</span></td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn btn--ghost btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-edit"/></svg>编辑</button>
+                        <button class="btn btn--ghost btn--sm" type="button">作答</button>
+                        <button class="btn btn--ghost btn--sm" type="button" style="color:var(--bx-danger)"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="pager">
+              <span>第 1 / 3 页 · 共 24 条</span>
+              <button class="pager__btn" type="button" aria-label="上一页"><svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+              <button class="pager__btn" type="button" aria-current="true">1</button>
+              <button class="pager__btn" type="button">2</button>
+              <button class="pager__btn" type="button">3</button>
+              <button class="pager__btn" type="button" aria-label="下一页"><svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 13.2 可视化设计器（PC 三栏） ═══════════ -->
+        <section class="screen" id="screen-editor-design" data-canvas="desktop" data-label="管理侧 · 13.2 可视化设计器（pages/editor/design · 两栏改三栏）">
+          <header class="navbar is-scrolled">
+            <button class="icon-btn" type="button" aria-label="返回列表"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            <div class="navbar__title">问卷设计 · 员工满意度调查（演示问卷）</div>
+            <button class="navbar__action" type="button"><svg class="icon icon--16" aria-hidden="true"><use href="#i-save"/></svg>保存</button>
+          </header>
+
+          <div class="workspace">
+            <!-- 左栏：问卷信息 + 题目列表 -->
+            <div class="pane">
+              <div class="pane__head">
+                <div class="seg-ctl" role="group" aria-label="编辑分组">
+                  <button type="button" aria-pressed="true">问卷信息</button>
+                  <button type="button" aria-pressed="false">题目 (11)</button>
+                </div>
+              </div>
+              <div class="pane__body">
+                <div class="field-row">
+                  <label for="ed-title">问卷标题 <span class="qreq">*</span></label>
+                  <input class="input" id="ed-title" type="text" value="员工满意度调查（演示问卷）">
+                </div>
+                <div class="field-row">
+                  <label for="ed-classify">分类 <span class="qreq">*</span></label>
+                  <button class="picker" id="ed-classify" type="button" style="min-height:40px">
+                    <span>自测（DAQ202409230006）</span>
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right" transform="rotate(90 12 12)"/></svg>
+                  </button>
+                  <div class="hint">分类同时决定信息采集类型（服务端派生）</div>
+                </div>
+                <div class="field-row">
+                  <label for="ed-keyword">关键字 <span class="qreq">*</span></label>
+                  <input class="input" id="ed-keyword" type="text" value="演示,员工满意度">
+                  <div class="hint">用于列表搜索与归档</div>
+                </div>
+                <div class="field-row">
+                  <label>封面图 <span class="qreq">*</span></label>
+                  <div class="row" style="gap:12px;align-items:flex-start">
+                    <div class="thumb" style="display:grid;place-items:center;color:var(--bx-primary);background:var(--bx-primary-soft);border-color:var(--bx-primary-line)">
+                      <svg class="icon" aria-hidden="true"><use href="#i-image"/></svg>
+                    </div>
+                    <div class="t-cap">建议 750×420，小于 2MB<br>已上传：cover_20261014.png</div>
+                  </div>
+                </div>
+
+                <hr class="divider">
+
+                <div class="row row--between" style="margin-bottom:8px">
+                  <div class="row" style="gap:8px">
+                    <b style="font-size:14px">题目</b>
+                    <span class="badge badge--neutral">11</span>
+                  </div>
+                  <button class="btn btn--secondary btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-plus"/></svg>添加题目</button>
+                </div>
+
+                <div>
+                  <div class="qrow"><span class="qrow__no">1</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您的姓名</div><div class="qrow__meta">文本 · 选填</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">2</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您所在的部门</div><div class="qrow__meta">单选 · 必答 · 4 个选项</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">3</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您在本公司的工作年限（年）</div><div class="qrow__meta">数字 · 必答</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">4</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您的入职日期</div><div class="qrow__meta">时间日期 · 选填</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow is-selected"><span class="qrow__no">5</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您对当前工作的整体满意度</div><div class="qrow__meta">单选 · 必答 · 4 个选项 · 10 分</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="上移"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow-up"/></svg></button><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="下移"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow-down"/></svg></button><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">6</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您认为公司在哪些方面做得好？</div><div class="qrow__meta">多选 · 必答 · 4 个选项 · 10 分</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">7</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您愿意推荐朋友来本公司工作吗？</div><div class="qrow__meta">单选 · 选填 · 4 个选项</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">8</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您的工作地点所在地区</div><div class="qrow__meta">地址 · 选填</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">9</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">上传一张您的工作环境照片</div><div class="qrow__meta">图片 · 选填 · 最多 9 张</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">10</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">请选择一份您参与过的问卷</div><div class="qrow__meta">引用 · 选填</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                  <div class="qrow"><span class="qrow__no">11</span><svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg><div class="qrow__main"><div class="qrow__title">您对公司的建议</div><div class="qrow__meta">文本 · 选填 · 多行</div></div><div class="qrow__tools"><button class="icon-btn" type="button" style="width:28px;height:28px" aria-label="删除"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-trash"/></svg></button></div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 中栏：题目设置 -->
+            <div class="pane">
+              <div class="pane__head">
+                <div class="row" style="gap:8px">
+                  <span class="pane__title">题目设置</span>
+                  <span class="badge badge--primary">第 5 题</span>
+                </div>
+                <span class="t-cap">改动会即时同步到右侧预览</span>
+              </div>
+              <div class="pane__body" style="padding:20px 28px 40px">
+                <div class="field-row">
+                  <label for="ed-qtitle">题干 <span class="qreq">*</span></label>
+                  <textarea class="textarea" id="ed-qtitle" style="min-height:64px">您对当前工作的整体满意度</textarea>
+                </div>
+
+                <div class="row" style="gap:16px;align-items:flex-start">
+                  <div class="field-row grow">
+                    <label>题型</label>
+                    <button class="picker" type="button" style="min-height:40px">
+                      <span class="row" style="gap:8px"><svg class="icon icon--16" aria-hidden="true"><use href="#i-list"/></svg>单选</span>
+                      <svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                    </button>
+                  </div>
+                  <div class="field-row" style="width:150px">
+                    <label>是否必答</label>
+                    <div class="seg-ctl" role="group" aria-label="是否必答">
+                      <button type="button" aria-pressed="true">必答</button>
+                      <button type="button" aria-pressed="false">选填</button>
+                    </div>
+                  </div>
+                  <div class="field-row" style="width:110px">
+                    <label for="ed-points">分值</label>
+                    <input class="input" id="ed-points" type="text" inputmode="numeric" value="10" style="min-height:40px">
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <label>选项与正确答案</label>
+                  <div class="card card--flat" style="overflow:hidden">
+                    <div class="list__item" style="padding:10px 14px;cursor:default">
+                      <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg>
+                      <span class="qno" style="margin:0">A</span>
+                      <input class="input" type="text" value="非常满意" style="min-height:36px" aria-label="选项 A">
+                      <button class="chip" type="button" aria-pressed="true" style="height:32px">正确答案</button>
+                      <span class="t-cap" style="width:44px;text-align:right">10 分</span>
+                    </div>
+                    <div class="list__item" style="padding:10px 14px;cursor:default">
+                      <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg>
+                      <span class="qno" style="margin:0">B</span>
+                      <input class="input" type="text" value="比较满意" style="min-height:36px" aria-label="选项 B">
+                      <button class="chip" type="button" aria-pressed="false" style="height:32px">正确答案</button>
+                      <span class="t-cap" style="width:44px;text-align:right">8 分</span>
+                    </div>
+                    <div class="list__item" style="padding:10px 14px;cursor:default">
+                      <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg>
+                      <span class="qno" style="margin:0">C</span>
+                      <input class="input" type="text" value="一般" style="min-height:36px" aria-label="选项 C">
+                      <button class="chip" type="button" aria-pressed="false" style="height:32px">正确答案</button>
+                      <span class="t-cap" style="width:44px;text-align:right">4 分</span>
+                    </div>
+                    <div class="list__item" style="padding:10px 14px;cursor:default">
+                      <svg class="icon icon--16" style="color:var(--bx-text-4)" aria-hidden="true"><use href="#i-grip"/></svg>
+                      <span class="qno" style="margin:0">D</span>
+                      <input class="input" type="text" value="不太满意" style="min-height:36px" aria-label="选项 D">
+                      <button class="chip" type="button" aria-pressed="false" style="height:32px">正确答案</button>
+                      <span class="t-cap" style="width:44px;text-align:right">0 分</span>
+                    </div>
+                  </div>
+                  <div class="row row--between" style="margin-top:8px">
+                    <span class="hint">选项字母按位置自动生成（A–Z，最多 26 项）</span>
+                    <button class="btn btn--secondary btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-plus"/></svg>添加选项</button>
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <label for="ed-analysis">答案解析（选填）</label>
+                  <textarea class="textarea" id="ed-analysis" style="min-height:64px" placeholder="作答后展示给用户的说明"></textarea>
+                </div>
+
+                <div class="field-row">
+                  <label>计分策略</label>
+                  <div class="seg-ctl" role="group" aria-label="计分策略">
+                    <button type="button" aria-pressed="true">选项分值累加</button>
+                    <button type="button" aria-pressed="false">完全正确</button>
+                    <button type="button" aria-pressed="false">错误不得分</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右栏：手机实时预览 -->
+            <div class="pane">
+              <div class="pane__head">
+                <span class="pane__title">实时预览</span>
+                <div class="seg-ctl" role="group" aria-label="预览端">
+                  <button type="button" aria-pressed="true">手机</button>
+                  <button type="button" aria-pressed="false">桌面</button>
+                </div>
+              </div>
+              <div class="pane__body" style="height:calc(100% - 61px)">
+                <div class="ph">
+                  <div class="ph__bar">员工满意度调查（演示问卷）</div>
+                  <div class="ph__body">
+                    <div style="height:2px;background:var(--bx-line-2);border-radius:999px;margin-bottom:10px">
+                      <div style="height:2px;width:45%;background:var(--bx-primary);border-radius:999px"></div>
+                    </div>
+                    <div class="t-cap" style="display:flex;justify-content:space-between;margin-bottom:12px">
+                      <span>第 5 题 / 共 11 题</span><span>已答 4</span>
+                    </div>
+                    <div class="qhead" style="margin-bottom:12px">
+                      <span class="qno">5</span>
+                      <div class="grow"><div style="font-size:15px;line-height:24px;font-weight:600">您对当前工作的整体满意度<span class="qreq" aria-hidden="true">*</span></div></div>
+                    </div>
+                    <div class="opts">
+                      <label class="opt" style="min-height:44px"><input type="radio" name="pv5"><span class="opt__mark"></span><span class="opt__text">非常满意</span></label>
+                      <label class="opt" style="min-height:44px"><input type="radio" name="pv5" checked><span class="opt__mark"></span><span class="opt__text">比较满意</span></label>
+                      <label class="opt" style="min-height:44px"><input type="radio" name="pv5"><span class="opt__mark"></span><span class="opt__text">一般</span></label>
+                      <label class="opt" style="min-height:44px"><input type="radio" name="pv5"><span class="opt__mark"></span><span class="opt__text">不太满意</span></label>
+                    </div>
+                    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--bx-line-2)">
+                      <div class="t-cap" style="margin-bottom:8px">下一题预览</div>
+                      <div class="qhead" style="margin-bottom:10px">
+                        <span class="qno">6</span>
+                        <div class="grow"><div style="font-size:15px;line-height:24px;font-weight:600">您认为公司在哪些方面做得好？<span class="qreq" aria-hidden="true">*</span></div><div class="qdesc">多选题</div></div>
+                      </div>
+                      <div class="opts">
+                        <label class="opt opt--check" style="min-height:44px"><input type="checkbox"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">团队氛围</span></label>
+                        <label class="opt opt--check" style="min-height:44px"><input type="checkbox"><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">薪酬福利</span></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 14.1 设计系统总览 ═══════════ -->
+        <section class="screen" id="screen-system" data-canvas="desktop" data-label="设计系统 · 14.1 令牌与组件总览">
+          <header class="app-header">
+            <div class="app-header__logo"><svg class="icon icon--18" aria-hidden="true"><use href="#i-layers"/></svg></div>
+            <b style="font-size:15px">设计系统总览</b>
+            <span class="badge badge--neutral">design-system/bx-questionnaire/MASTER.md</span>
+            <div class="spacer grow"></div>
+            <span class="t-cap">风格：Minimalism &amp; Swiss Style + Micro-interactions</span>
+          </header>
+
+          <div class="app-main">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>这页就是落地清单：</b>每个色值 / 字阶 / 间距都对应 <code>src/styles/tokens.scss</code> 里的一个 CSS 变量。<b>不新增任意值</b>——这是把"12 种字号、11 档间距"收敛成体系的关键。</div>
+            </div>
+
+            <div class="section-title">品牌主色（可整体换主题）</div>
+            <div class="swatches">
+              <div class="swatch"><div class="swatch__chip" style="background:#EFF5FF"></div><div class="swatch__meta"><b>--bx-primary-soft</b>#EFF5FF · 选中底</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#DCE9FF"></div><div class="swatch__meta"><b>--bx-primary-line</b>#DCE9FF · 选中描边</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#0067DB"></div><div class="swatch__meta"><b>--bx-primary</b>#0067DB · 白字 5.30:1 ✅</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#0059BD"></div><div class="swatch__meta"><b>--bx-primary-hover</b>#0059BD · 6.29:1</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#004DA3"></div><div class="swatch__meta"><b>--bx-primary-active</b>#004DA3 · 7.35:1</div></div>
+            </div>
+
+            <div class="section-title">中性色阶（文字对比度按 WCAG AA 选定）</div>
+            <div class="swatches">
+              <div class="swatch"><div class="swatch__chip" style="background:#F5F7FA"></div><div class="swatch__meta"><b>--bx-bg</b>#F5F7FA · 页面底</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#FAFBFC"></div><div class="swatch__meta"><b>--bx-surface-2</b>#FAFBFC · 输入底</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#E4E7EC"></div><div class="swatch__meta"><b>--bx-line</b>#E4E7EC · 描边</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#98A2B3"></div><div class="swatch__meta"><b>--bx-text-4</b>#98A2B3 · 仅占位</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#667085"></div><div class="swatch__meta"><b>--bx-text-3</b>#667085 · 4.97:1 ✅</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#475467"></div><div class="swatch__meta"><b>--bx-text-2</b>#475467 · 7.5:1 ✅</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#101828"></div><div class="swatch__meta"><b>--bx-text</b>#101828 · 17.4:1 ✅</div></div>
+            </div>
+
+            <div class="section-title">语义色（文字 / 浅底 / 描边 三件套）</div>
+            <div class="swatches">
+              <div class="swatch"><div class="swatch__chip" style="background:#D92C2C"></div><div class="swatch__meta"><b>danger</b>#D92C2C · 5.13:1</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#0F7B2F"></div><div class="swatch__meta"><b>success</b>#0F7B2F · 5.55:1</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#C2410C"></div><div class="swatch__meta"><b>warn</b>#C2410C · 5.30:1</div></div>
+              <div class="swatch"><div class="swatch__chip" style="background:#0D9488"></div><div class="swatch__meta"><b>health</b>#0D9488 · 4.54:1</div></div>
+            </div>
+
+            <div class="section-title">字阶（六档，不再出现第七种字号）</div>
+            <div class="spec-block">
+              <div class="spec-row"><div class="spec-row__k">display 32/40</div><div class="t-display" style="font-size:32px">86 分</div></div>
+              <div class="spec-row"><div class="spec-row__k">title 22/30</div><div class="t-title">问卷封面主标题</div></div>
+              <div class="spec-row"><div class="spec-row__k">h2 17/26</div><div class="t-h2">题干与区块标题</div></div>
+              <div class="spec-row"><div class="spec-row__k">body 15/25</div><div class="t-body">正文与选项文案，中文行高 1.7</div></div>
+              <div class="spec-row"><div class="spec-row__k">sub 13/20</div><div class="t-sub">辅助说明与按钮内文字</div></div>
+              <div class="spec-row"><div class="spec-row__k">caption 12/18</div><div class="t-cap">元信息、计数、时间（下限 12px）</div></div>
+            </div>
+
+            <div class="section-title">形状 · 间距 · 运动</div>
+            <div class="spec-grid">
+              <div class="spec-block">
+                <div class="kv"><span class="kv__k">卡片圆角</span><span class="kv__v">16px</span></div>
+                <div class="kv"><span class="kv__k">控件圆角</span><span class="kv__v">12px</span></div>
+                <div class="kv"><span class="kv__k">小控件圆角</span><span class="kv__v">8px</span></div>
+                <div class="kv"><span class="kv__k">胶囊圆角</span><span class="kv__v">999px</span></div>
+                <div class="kv"><span class="kv__k">主控件高度</span><span class="kv__v">48px</span></div>
+              </div>
+              <div class="spec-block">
+                <div class="kv"><span class="kv__k">xs / sm</span><span class="kv__v">4 / 8px</span></div>
+                <div class="kv"><span class="kv__k">md / lg</span><span class="kv__v">12 / 16px</span></div>
+                <div class="kv"><span class="kv__k">xl / 2xl / 3xl</span><span class="kv__v">24 / 32 / 48px</span></div>
+                <div class="kv"><span class="kv__k">内容列宽</span><span class="kv__v">作答 720 / 管理 1200</span></div>
+                <div class="kv"><span class="kv__k">选项间距</span><span class="kv__v">8px（触摸间距下限）</span></div>
+              </div>
+              <div class="spec-block">
+                <div class="kv"><span class="kv__k">fast</span><span class="kv__v">120ms · 选中/hover</span></div>
+                <div class="kv"><span class="kv__k">base</span><span class="kv__v">180ms · 展开/切换</span></div>
+                <div class="kv"><span class="kv__k">slow</span><span class="kv__v">280ms · 弹层/进度</span></div>
+                <div class="kv"><span class="kv__k">缓动</span><span class="kv__v">cubic-bezier(.22,.61,.36,1)</span></div>
+                <div class="kv"><span class="kv__k">减弱动效</span><span class="kv__v">prefers-reduced-motion → 0ms</span></div>
+              </div>
+            </div>
+
+            <div class="section-title">核心组件</div>
+            <div class="spec-grid">
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">按钮</div>
+                <div class="row" style="flex-wrap:wrap;gap:10px">
+                  <button class="btn btn--primary" type="button">提交问卷</button>
+                  <button class="btn btn--secondary" type="button">暂存草稿</button>
+                  <button class="btn btn--ghost" type="button">返回</button>
+                  <button class="btn btn--danger" type="button">删除</button>
+                </div>
+                <div class="row" style="flex-wrap:wrap;gap:10px;margin-top:12px">
+                  <button class="btn btn--primary" type="button" disabled>禁用</button>
+                  <button class="btn btn--primary" type="button"><span class="spinner"></span>提交中</button>
+                  <button class="btn btn--secondary btn--sm" type="button">小号按钮</button>
+                </div>
+              </div>
+
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">选项（单选 / 多选）</div>
+                <div class="opts">
+                  <label class="opt" style="min-height:44px"><input type="radio" name="sc1"><span class="opt__mark"></span><span class="opt__text">未选中</span></label>
+                  <label class="opt" style="min-height:44px"><input type="radio" name="sc1" checked><span class="opt__mark"></span><span class="opt__text">已选中</span></label>
+                  <label class="opt opt--check" style="min-height:44px"><input type="checkbox" checked><span class="opt__mark"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg></span><span class="opt__text">多选已选</span></label>
+                </div>
+              </div>
+
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">输入与选择</div>
+                <div class="stack-12">
+                  <input class="input" type="text" placeholder="默认输入框" aria-label="示例输入框">
+                  <input class="input is-invalid" type="text" value="校验失败" aria-invalid="true" aria-label="出错输入框">
+                  <button class="picker is-placeholder" type="button" style="min-height:44px"><span>请选择日期</span><svg class="icon icon--16" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+                </div>
+              </div>
+
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">徽章与进度</div>
+                <div class="row" style="flex-wrap:wrap;gap:8px">
+                  <span class="badge badge--primary">进行中</span>
+                  <span class="badge badge--success">已完成</span>
+                  <span class="badge badge--warn">未完成</span>
+                  <span class="badge badge--danger">校验失败</span>
+                  <span class="badge badge--health">状态良好</span>
+                  <span class="badge badge--neutral">已结束</span>
+                </div>
+                <div class="progress__track" style="height:6px;border-radius:999px;margin-top:16px"><div class="progress__bar" style="width:36%;border-radius:999px"></div></div>
+                <div class="t-cap" style="margin-top:8px">第 4 题 / 共 11 题 · 已答 4</div>
+              </div>
+
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">提示条四态</div>
+                <div class="stack-8">
+                  <div class="alert alert--info" style="padding:10px 12px"><svg class="icon icon--16" aria-hidden="true" style="color:var(--bx-primary);margin-top:2px"><use href="#i-info"/></svg><div>信息提示</div></div>
+                  <div class="alert alert--success" style="padding:10px 12px"><svg class="icon icon--16" aria-hidden="true" style="color:var(--bx-success);margin-top:2px"><use href="#i-check-circle"/></svg><div>提交成功</div></div>
+                  <div class="alert alert--warn" style="padding:10px 12px"><svg class="icon icon--16" aria-hidden="true" style="color:var(--bx-warn);margin-top:2px"><use href="#i-clock"/></svg><div>草稿未提交</div></div>
+                  <div class="alert alert--danger" style="padding:10px 12px"><svg class="icon icon--16" aria-hidden="true" style="color:var(--bx-danger);margin-top:2px"><use href="#i-alert"/></svg><div>还有 3 道必填题未作答</div></div>
+                </div>
+              </div>
+
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">分数环（测评语义色）</div>
+                <div class="score-ring" style="width:132px;height:132px">
+                  <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+                    <circle class="score-ring__track" cx="66" cy="66" r="56" stroke-width="10"></circle>
+                    <circle class="score-ring__val" cx="66" cy="66" r="56" stroke-width="10" stroke-dasharray="351.9" stroke-dashoffset="49.3"></circle>
+                  </svg>
+                  <div class="score-ring__center"><span class="score-ring__num" style="font-size:30px;line-height:34px">86</span><span class="t-cap">总分 100</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-title">图标（统一线性图标，禁止 emoji 与文字符号）</div>
+            <div class="spec-block">
+              <div class="row" style="flex-wrap:wrap;gap:18px;color:var(--bx-text-2)">
+                <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-map-pin"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-image"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-list"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-arrow-up"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-arrow-down"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-grip"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-save"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-user"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+                <svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>
+              </div>
+            </div>
+            <div style="height:40px"></div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 14.2 空态 / 加载 / 异常 ═══════════ -->
+        <section class="screen" id="screen-states" data-canvas="desktop" data-label="设计系统 · 14.2 空态 / 加载 / 异常 / 弹层">
+          <header class="app-header">
+            <div class="app-header__logo"><svg class="icon icon--18" aria-hidden="true"><use href="#i-inbox"/></svg></div>
+            <b style="font-size:15px">状态与边界</b>
+            <span class="badge badge--neutral">把"讲清楚"当作界面的一部分</span>
+          </header>
+
+          <div class="app-main">
+            <div class="anno">
+              <svg class="icon icon--16" aria-hidden="true" style="margin-top:2px"><use href="#i-info"/></svg>
+              <div><b>重设计要点：</b>旧版空态是白底蓝圆里的文字符号 <code>∅</code>、加载态是一行"正在加载…"。新方案：空态给自制线性几何插画 + 一句主文案 + 一个可行动作；加载给骨架屏（保住布局、不闪）；错误给"发生了什么 + 怎么办"。</div>
+            </div>
+
+            <div class="section-title">空态（含未登录引导）</div>
+            <div class="spec-grid">
+              <div class="spec-block" style="padding:0">
+                <div class="empty">
+                  <svg class="empty__art" viewBox="0 0 112 112" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="26" y="20" width="60" height="72" rx="8"></rect>
+                    <path d="M38 38h36M38 50h36M38 62h22" stroke="#DCE9FF"></path>
+                    <circle cx="76" cy="78" r="16" fill="#fff" stroke="#0067DB" stroke-width="2.5"></circle>
+                    <path d="M76 71v8M76 84h.01" stroke="#0067DB" stroke-width="2.5"></path>
+                  </svg>
+                  <div class="empty__title">暂无作答记录</div>
+                  <div class="empty__desc">完成一次作答后，记录会出现在这里。</div>
+                  <button class="btn btn--primary btn--sm" type="button" style="margin-top:12px">去作答</button>
+                </div>
+              </div>
+
+              <div class="spec-block" style="padding:0">
+                <div class="empty">
+                  <svg class="empty__art" viewBox="0 0 112 112" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="56" cy="44" r="20"></circle>
+                    <path d="M22 92a34 34 0 0168 0" stroke="#DCE9FF"></path>
+                  </svg>
+                  <div class="empty__title">未获取到登录信息</div>
+                  <div class="empty__desc">登录后可查看账号下的全部测评记录。</div>
+                  <button class="btn btn--primary btn--sm" type="button" style="margin-top:12px">去登录</button>
+                </div>
+              </div>
+
+              <div class="spec-block" style="padding:0">
+                <div class="empty">
+                  <svg class="empty__art" viewBox="0 0 112 112" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="24" y="26" width="64" height="60" rx="8"></rect>
+                    <path d="M40 46h32M40 58h20" stroke="#DCE9FF"></path>
+                    <path d="M62 70l5 5 12-12" stroke="#0F7B2F" stroke-width="2.5"></path>
+                  </svg>
+                  <div class="empty__title">没有找到问卷</div>
+                  <div class="empty__desc">换个关键字试试，或点右上角「新建」创建一份。</div>
+                  <button class="btn btn--secondary btn--sm" type="button" style="margin-top:12px">清空筛选</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-title">加载（骨架屏优先于"正在加载…"）</div>
+            <div class="spec-grid">
+              <div class="spec-block">
+                <div class="skel skel--title"></div>
+                <div class="skel skel--line" style="width:92%"></div>
+                <div class="skel skel--line" style="width:74%"></div>
+                <div class="row" style="gap:10px;margin-top:16px">
+                  <div class="skel" style="width:88px;height:88px;border-radius:12px"></div>
+                  <div class="grow">
+                    <div class="skel skel--line" style="width:60%"></div>
+                    <div class="skel skel--line" style="width:40%"></div>
+                  </div>
+                </div>
+                <div class="t-cap" style="margin-top:12px">列表骨架：保持布局稳定，超过 400ms 才出现</div>
+              </div>
+              <div class="spec-block">
+                <div class="row" style="gap:10px">
+                  <button class="btn btn--primary" type="button" disabled><span class="spinner"></span>提交中…</button>
+                  <button class="btn btn--secondary" type="button" disabled>暂存草稿</button>
+                </div>
+                <div class="t-cap" style="margin-top:12px">按钮 loading：文案保留、宽度不跳；禁用态 opacity .45 且不响应点击</div>
+                <div class="row" style="gap:10px;margin-top:16px">
+                  <span class="spinner spinner--dark"></span><span class="t-sub">正在加载更多…</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-title">异常与失败</div>
+            <div class="spec-grid">
+              <div class="spec-block">
+                <div class="alert alert--danger" role="alert">
+                  <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-danger)"><use href="#i-alert"/></svg>
+                  <div>
+                    <div class="alert__title">问卷加载失败</div>
+                    请确认链接是否有效，或联系活动发起人。
+                    <div style="margin-top:10px"><button class="btn btn--secondary btn--sm" type="button"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-refresh"/></svg>重新加载</button></div>
+                  </div>
+                </div>
+                <div class="t-cap" style="margin-top:10px">页面级错误：说明原因 + 给出重试，不用 toast 打发</div>
+              </div>
+
+              <div class="spec-block">
+                <div class="alert alert--warn">
+                  <svg class="icon icon--18" aria-hidden="true" style="margin-top:1px;color:var(--bx-warn)"><use href="#i-alert"/></svg>
+                  <div>
+                    <div class="alert__title">登录已过期</div>
+                    为保护账号安全，请重新登录后继续；已作答的草稿不会丢失。
+                    <div style="margin-top:10px"><button class="btn btn--primary btn--sm" type="button">重新登录</button></div>
+                  </div>
+                </div>
+                <div class="t-cap" style="margin-top:10px">会话过期（resultCode 0011）：只清登录态，<b>不动</b> <code>bxq:fill_batch_no</code></div>
+              </div>
+            </div>
+
+            <div class="section-title">底部弹层（引用选择器）与轻提示</div>
+            <div class="spec-grid">
+              <div class="spec-block" style="padding:0;position:relative;height:340px;overflow:hidden;border-radius:var(--bx-radius-card)">
+                <div style="position:absolute;inset:0;background:var(--bx-bg);padding:20px">
+                  <div class="skel skel--line" style="width:70%"></div>
+                  <div class="skel skel--line" style="width:90%"></div>
+                  <div class="skel skel--line" style="width:50%"></div>
+                </div>
+                <div class="mask" style="position:absolute"></div>
+                <div class="sheet" style="position:absolute">
+                  <div class="sheet__head">
+                    <span class="sheet__title">请选择</span>
+                    <button class="icon-btn" type="button" aria-label="关闭"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+                  </div>
+                  <div class="sheet__body">
+                    <div class="sheet__item is-active"><span>2026 年度员工满意度调查</span><svg class="icon icon--16" aria-hidden="true"><use href="#i-check"/></svg></div>
+                    <div class="sheet__item"><span>2025 年度员工满意度调查</span><svg class="icon icon--16" aria-hidden="true"><use href="#i-check"/></svg></div>
+                    <div class="sheet__item"><span>新员工入职体验问卷</span><svg class="icon icon--16" aria-hidden="true"><use href="#i-check"/></svg></div>
+                  </div>
+                  <div class="sheet__foot"><button class="btn btn--primary btn--block" type="button">确定</button></div>
+                </div>
+              </div>
+              <div class="spec-block">
+                <div class="t-sub" style="margin-bottom:12px;color:var(--bx-text-3)">轻提示（toast）</div>
+                <div style="position:relative;height:120px;border-radius:var(--bx-radius);background:var(--bx-surface-2);border:1px solid var(--bx-line)">
+                  <div class="toast" style="position:absolute;bottom:32px">
+                    <svg class="icon icon--16" aria-hidden="true"><use href="#i-check-circle"/></svg>
+                    草稿已暂存
+                  </div>
+                </div>
+                <div class="t-cap" style="margin-top:10px">只用于"已经成功"的轻确认；失败一律走可操作的提示条或页面态</div>
+              </div>
+            </div>
+            <div style="height:40px"></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var frame = document.getElementById('frame');
+  var viewport = document.getElementById('viewport');
+  var stage = document.getElementById('stage');
+  var note = document.getElementById('proto-note');
+  var links = Array.prototype.slice.call(document.querySelectorAll('.proto-nav a'));
+
+  function setDevice(def){
+    frame.className = 'frame frame--' + (def === 'desktop' ? 'desktop' : 'mobile');
+    Array.prototype.slice.call(document.querySelectorAll('.proto-bar [data-device]')).forEach(function(x){
+      x.setAttribute('aria-pressed', String(x.dataset.device === def));
+    });
+  }
+  function show(id){
+    var target = document.getElementById('screen-' + id);
+    if(!target){ return; }
+    Array.prototype.slice.call(viewport.querySelectorAll('.screen')).forEach(function(s){
+      s.classList.toggle('is-active', s.id === 'screen-' + id);
+    });
+    links.forEach(function(a){ a.setAttribute('aria-current', String(a.dataset.screen === id)); });
+    note.textContent = (target.dataset.label || '');
+    // 管理侧与设计系统屏固定用桌面画布；作答侧默认移动画布
+    setDevice(target.dataset.canvas === 'desktop' ? 'desktop' : 'mobile');
+    viewport.scrollTop = 0;
+    if(location.hash !== '#' + id){ history.replaceState(null, '', '#' + id); }
+  }
+  links.forEach(function(a){
+    a.addEventListener('click', function(){ show(a.dataset.screen); });
+  });
+  Array.prototype.slice.call(document.querySelectorAll('.proto-bar [data-device]')).forEach(function(b){
+    b.addEventListener('click', function(){ setDevice(b.dataset.device); });
+  });
+  Array.prototype.slice.call(document.querySelectorAll('[data-theme-btn]')).forEach(function(b){
+    b.addEventListener('click', function(){
+      Array.prototype.slice.call(document.querySelectorAll('[data-theme-btn]')).forEach(function(x){
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      document.documentElement.dataset.theme = b.dataset.themeBtn;
+    });
+  });
+  // 滚动时导航栏出现分割线
+  viewport.addEventListener('scroll', function(){
+    Array.prototype.slice.call(viewport.querySelectorAll('.navbar')).forEach(function(n){
+      n.classList.toggle('is-scrolled', viewport.scrollTop > 2);
+    });
+  });
+  // 分数环入场动画（reduced-motion 下直接落到终值）
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function ringIn(){
+    Array.prototype.slice.call(viewport.querySelectorAll('.score-ring__val')).forEach(function(el){
+      var full = parseFloat(el.getAttribute('stroke-dasharray')) || 0;
+      var to = parseFloat(el.getAttribute('stroke-dashoffset')) || 0;
+      if(reduce){ return; }
+      el.style.strokeDashoffset = String(full);
+      requestAnimationFrame(function(){ el.style.strokeDashoffset = String(to); });
+    });
+  }
+  window.addEventListener('hashchange', function(){ show(location.hash.replace('#','')); });
+  show(location.hash ? location.hash.replace('#','') : 'cover');
+  ringIn();
+})();
+</script>
+</body>
+</html>
