@@ -24,7 +24,17 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
     // https://uni-helper.js.org/vite-plugin-uni-pages
-      UniPages({ homePage: 'pages/questionnaire/index/index' }),
+      // 启动页 = 问卷列表。刻意不选作答页：作答页必须带 activity_no，
+      // 从根路径直接打开只会落到「缺少活动编号」的死路上。
+      // 这里与 `pages/editor/list/index.vue` 的 `definePage({ type: 'home' })` 必须一致。
+      //
+      // ⚠️ 改完首页后必须**先删掉磁盘上的 `src/pages.json` 再重启 dev server**：
+      // 插件默认 `mergePages: true`，会与已存在的生成物合并，旧顺序会被保留
+      // （实测还会出现重复条目），表现为「首页没变」，而干净检出的仓库里是正确的。
+      // 不要试图用 `mergePages: false` 规避 —— 读插件源码可知那个开关会**跳过
+      // src/pages 的扫描**（index.mjs 里 scanPages 就在这个分支内），
+      // 结果是 pages.json 里一条路由都没有、启动时报 "No home page found"。
+      UniPages({ homePage: 'pages/editor/list/index' }),
       // https://uni-helper.js.org/vite-plugin-uni-layouts
       UniLayouts(),
       // https://uni-helper.js.org/vite-plugin-uni-manifest

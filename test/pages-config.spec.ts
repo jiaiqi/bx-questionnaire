@@ -41,20 +41,27 @@ function collectPages(dir: string, acc: string[] = []): string[] {
 
 /** 取出页面里 `definePage({ ... })` 的实参原文；没有则返回 null */
 function readDefinePage(src: string): string | null {
-  const idx = src.indexOf('definePage(')
+  /**
+   * 先剥离注释再定位。
+   *
+   * 页面里的说明性注释会**举例**写 `definePage({ type: 'home' })`（讲首页是怎么决定的），
+   * 不剥离就会把注释里的示例当成真声明 —— 首页一致性守卫正是这样被误判过一次。
+   */
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  const idx = code.indexOf('definePage(')
   if (idx === -1)
     return null
   // 从宏名后的第一个 `(` 起做括号配对，避免嵌套对象把 `})` 提前截断
   let depth = 0
-  const open = src.indexOf('(', idx)
-  for (let i = open; i < src.length; i++) {
-    if (src[i] === '(') {
+  const open = code.indexOf('(', idx)
+  for (let i = open; i < code.length; i++) {
+    if (code[i] === '(') {
       depth++
     }
-    else if (src[i] === ')') {
+    else if (code[i] === ')') {
       depth--
       if (depth === 0)
-        return src.slice(open + 1, i)
+        return code.slice(open + 1, i)
     }
   }
   return null
@@ -114,5 +121,33 @@ describe('页面配置一致性', () => {
     // 反向保护：若 collectPages 或匹配逻辑坏掉，上面两条会「因为没扫到而通过」
     const users = PAGES.filter(f => readFileSync(f, 'utf8').includes('useRecordHistoryPage'))
     expect(users.length).toBe(2)
+  })
+
+  /**
+   * 启动页（首页）在**两处**声明，必须一致：
+   *  - `vite.config.ts` 的 `UniPages.homePage`
+   *  - 某个页面里的 `definePage({ type: 'home' })`
+   *
+   * 实测教训：只改一处时，`pages.json` 会按「声明了 type: home 的页面」排序，
+   * 而插件选项仍指向旧路径 —— 两者不一致时行为取决于谁先被读到，表现为
+   * 「首页没变」，同时生成物里还会出现重复条目。
+   * 另一个更隐蔽的坑：改完必须**删掉磁盘上的 `src/pages.json` 再重启 dev server**，
+   * 否则插件会把旧顺序合并回来（该行为已写在 vite.config.ts 的注释里）。
+   */
+  it('启动页两处声明必须一致且唯一', () => {
+    const viteConfig = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8')
+    const declared = viteConfig.match(/homePage:\s*'([^']+)'/)?.[1] ?? ''
+    expect(declared, 'vite.config.ts 的 UniPages 必须显式声明 homePage').not.toBe('')
+
+    const marked: string[] = []
+    for (const file of PAGES) {
+      const arg = readDefinePage(readFileSync(file, 'utf8'))
+      if (arg !== null && /\btype\s*:\s*['"]home['"]/.test(arg)) {
+        marked.push(file.replace(/^.*\/src\//, '').replace(/\.vue$/, ''))
+      }
+    }
+
+    expect(marked, '应恰好有一个页面声明 type: home').toHaveLength(1)
+    expect(marked[0], 'vite.config.ts 的 homePage 必须与声明 type: home 的页面一致').toBe(declared)
   })
 })

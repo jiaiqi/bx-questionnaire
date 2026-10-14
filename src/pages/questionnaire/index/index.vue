@@ -15,19 +15,18 @@ import { queryString, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 
 /**
- * 显式声明首页
+ * 本页**不再是首页**：首页已改为问卷列表 `pages/editor/list/index`
  *
- * `src/pages.json` 是**生成物且被 gitignore**，所以新克隆的仓库里没有它，
- * 页面顺序完全由 `src/pages/**` 的扫描顺序决定 —— 那会变成按路径字母序，
- * 首页就成了 `pages/questionnaire/assessmentResult/assessmentResult`。
- * 之前本地看着正常，只是因为 `pages.json` 已在磁盘上、插件的 `mergePages`
- * 把旧顺序合并保留了，属于「本机碰巧对」。
+ * 原因：启动页需要一个不依赖入参的入口，而本页必须带 `activity_no`，
+ * 从根路径直接打开只会看到「缺少活动编号」。
  *
- * 加 `editor/**` 之后这个隐患更明显（入口可能落到编辑器上），
- * 因此按插件支持的方式显式标记 `type: 'home'`：插件会把首页排到 pages 数组最前，
- * 与文件是否已存在、扫描顺序如何都无关。
+ * 保留一段背景说明，因为「哪个页面是首页」这个坑与页面本身无关：
+ * `src/pages.json` 是**生成物且被 gitignore**，新克隆的仓库里没有它，
+ * 页面顺序默认由 `src/pages/**` 的扫描顺序决定（按路径字母序），
+ * 首页会落到 `pages/questionnaire/assessmentResult/assessmentResult` 这种地方。
+ * 因此首页必须显式指定，且两处保持一致：`vite.config.ts` 的 `UniPages.homePage`
+ * 与页面里的 `definePage({ type: 'home' })`。
  */
-definePage({ type: 'home' })
 
 const activityNo = ref('')
 const formType = ref('form')

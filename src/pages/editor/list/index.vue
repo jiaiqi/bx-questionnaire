@@ -39,8 +39,13 @@ import { confirmDialog, toast } from '@/utils/ui'
  * 另：H5 端 `enablePullDownRefresh` 是**编译期特性开关**，
  * 由 pages.json 推导并在 dev server 启动时烘进 bundle，**改完要重启 dev server**，
  * 否则整段下拉刷新被 tree-shake 掉，表现是「手势没反应」而不是报错。
+ *
+ * 本页是**启动页**：从根路径进入即到这里。相比作答页（必须带 `activity_no`，
+ * 直接打开只会看到「缺少活动编号」），列表页不依赖入参，是个能用的入口；
+ * 代价是它需要登录态，未登录时会被会话过期链路送到登录页。
+ * `type: 'home'` 与 vite.config.ts 的 `UniPages.homePage` 必须同时指向本页。
  */
-definePage({ style: { enablePullDownRefresh: true } })
+definePage({ type: 'home', style: { enablePullDownRefresh: true } })
 
 const statusOptions = ACTIVITY_STATUS_OPTIONS
 

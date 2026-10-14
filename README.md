@@ -25,7 +25,7 @@
 │   ├── composables/         # useQuestionnaire / useDraft / useSubmit / useLogin 等
 │   ├── domain/questionnaire # 纯逻辑：题型映射、序列化、校验、计分
 │   ├── pages/questionnaire/ # 10 个作答侧页面
-│   ├── pages/editor/        # 2 个管理侧页面（问卷列表 / 可视化设计器）
+│   ├── pages/editor/        # 2 个管理侧页面（问卷列表＝**启动页** / 可视化设计器）
 │   ├── pages/login/         # 1 个登录页（会话过期后 reLaunch 到这里）
 │   ├── stores/              # session 等
 │   └── utils/               # request（请求层）/ crypto（RSA）/ storage / query（页面参数解析）
