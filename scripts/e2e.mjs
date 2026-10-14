@@ -66,6 +66,10 @@ async function centerOf(selector) {
     expression: `(() => {
       const el = document.querySelector(${JSON.stringify(selector)})
       if (!el) return null
+      // 先滚到视口中央再取坐标：吸顶/吸底栏会盖住贴边的元素，不滚动就按 rect
+      // 派发鼠标事件会落到栏上而不是元素上（实测多选第 2 项距吸底栏只剩 3px，
+      // 一旦吸底栏因「草稿已自动保存」提示变高 24px，点击就落到按钮上了）。
+      el.scrollIntoView({ block: 'center' })
       const b = el.getBoundingClientRect()
       if (b.width === 0 && b.height === 0) return null
       return { x: b.left + b.width / 2, y: b.top + b.height / 2 }
@@ -749,7 +753,10 @@ async function main() {
   })
   checks.push({
     name: '空卷提交后仍停留在作答页',
-    pass: afterEmptySubmit.text.includes('提交问卷'),
+    // 判据用 hash 而不是「页面文本里含『提交问卷』」：readState 只取 innerText 前 400 字，
+    // 而吸顶进度区与错误摘要之后，底部按钮的文案会落到 400 字之外 —— 那会让这条断言
+    // 随页面内容长度忽绿忽红，测的是文本长度而不是「有没有跳走」。
+    pass: afterEmptySubmit.hash.includes('/pages/questionnaire/index/index'),
   })
   checks.push({
     name: '空卷提交不弹二次确认框',
@@ -772,7 +779,8 @@ async function main() {
   console.log(`  提交后文本尾部：${afterPartial.text.slice(-200)}`)
   checks.push({
     name: '只答一题仍被拦住并提示必填',
-    pass: /必填/.test(afterPartial.text) && afterPartial.text.includes('提交问卷'),
+    // 同上：用 hash 判断「没跳走」，不依赖底部按钮文案是否落在 400 字窗口内
+    pass: /必填/.test(afterPartial.text) && afterPartial.hash.includes('/pages/questionnaire/index/index'),
   })
   checks.push({
     name: '只答一题未发出 submit 请求',
