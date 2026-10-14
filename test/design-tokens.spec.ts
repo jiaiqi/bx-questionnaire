@@ -1,14 +1,16 @@
 /**
  * 设计令牌一致性守卫
  *
- * 同一套色值目前有**三份**声明：
- *  - `src/styles/tokens.scss` —— CSS 变量（运行时主题覆盖的入口）
- *  - `src/uni.scss`          —— SCSS 变量（编译期计算，自动注入每个组件）
- *  - `uno.config.ts`         —— UnoCSS theme（工具类 `bg-bx-blue` 等）
+ * 真源只有一处：`src/styles/tokens.scss`（CSS 变量）。
  *
- * 三份都靠人手同步，而**改一处忘另一处不会报错**：`bg-bx-blue` 取的是 UnoCSS
- * 那份，`color: var(--bx-blue)` 取的是 CSS 变量那份 —— 同一个页面于是出现两种蓝，
- * 只有对比设计稿或截图时才发现。这条约束靠人记不住，固化成测试。
+ * 另外两处都要被这条测试管住，但方式不同：
+ *  - `uno.config.ts` —— UnoCSS theme。**必须与 tokens.scss 同值**：`bg-bx-blue` 取的是
+ *    UnoCSS 那份、`color: var(--bx-blue)` 取的是 CSS 变量那份，不同值就会出现两种蓝，
+ *    只有对比设计稿或截图才发现。
+ *  - `src/uni.scss` —— **不得再出现 `$bx-*`**。历史上有 16 个 `$bx-*` 副本，实测在
+ *    `src/` 内引用次数为 0：它不是"第三份真源"，而是死代码。早期版本的这条测试曾去校验
+ *    「uni.scss 与 tokens.scss 同值」，等于花力气维护一份没人用的副本 —— 现在反过来守住
+ *    「别把死副本写回来」。
  *
  * 与 `style-units.spec.ts` 的产物侧守卫同理：真正危险的不是「写错」，而是「写漏了
  * 但没人发现」。
@@ -45,10 +47,7 @@ const tokens = readVars(
   /--bx-([\w-]+):([^;]+);/g,
 )
 
-const uniVars = readVars(
-  readFileSync(join(SRC, 'uni.scss'), 'utf8'),
-  /\$bx-([\w-]+):([^;]+);/g,
-)
+const uniScss = readFileSync(join(SRC, 'uni.scss'), 'utf8')
 
 /**
  * UnoCSS 的色值**直接读实际生效的配置**，而不是再解析一遍源码：
@@ -67,27 +66,9 @@ describe('设计令牌一致性', () => {
    * 反向保护：正则或配置结构坏掉时，下面的比对会「因为两边都空」而全部通过。
    * 给一个下界，让「解析静默失效」也变红（同 dead-code.spec.ts 的做法）。
    */
-  it('三源都能解析到足量令牌（防止空比对）', () => {
-    expect(Object.keys(tokens).length, 'tokens.scss 解析到的令牌数').toBeGreaterThanOrEqual(16)
-    expect(Object.keys(uniVars).length, 'uni.scss 解析到的令牌数').toBeGreaterThanOrEqual(16)
-    expect(Object.keys(unoColors).length, 'uno.config.ts 解析到的色值数').toBeGreaterThanOrEqual(14)
-  })
-
-  it('uni.scss 的 $bx-* 与 tokens.scss 的 --bx-* 同值', () => {
-    const mismatched: string[] = []
-    for (const [name, value] of Object.entries(uniVars)) {
-      const cssValue = tokens[name]
-      if (cssValue === undefined) {
-        mismatched.push(`$bx-${name}：uni.scss 有，tokens.scss 缺 --bx-${name}`)
-      }
-      else if (cssValue !== value) {
-        mismatched.push(`$bx-${name}：tokens.scss=${cssValue} vs uni.scss=${value}`)
-      }
-    }
-    expect(
-      mismatched,
-      'SCSS 变量与 CSS 变量必须同值，否则编译期取值与运行期取值会不一致',
-    ).toEqual([])
+  it('两源都能解析到足量令牌（防止空比对）', () => {
+    expect(Object.keys(tokens).length, 'tokens.scss 解析到的令牌数').toBeGreaterThanOrEqual(30)
+    expect(Object.keys(unoColors).length, 'uno.config.ts 解析到的色值数').toBeGreaterThanOrEqual(18)
   })
 
   it('uno.config.ts 的 bx 色值与 tokens.scss 同值', () => {
@@ -119,5 +100,17 @@ describe('设计令牌一致性', () => {
       }
     }
     expect(missing, 'tokens.scss 新增颜色时须同步补 uno.config.ts，否则没有对应工具类').toEqual([])
+  })
+
+  /**
+   * 回归防护：`uni.scss` 里的 `$bx-*` 副本已被删除（实测零引用）。
+   * 这条红了 = 有人又把 CSS 变量复制成 SCSS 变量，制造出第二份没人用的真源。
+   */
+  it('uni.scss 不得再出现 $bx-* 副本', () => {
+    const copied = Object.keys(readVars(uniScss, /\$bx-([\w-]+):([^;]+);/g))
+    expect(
+      copied,
+      'uni.scss 只应保留 uni-app 模板变量；$bx-* 一律走 tokens.scss 的 CSS 变量（它才是唯一真源）',
+    ).toEqual([])
   })
 })

@@ -21,22 +21,34 @@ export default defineConfig({
   ],
   theme: {
     colors: {
-      // 与 styles/tokens.scss 保持同源：主色 #007AFF
+      /**
+       * 与 `src/styles/tokens.scss` 同源，**每个色值都必须在那边存在**
+       * （由 test/design-tokens.spec.ts 双向守护）。
+       *
+       * 这里的色值虽暂无工具类引用（src 里零 `bg-bx-*` 用法），仍完整镜像：
+       * 守卫的价值在于「改一处忘另一处会报错」，留一半反而制造盲区。
+       */
       bx: {
-        'blue': '#007AFF',
-        'blue-hover': '#0067DB',
-        'blue-active': '#0059BD',
+        'blue': '#0067DB',
+        'blue-hover': '#0059BD',
+        'blue-active': '#004DA3',
         'blue-soft': '#EAF3FF',
-        'bg': '#F5F6F8',
+        'bg': '#F2F4F7',
         'surface': '#FFFFFF',
         'text': '#1F2329',
         'text-2': '#646A73',
-        'text-3': '#8F959E',
+        'text-3': '#667085',
         'line': '#E5E6EB',
         'line-2': '#F0F1F3',
-        'danger': '#F53F3F',
-        'success': '#00B42A',
-        'warn': '#FF7D00',
+        'danger': '#D92C2C',
+        'danger-soft': '#FEF1F1',
+        'danger-line': '#F5C2C2',
+        'success': '#0F7B2F',
+        'success-soft': '#EAF7EE',
+        'success-line': '#B7E0C2',
+        'warn': '#C2410C',
+        'warn-soft': '#FDF3E7',
+        'warn-line': '#F0D0AE',
       },
     },
   },

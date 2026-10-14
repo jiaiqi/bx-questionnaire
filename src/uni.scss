@@ -1,7 +1,8 @@
 /**
  * uni-app 全局 SCSS 变量（自动注入到每个组件的 <style lang="scss">）
  *
- * 设计语言：简洁问卷风，主色 #007AFF，与 CSS 变量（styles/tokens.scss）同源。
+ * 设计语言：简洁问卷风。颜色、字阶、间距、圆角、阴影一律以 styles/tokens.scss
+ * 的 CSS 变量为准 —— 本文件不再镜像它们的 SCSS 副本（见文末说明）。
  * 组件内优先使用 CSS 变量（便于运行时覆盖），SCSS 变量仅用于编译期计算。
  */
 
@@ -54,20 +55,10 @@ $uni-spacing-col-lg: 12px;
 /* 透明度 */
 $uni-opacity-disabled: 0.3;
 
-/* 本工程自定义 token（与 styles/tokens.scss 的 CSS 变量一一对应） */
-$bx-blue: #007aff;
-$bx-blue-hover: #0067db;
-$bx-blue-active: #0059bd;
-$bx-blue-soft: #eaf3ff;
-$bx-text: #1f2329;
-$bx-text-2: #646a73;
-$bx-text-3: #8f959e;
-$bx-line: #e5e6eb;
-$bx-line-2: #f0f1f3;
-$bx-bg: #f5f6f8;
-$bx-surface: #ffffff;
-$bx-danger: #f53f3f;
-$bx-success: #00b42a;
-$bx-warn: #ff7d00;
-$bx-radius: 8px;
-$bx-radius-card: 12px;
+/*
+ * 这里原本有 16 个 `$bx-*` 变量，声称与 `styles/tokens.scss` 的 CSS 变量一一对应。
+ * 实测它们在 src 内**引用次数为 0** —— 既不是真源，也没有消费方，属于死副本。
+ * 本工程的颜色、字阶、间距、圆角、阴影一律走 tokens.scss 的 CSS 变量（那也是
+ * 运行时主题覆盖与宿主注入的唯一入口）；本文件只保留 uni-app 模板自带的 `$uni-*`。
+ * 别再把 CSS 变量复制成 SCSS 变量：test/design-tokens.spec.ts 会拦住这件事。
+ */

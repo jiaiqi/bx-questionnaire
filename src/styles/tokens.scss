@@ -3,34 +3,118 @@
  *
  * 使用 CSS 变量而非纯 SCSS 变量，便于运行时覆盖与宿主门户注入主题。
  * 小程序端支持 CSS 变量；`page` 会被 uni-app 编译为各端根节点。
+ *
+ * 这是**唯一真源**：`uno.config.ts` 的 theme 必须与之同值（由 test/design-tokens.spec.ts
+ * 守护）。`src/uni.scss` 不再保留 `$bx-*` 副本 —— 那 16 个变量在 src 内引用次数为 0，
+ * 留着只会让人以为"还有第三处在用"。
+ *
+ * 对比度约束：文字与语义色按 WCAG AA（正文 ≥4.5:1）选定。改色值前请用对比度公式复核，
+ * 本轮实测数据见 docs/UI-UX-视觉与体验优化建议.md。
  */
 
 page,
 :root {
-  /* 主色 */
-  --bx-blue: #007aff;
-  --bx-blue-hover: #0067db;
-  --bx-blue-active: #0059bd;
+  /* ── 主色 ─────────────────────────────────────────────────────────
+   * 基础色取 #0067db 而不是 #007aff：后者「白字作按钮底」只有 4.02:1，
+   * 达不到 AA 的 4.5:1；#0067db 是 5.30:1，而且它本来就是原来的 hover 色。
+   */
+  --bx-blue: #0067db;
+  --bx-blue-hover: #0059bd;
+  --bx-blue-active: #004da3;
   --bx-blue-soft: #eaf3ff;
 
-  /* 中性色 */
-  --bx-bg: #f5f6f8;
+  /* ── 中性色 ───────────────────────────────────────────────────────
+   * text-3 由 #8f959e（白底 3.02:1）改为 #667085（白底 4.97:1）：它承载 30+ 处
+   * 12–14px 的元信息文字，是本次对比度收益最大的一项。
+   * bg 比原来的 #f5f6f8 深一档，让白色卡片真正"浮"起来。
+   */
+  --bx-bg: #f2f4f7;
   --bx-surface: #ffffff;
   --bx-text: #1f2329;
   --bx-text-2: #646a73;
-  --bx-text-3: #8f959e;
+  --bx-text-3: #667085;
   --bx-line: #e5e6eb;
   --bx-line-2: #f0f1f3;
 
-  /* 语义色 */
-  --bx-danger: #f53f3f;
-  --bx-success: #00b42a;
-  --bx-warn: #ff7d00;
+  /* ── 语义色：文字 / 浅底 / 描边 三件套 ────────────────────────────
+   * 补浅底与描边，是因为此前同一个 danger 浅底出现了 `#fff5f5` 与
+   * `rgba(245,63,63,.1)` 两种写法 —— 没有配对令牌，各处只能自己编一个。
+   * 三个主色亦按 AA 提深（原值分别为 3.71 / 2.78 / 2.57:1）。
+   */
+  --bx-danger: #d92c2c;
+  --bx-danger-soft: #fef1f1;
+  --bx-danger-line: #f5c2c2;
+  --bx-success: #0f7b2f;
+  --bx-success-soft: #eaf7ee;
+  --bx-success-line: #b7e0c2;
+  --bx-warn: #c2410c;
+  --bx-warn-soft: #fdf3e7;
+  --bx-warn-line: #f0d0ae;
 
-  /* 尺寸与阴影 */
-  --bx-radius: 8px;
+  /* ── 字阶 ─────────────────────────────────────────────────────────
+   * 此前全工程出现 12 种字号（12/13/14 三分天下、共 128 处），没有阶梯就没有层级。
+   * display：登录页时钟与结果页分数；title：页面/卡片主标题；h2：题组标题；
+   * body：题干与正文；sub：选项与辅助正文；caption：元信息（下限 12px）。
+   */
+  --bx-font-display: 28px;
+  --bx-leading-display: 36px;
+  --bx-font-title: 20px;
+  --bx-leading-title: 28px;
+  --bx-font-h2: 17px;
+  --bx-leading-h2: 26px;
+  --bx-font-body: 15px;
+  --bx-leading-body: 24px;
+  --bx-font-sub: 13px;
+  --bx-leading-sub: 20px;
+  --bx-font-caption: 12px;
+  --bx-leading-caption: 18px;
+
+  /* ── 间距：4 基数 ────────────────────────────────────────────────
+   * 用法：卡片内 md、卡片间 sm、区块间 lg、页面左右 md/lg。
+   */
+  --bx-space-xs: 4px;
+  --bx-space-sm: 8px;
+  --bx-space-md: 16px;
+  --bx-space-lg: 24px;
+  --bx-space-xl: 32px;
+
+  /* ── 圆角：按语义分四档 ───────────────────────────────────────────
+   * 此前令牌之外还散着 4 / 10 / 15 / 2px 与硬编码的 `12px 12px 0 0`。
+   */
+  --bx-radius: 10px;
   --bx-radius-card: 12px;
-  --bx-shadow-card: 0 1px 2px rgba(31, 35, 41, 0.04), 0 2px 8px rgba(31, 35, 41, 0.04);
+  --bx-radius-chip: 999px;
+  --bx-radius-mark: 4px;
+
+  /* ── 层级阴影：四级 ───────────────────────────────────────────────
+   * 此前全站只有 1 个阴影令牌、且仅登录页在用：浮层、吸顶栏、吸底栏都只有
+   * 1px 描边，界面因此"没有前后关系"。
+   */
+  --bx-elev-1: 0 1px 2px rgba(31, 35, 41, 0.05), 0 2px 8px rgba(31, 35, 41, 0.05);
+  --bx-elev-2: 0 4px 14px rgba(31, 35, 41, 0.08);
+  --bx-elev-3: 0 12px 32px rgba(31, 35, 41, 0.14);
+  /* 兼容旧名（原卡片阴影）：指向 elev-1 */
+  --bx-shadow-card: var(--bx-elev-1);
+
+  /* ── 控件尺寸与交互 ───────────────────────────────────────────────
+   * 44px 此前手写 7 遍；禁用态透明度此前有 .4 / .45 / .5 / .6 四档。
+   */
+  --bx-control-height: 44px;
+  --bx-control-height-sm: 32px;
+  --bx-disabled-opacity: 0.45;
+  --bx-focus-ring: 2px solid var(--bx-blue);
+
+  /* ── 动效 ──────────────────────────────────────────────────────── */
+  --bx-duration-fast: 120ms;
+  --bx-duration-base: 180ms;
+  --bx-duration-slow: 280ms;
+  --bx-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* ── 叠层：z-index 此前是 1 / 10 / 40 / 60 / 900 五个裸值 ─────────── */
+  --bx-z-sticky: 10;
+  --bx-z-fixed: 40;
+  --bx-z-overlay: 60;
+  --bx-z-modal: 900;
 
   /* 内容列宽：PC 端居中定宽，移动端全宽（由容器宽度决定布局，见 §5.4） */
   --bx-content-width: 860px;
