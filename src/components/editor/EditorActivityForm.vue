@@ -272,9 +272,9 @@ function errorFor(field: string): string {
 
     <EditorFormField label="封面图" required :error="errorFor('activityImage')">
       <view class="bx-eaf__cover" role="button" tabindex="0" aria-label="上传封面图" @click="chooseCover">
-        <image v-if="coverUrl" class="bx-eaf__cover-img" :src="coverUrl" mode="aspectFill" />
+        <image v-if="coverUrl" class="bx-eaf__cover-img" :src="coverUrl" mode="aspectFill" alt="问卷封面预览" />
         <view v-else class="bx-eaf__cover-empty">
-          <text class="bx-eaf__cover-plus">＋</text>
+          <view class="bx-eaf__cover-plus" aria-hidden="true" />
           <text class="bx-eaf__cover-tip">{{ uploading ? '上传中…' : '点击上传' }}</text>
         </view>
       </view>
@@ -555,9 +555,28 @@ function errorFor(field: string): string {
   align-items: center;
 }
 
+/* 加号用两条线绘制（原为「＋」文字符号，字形随字体变化） */
 .bx-eaf__cover-plus {
-  font-size: 20px;
-  color: var(--bx-text-3);
+  position: relative;
+  width: 16px;
+  height: 16px;
+}
+
+.bx-eaf__cover-plus::before,
+.bx-eaf__cover-plus::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: var(--bx-text-3);
+  border-radius: 1px;
+}
+
+.bx-eaf__cover-plus::after {
+  transform: rotate(90deg);
 }
 
 .bx-eaf__cover-tip {

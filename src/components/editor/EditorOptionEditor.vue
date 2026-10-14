@@ -95,7 +95,7 @@ function onPointsInput(index: number, event: unknown): void {
             @touchstart.stop="begin(index, $event)"
             @mousedown.stop="begin(index, $event)"
           >
-            <text class="bx-editor-option-row__dots">⋮⋮</text>
+            <view class="bx-editor-option-row__dots" aria-hidden="true" />
           </view>
 
           <text class="bx-editor-option-row__letter">{{ letter(index) }}</text>
@@ -118,7 +118,7 @@ function onPointsInput(index: number, event: unknown): void {
             @click="emit('updateAnswer', index, !option.isAnswer)"
             @keydown.enter.prevent="emit('updateAnswer', index, !option.isAnswer)"
           >
-            <text class="bx-editor-option-row__answer-text">✓</text>
+            <view class="bx-editor-option-row__answer-text" aria-hidden="true" />
           </view>
 
           <input
@@ -139,7 +139,7 @@ function onPointsInput(index: number, event: unknown): void {
             @click="emit('moveUp', index)"
             @keydown.enter.prevent="emit('moveUp', index)"
           >
-            <text class="bx-editor-option-row__btn-text">↑</text>
+            <view class="bx-editor-option-row__btn-text bx-editor-option-row__btn-text--up" aria-hidden="true" />
           </view>
           <view
             class="bx-editor-option-row__btn"
@@ -150,7 +150,7 @@ function onPointsInput(index: number, event: unknown): void {
             @click="emit('moveDown', index)"
             @keydown.enter.prevent="emit('moveDown', index)"
           >
-            <text class="bx-editor-option-row__btn-text">↓</text>
+            <view class="bx-editor-option-row__btn-text bx-editor-option-row__btn-text--down" aria-hidden="true" />
           </view>
           <view
             class="bx-editor-option-row__btn bx-editor-option-row__btn--danger"
@@ -160,7 +160,7 @@ function onPointsInput(index: number, event: unknown): void {
             @click="emit('remove', index)"
             @keydown.enter.prevent="emit('remove', index)"
           >
-            <text class="bx-editor-option-row__btn-text">✕</text>
+            <view class="bx-editor-option-row__btn-text bx-editor-option-row__btn-text--close" aria-hidden="true" />
           </view>
         </view>
       </view>
@@ -186,8 +186,9 @@ function onPointsInput(index: number, event: unknown): void {
       @click="canAdd && emit('add')"
       @keydown.enter.prevent="canAdd && emit('add')"
     >
+      <view v-if="canAdd" class="bx-editor-option__add-icon" aria-hidden="true" />
       <text class="bx-editor-option__add-text">
-        {{ canAdd ? '＋ 添加选项' : `已达上限 ${MAX_OPTIONS} 个` }}
+        {{ canAdd ? '添加选项' : `已达上限 ${MAX_OPTIONS} 个` }}
       </text>
     </view>
 
@@ -229,6 +230,13 @@ function onPointsInput(index: number, event: unknown): void {
   overflow: hidden;
 }
 
+/*
+ * 选项行
+ *
+ * 契约（test/components/editor-layout.spec.ts 守住）：**不得声明 height**
+ * —— 行高由内联 style 提供（拖拽落点按 OPTION_ROW_HEIGHT 反算），
+ * CSS 再写一遍 height 会与内联样式打架。也不得有纵向 margin。
+ */
 .bx-editor-option-row {
   box-sizing: border-box;
   display: flex;
@@ -245,11 +253,11 @@ function onPointsInput(index: number, event: unknown): void {
 
 .bx-editor-option-row--dragging {
   opacity: 0.6;
-  background-color: var(--bx-blue-soft);
+  background-color: var(--bx-primary-soft);
 }
 
 .bx-editor-option-row--drop {
-  box-shadow: inset 3px 0 0 var(--bx-blue);
+  box-shadow: inset 3px 0 0 var(--bx-primary);
 }
 
 .bx-editor-option-row__handle {
@@ -262,10 +270,23 @@ function onPointsInput(index: number, event: unknown): void {
   user-select: none;
 }
 
+/*
+ * 拖拽把手：2×3 点阵
+ *
+ * 原为「⋮⋮」文字符号 —— 字形随字体变化、间距不一致。这里用「一个小圆 + 5 个
+ * box-shadow 偏移」画点阵，比 radial-gradient 背景更稳（部分小程序内核不支持）。
+ */
 .bx-editor-option-row__dots {
-  font-size: 12px;
-  color: var(--bx-text-3);
-  letter-spacing: -2px;
+  width: 3px;
+  height: 3px;
+  background-color: var(--bx-text-4);
+  border-radius: 50%;
+  box-shadow:
+    4px 0 0 var(--bx-text-4),
+    0 4px 0 var(--bx-text-4),
+    4px 4px 0 var(--bx-text-4),
+    0 8px 0 var(--bx-text-4),
+    4px 8px 0 var(--bx-text-4);
 }
 
 .bx-editor-option-row__letter {
@@ -291,6 +312,7 @@ function onPointsInput(index: number, event: unknown): void {
   justify-content: center;
   width: 22px;
   height: 22px;
+  cursor: pointer;
   border: 1px solid var(--bx-line);
   border-radius: 50%;
   background-color: var(--bx-surface);
@@ -301,13 +323,23 @@ function onPointsInput(index: number, event: unknown): void {
   background-color: var(--bx-success);
 }
 
+/*
+ * 正确答案的对勾
+ *
+ * 用两条边框旋转绘制（原为「✓」文字符号）。未选中时用 opacity 藏起来，
+ * 而不是像原来那样把文字颜色设成 transparent —— 后者的元素仍在布局里占位。
+ */
 .bx-editor-option-row__answer-text {
-  font-size: 12px;
-  color: transparent;
+  width: 9px;
+  height: 9px;
+  opacity: 0;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(45deg) translate(-1px, -1px);
 }
 
 .bx-editor-option-row__answer--on .bx-editor-option-row__answer-text {
-  color: #ffffff;
+  opacity: 1;
 }
 
 .bx-editor-option-row__points {
@@ -323,26 +355,67 @@ function onPointsInput(index: number, event: unknown): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 26px;
   height: 28px;
-  border-radius: var(--bx-radius);
+  cursor: pointer;
+  border-radius: var(--bx-radius-sm);
 }
 
+.bx-editor-option-row__btn:hover,
 .bx-editor-option-row__btn:active {
   background-color: var(--bx-line-2);
 }
 
-.bx-editor-option-row__btn--off .bx-editor-option-row__btn-text {
-  color: var(--bx-line);
-}
-
-.bx-editor-option-row__btn--danger .bx-editor-option-row__btn-text {
-  color: var(--bx-danger);
-}
-
 .bx-editor-option-row__btn-text {
-  font-size: 12px;
-  color: var(--bx-text-2);
+  width: 7px;
+  height: 7px;
+}
+
+/* 上 / 下移箭头：两条边框旋转 45°（不再用 ↑ ↓ 文字符号） */
+.bx-editor-option-row__btn-text--up {
+  border-top: 1.5px solid var(--bx-text-2);
+  border-left: 1.5px solid var(--bx-text-2);
+  transform: rotate(45deg);
+}
+
+.bx-editor-option-row__btn-text--down {
+  border-right: 1.5px solid var(--bx-text-2);
+  border-bottom: 1.5px solid var(--bx-text-2);
+  transform: rotate(45deg);
+}
+
+/* 已是首 / 尾：箭头变浅表示不可用 */
+.bx-editor-option-row__btn--off .bx-editor-option-row__btn-text--up,
+.bx-editor-option-row__btn--off .bx-editor-option-row__btn-text--down {
+  border-color: var(--bx-line);
+}
+
+/* 删除：两条交叉线（不再用 ✕ 文字符号） */
+.bx-editor-option-row__btn-text--close {
+  position: relative;
+  width: 9px;
+  height: 9px;
+}
+
+.bx-editor-option-row__btn-text--close::before,
+.bx-editor-option-row__btn-text--close::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 9px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: var(--bx-danger);
+  border-radius: 1px;
+}
+
+.bx-editor-option-row__btn-text--close::before {
+  transform: rotate(45deg);
+}
+
+.bx-editor-option-row__btn-text--close::after {
+  transform: rotate(-45deg);
 }
 
 .bx-editor-option__layer {
@@ -352,7 +425,9 @@ function onPointsInput(index: number, event: unknown): void {
   bottom: 0;
   left: 0;
   z-index: 10;
-  background-color: rgba(0, 122, 255, 0.04);
+  /* 原来写死的 rgba(0,122,255,.04) 是旧蓝；用主色浅底 + 透明度，主题可跟随 */
+  opacity: 0.6;
+  background-color: var(--bx-primary-soft);
 }
 
 .bx-editor-option__add {
@@ -361,22 +436,51 @@ function onPointsInput(index: number, event: unknown): void {
   justify-content: center;
   height: 36px;
   margin-top: 8px;
+  cursor: pointer;
   border: 1px dashed var(--bx-line);
   border-radius: var(--bx-radius);
 }
 
+.bx-editor-option__add:hover,
 .bx-editor-option__add:active {
-  border-color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
+  border-color: var(--bx-primary);
+  background-color: var(--bx-primary-soft);
 }
 
 .bx-editor-option__add--off {
+  cursor: not-allowed;
   opacity: var(--bx-disabled-opacity);
+}
+
+/* 加号用两条线绘制（原为「＋ 添加选项」里的全角加号） */
+.bx-editor-option__add-icon {
+  position: relative;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+}
+
+.bx-editor-option__add-icon::before,
+.bx-editor-option__add-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: var(--bx-primary);
+  border-radius: 1px;
+}
+
+.bx-editor-option__add-icon::after {
+  transform: rotate(90deg);
 }
 
 .bx-editor-option__add-text {
   font-size: 13px;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
 }
 
 .bx-editor-option__hint {

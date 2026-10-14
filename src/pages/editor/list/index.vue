@@ -193,7 +193,8 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
           @click="onCreate"
           @keydown.enter.prevent="onCreate"
         >
-          <text class="editor-list__create-text">＋ 新建</text>
+          <view class="editor-list__create-icon" aria-hidden="true" />
+          <text class="editor-list__create-text">新建</text>
         </view>
       </template>
     </BxNavBar>
@@ -278,8 +279,8 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
           @remove="onRemove(row)"
         />
 
-        <view v-if="loading" class="editor-list__loading">
-          <text class="editor-list__loading-text">加载中…</text>
+        <view v-if="loading" class="editor-list__skeleton" aria-busy="true">
+          <view v-for="n in 3" :key="n" class="editor-list__skeleton-row" />
         </view>
       </template>
     </view>
@@ -348,15 +349,42 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 10px;
-  background-color: var(--bx-blue);
-  border-radius: var(--bx-radius);
+  height: 36px;
+  padding: 0 14px;
+  cursor: pointer;
+  background-color: var(--bx-primary);
+  border-radius: var(--bx-radius-sm);
+}
+
+/* 加号用两条线绘制（原为「＋ 新建」里的全角加号，字形随字体变化） */
+.editor-list__create-icon {
+  position: relative;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+}
+
+.editor-list__create-icon::before,
+.editor-list__create-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: #fff;
+  border-radius: 1px;
+}
+
+.editor-list__create-icon::after {
+  transform: rotate(90deg);
 }
 
 .editor-list__create-text {
-  font-size: 13px;
-  color: #ffffff;
+  font-size: 14px;
+  color: #fff;
 }
 
 .editor-list__body {
@@ -485,16 +513,17 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   color: var(--bx-blue);
 }
 
-.editor-list__loading {
+/* 加载：三条骨架保持布局稳定（原来是居中一行「加载中…」） */
+.editor-list__skeleton {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.editor-list__loading-text {
-  font-size: 13px;
-  color: var(--bx-text-3);
+.editor-list__skeleton-row {
+  height: 76px;
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius-card);
 }
 
 .editor-list__pager {

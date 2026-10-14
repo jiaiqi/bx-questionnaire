@@ -82,8 +82,8 @@ const emit = defineEmits<{
 }
 
 .type-picker__cell:active {
-  border-color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
+  border-color: var(--bx-primary);
+  background-color: var(--bx-primary-soft);
 }
 
 .type-picker__name {

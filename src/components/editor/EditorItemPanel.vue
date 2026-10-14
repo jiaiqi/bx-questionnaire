@@ -196,7 +196,7 @@ function onTypeSelected(type: string): void {
       v-if="!hasOptions"
       label="正确答案"
       :error="errorFor('answer')"
-      hint="选填；选项类题目的正确答案请点选项右侧的 ✓"
+      hint="选填；选项类题目的正确答案请点选项右侧的对勾按钮"
     >
       <input
         class="bx-eip__input"
@@ -346,8 +346,8 @@ function onTypeSelected(type: string): void {
 .bx-eip__type {
   padding: 2px 8px;
   font-size: 12px;
-  color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
+  color: var(--bx-primary);
+  background-color: var(--bx-primary-soft);
   border-radius: 10px;
 }
 

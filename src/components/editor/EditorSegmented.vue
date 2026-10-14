@@ -62,8 +62,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 }
 
 .bx-seg__item--on {
-  border-color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
+  border-color: var(--bx-primary);
+  background-color: var(--bx-primary-soft);
 }
 
 .bx-seg__text {
@@ -72,7 +72,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 }
 
 .bx-seg__item--on .bx-seg__text {
-  color: var(--bx-blue);
+  color: var(--bx-primary);
   font-weight: 500;
 }
 </style>

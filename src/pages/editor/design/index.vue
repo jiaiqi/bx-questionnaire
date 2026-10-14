@@ -19,6 +19,8 @@
  * 不再同时承担两份职责。
  */
 
+import { computed } from 'vue'
+
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import EditorActivityForm from '@/components/editor/EditorActivityForm.vue'
@@ -26,7 +28,7 @@ import EditorItemPanel from '@/components/editor/EditorItemPanel.vue'
 import EditorItemRow from '@/components/editor/EditorItemRow.vue'
 import EditorTypePicker from '@/components/editor/EditorTypePicker.vue'
 import { useEditorDesign } from '@/composables/useEditorDesign'
-import { editorListUrl } from '@/domain/editor'
+import { editorListUrl, isSingleChoice, typeHasOptions } from '@/domain/editor'
 
 // 解构出来的名字与模板里用的一致，改模板时不必再去 composable 里找别名
 const {
@@ -73,6 +75,51 @@ const {
   onSave,
   onDiscard,
 } = useEditorDesign()
+
+/*
+ * ── 实时预览（宽屏第三栏）──
+ *
+ * 预览刻意**不**复用作答侧的 BxFieldRenderer：那边吃的是 `QuestionField`（平台行经
+ * mapper 归一化后的作答模型），而编辑器手里是 `EditorItem`（改动未保存的编辑模型）。
+ * 为预览再造一条 EditorItem → QuestionField 的转换，等于把 mapper 抄第二遍 ——
+ * 那份逻辑一旦分叉，预览就会"看起来很对、实际不对"。
+ *
+ * 所以这里只做**结构示意**：题干 + 必答标记 + 该题型的控件形态。它回答的是
+ * 「这道题在手机上长什么样、选项够不够」，不承担像素级还原。
+ */
+const previewHasOptions = computed(() => {
+  const item = selectedItem.value
+  return !!item && typeHasOptions(item.type) && item.options.length > 0
+})
+
+/** 选项题是单选还是多选：由 `isSingleChoice()` 判定（「选项」题型的单/多选在 attr 里） */
+const previewMulti = computed(() => {
+  const item = selectedItem.value
+  return !!item && !isSingleChoice(item.type, item.attr)
+})
+
+const previewIsText = computed(() => {
+  const type = selectedItem.value?.type ?? ''
+  return type === '文本' || type === '数字'
+})
+
+/** 非选项类题型的占位文案：与作答侧同一套措辞 */
+const previewPlaceholder = computed(() => {
+  switch (selectedItem.value?.type) {
+    case '数字':
+      return '请输入数字'
+    case '时间日期':
+      return '请选择日期'
+    case '地址':
+      return '请选择地区'
+    case '引用':
+      return '请选择'
+    case '图片':
+      return '上传图片'
+    default:
+      return '请输入'
+  }
+})
 </script>
 
 <template>
@@ -170,7 +217,8 @@ const {
               @click="addingType = !addingType"
               @keydown.enter.prevent="addingType = !addingType"
             >
-              <text class="design__add-text">＋ 添加题目</text>
+              <view class="design__add-icon" aria-hidden="true" />
+              <text class="design__add-text">添加题目</text>
             </view>
           </view>
 
@@ -201,7 +249,7 @@ const {
             <BxEmpty
               v-if="loaded && doc.items.length === 0"
               text="还没有题目"
-              tip="点上方「＋ 添加题目」开始设计"
+              tip="点上方「添加题目」开始设计"
             />
             <view v-if="loading" class="design__loading">
               <text class="design__loading-text">加载中…</text>
@@ -254,6 +302,57 @@ const {
             text="未选择题目"
             tip="从左侧点一道题开始编辑"
           />
+        </scroll-view>
+      </view>
+
+      <!--
+        ── 预览栏（宽屏第三栏）──
+        320 + 编辑区 + 360 在 1280px 以下会挤到没法编辑，所以窄屏直接不渲染它。
+        内容只做结构示意（题干 / 必答标记 / 该题型的控件形态），理由见 script 里
+        `previewHasOptions` 上方那段说明。
+      -->
+      <view class="design__pane design__pane--preview">
+        <view class="design__panel-head">
+          <text class="design__panel-title">实时预览</text>
+        </view>
+
+        <scroll-view class="design__scroll" scroll-y>
+          <view class="dv">
+            <view class="dv__screen">
+              <template v-if="selectedItem">
+                <view class="dv__qhead">
+                  <text class="dv__no">{{ selectedIndex + 1 }}</text>
+                  <text class="dv__title">
+                    {{ selectedItem.title || '（未填写题干）' }}
+                    <text v-if="selectedItem.required" class="dv__req">*</text>
+                  </text>
+                </view>
+                <text v-if="previewMulti" class="dv__hint">多选题 · 可选择多项</text>
+
+                <view v-if="previewHasOptions" class="dv__opts">
+                  <view
+                    v-for="option in selectedItem.options"
+                    :key="option.clientKey"
+                    class="dv__opt"
+                  >
+                    <view class="dv__mark" :class="{ 'dv__mark--box': previewMulti }" />
+                    <text class="dv__opt-text">{{ option.value || '（未填写选项）' }}</text>
+                  </view>
+                </view>
+
+                <view v-else class="dv__control">
+                  <text class="dv__placeholder">{{ previewPlaceholder }}</text>
+                  <view v-if="!previewIsText" class="dv__arrow" aria-hidden="true" />
+                </view>
+              </template>
+
+              <view v-else class="dv__empty">
+                <text class="dv__empty-text">从左侧点一道题，这里会显示它在手机上的样子</text>
+              </view>
+            </view>
+
+            <text class="dv__caption">结构示意：题干、必答标记与该题型的控件形态</text>
+          </view>
         </scroll-view>
       </view>
     </view>
@@ -436,15 +535,47 @@ const {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--bx-blue);
-  border-radius: var(--bx-radius);
+  height: 32px;
+  padding: 0 12px;
+  cursor: pointer;
+  border: 1px solid var(--bx-primary);
+  border-radius: var(--bx-radius-sm);
+}
+
+.design__add:hover,
+.design__add:active {
+  background-color: var(--bx-primary-soft);
+}
+
+/* 加号用两条线绘制（原为「＋ 添加题目」里的全角加号，字形随字体变化） */
+.design__add-icon {
+  position: relative;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+}
+
+.design__add-icon::before,
+.design__add-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 9px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: var(--bx-primary);
+  border-radius: 1px;
+}
+
+.design__add-icon::after {
+  transform: rotate(90deg);
 }
 
 .design__add-text {
   font-size: 13px;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
 }
 
 .design__type-panel {
@@ -540,8 +671,8 @@ const {
   }
 
   .design__pane--left {
-    flex: 0 0 420px;
-    max-width: 420px;
+    flex: 0 0 320px;
+    max-width: 320px;
     border-right: 1px solid var(--bx-line);
   }
 
@@ -558,6 +689,168 @@ const {
 
   .design__panel-head {
     justify-content: flex-start;
+  }
+}
+
+/* ── 预览栏 ──
+ * 默认不渲染：320 + 编辑区 + 360 在 1280px 以下会把编辑区挤到没法用。
+ */
+.design__pane--preview {
+  display: none;
+}
+
+.dv {
+  padding: 16px;
+}
+
+/* 只做视觉边界（像一台手机），高度随内容 */
+.dv__screen {
+  padding: 16px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
+}
+
+.dv__qhead {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* 序号胶囊：与作答页同一套语言，让预览看起来就是那道题 */
+.dv__no {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  margin-right: 10px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--bx-primary);
+  text-align: center;
+  background-color: var(--bx-primary-soft);
+  border-radius: var(--bx-radius-sm);
+}
+
+.dv__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--bx-text);
+  word-break: break-all;
+}
+
+.dv__req {
+  margin-left: 2px;
+  color: var(--bx-danger);
+}
+
+.dv__hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--bx-text-3);
+}
+
+.dv__opts {
+  margin-top: 16px;
+}
+
+.dv__opt {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius);
+}
+
+.dv__opt + .dv__opt {
+  margin-top: 8px;
+}
+
+.dv__mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  border: 1.5px solid var(--bx-text-4);
+  border-radius: 50%;
+}
+
+.dv__mark--box {
+  border-radius: 6px;
+}
+
+.dv__opt-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--bx-text-2);
+  word-break: break-all;
+}
+
+.dv__control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--bx-control-height);
+  margin-top: 16px;
+  padding: 12px 14px;
+  background-color: var(--bx-bg);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius);
+}
+
+.dv__placeholder {
+  font-size: 15px;
+  color: var(--bx-text-4);
+}
+
+.dv__arrow {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: 10px;
+  border-top: 1.5px solid var(--bx-text-3);
+  border-right: 1.5px solid var(--bx-text-3);
+  transform: rotate(45deg);
+}
+
+.dv__empty {
+  padding: 24px 0;
+  text-align: center;
+}
+
+.dv__empty-text {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--bx-text-3);
+}
+
+.dv__caption {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--bx-text-3);
+}
+
+/* 1280px 以上才并排第三栏 */
+@media (min-width: 1280px) {
+  .design__pane--preview {
+    display: flex;
+    flex: 0 0 360px;
+    flex-direction: column;
+    max-width: 360px;
+    background-color: var(--bx-surface);
+    border-left: 1px solid var(--bx-line);
   }
 }
 </style>

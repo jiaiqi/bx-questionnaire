@@ -81,7 +81,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
       @touchstart.stop="emit('dragStart', $event)"
       @mousedown.stop="emit('dragStart', $event)"
     >
-      <text class="bx-editor-item-row__handle-dots">⋮⋮</text>
+      <view class="bx-editor-item-row__handle-dots" aria-hidden="true" />
     </view>
 
     <text class="bx-editor-item-row__index">{{ props.index + 1 }}</text>
@@ -101,7 +101,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
         @click.stop="emit('moveUp')"
         @keydown.enter.prevent="emit('moveUp')"
       >
-        <text class="bx-editor-item-row__btn-text">↑</text>
+        <view class="bx-editor-item-row__btn-text bx-editor-item-row__btn-text--up" aria-hidden="true" />
       </view>
       <view
         class="bx-editor-item-row__btn"
@@ -112,7 +112,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
         @click.stop="emit('moveDown')"
         @keydown.enter.prevent="emit('moveDown')"
       >
-        <text class="bx-editor-item-row__btn-text">↓</text>
+        <view class="bx-editor-item-row__btn-text bx-editor-item-row__btn-text--down" aria-hidden="true" />
       </view>
       <view
         class="bx-editor-item-row__btn bx-editor-item-row__btn--danger"
@@ -122,7 +122,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
         @click.stop="emit('remove')"
         @keydown.enter.prevent="emit('remove')"
       >
-        <text class="bx-editor-item-row__btn-text">✕</text>
+        <view class="bx-editor-item-row__btn-text bx-editor-item-row__btn-text--close" aria-hidden="true" />
       </view>
     </view>
   </view>
@@ -142,7 +142,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
 }
 
 .bx-editor-item-row--selected {
-  background-color: var(--bx-blue-soft);
+  background-color: var(--bx-primary-soft);
 }
 
 .bx-editor-item-row--dragging {
@@ -151,7 +151,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
 
 /* 落点提示：用左侧色条，不改变高度（改高度会让落点计算自相矛盾） */
 .bx-editor-item-row--drop {
-  box-shadow: inset 3px 0 0 var(--bx-blue);
+  box-shadow: inset 3px 0 0 var(--bx-primary);
 }
 
 .bx-editor-item-row--issue .bx-editor-item-row__title {
@@ -168,17 +168,32 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
   user-select: none;
 }
 
+/*
+ * 拖拽把手：2×3 点阵
+ *
+ * 原先是一个「⋮⋮」文字符号 —— 字形随字体变化，两个竖排点在各平台的间距也不一致。
+ * 这里用「一个小圆 + 5 个 box-shadow 偏移」画点阵，比 radial-gradient 背景更稳
+ * （部分小程序内核不支持 radial-gradient）。
+ */
 .bx-editor-item-row__handle-dots {
-  font-size: 14px;
-  color: var(--bx-text-3);
-  letter-spacing: -2px;
+  width: 3px;
+  height: 3px;
+  background-color: var(--bx-text-4);
+  border-radius: 50%;
+  box-shadow:
+    5px 0 0 var(--bx-text-4),
+    0 5px 0 var(--bx-text-4),
+    5px 5px 0 var(--bx-text-4),
+    0 10px 0 var(--bx-text-4),
+    5px 10px 0 var(--bx-text-4);
 }
 
 .bx-editor-item-row__index {
   width: 24px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--bx-text-3);
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .bx-editor-item-row__main {
@@ -194,7 +209,8 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
 /* 单行省略：题目行必须保持固定高度，两行文字会溢出 */
 .bx-editor-item-row__title {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 20px;
   color: var(--bx-text);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,6 +220,7 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
   margin-top: 2px;
   overflow: hidden;
   font-size: 12px;
+  line-height: 16px;
   color: var(--bx-text-3);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -214,29 +231,71 @@ const title = computed(() => props.item.title.trim() || '未命名题目')
   align-items: center;
 }
 
+/* 36px 点击区：56px 的行高装得下，比原 32px 更接近触摸目标下限 */
 .bx-editor-item-row__btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--bx-radius);
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  border-radius: var(--bx-radius-sm);
 }
 
+.bx-editor-item-row__btn:hover,
 .bx-editor-item-row__btn:active {
   background-color: var(--bx-line-2);
 }
 
-.bx-editor-item-row__btn--off .bx-editor-item-row__btn-text {
-  color: var(--bx-line);
-}
-
-.bx-editor-item-row__btn--danger .bx-editor-item-row__btn-text {
-  color: var(--bx-danger);
-}
-
 .bx-editor-item-row__btn-text {
-  font-size: 14px;
-  color: var(--bx-text-2);
+  width: 8px;
+  height: 8px;
+}
+
+/* 上 / 下移箭头：两条边框旋转 45°（不再用 ↑ ↓ 文字符号） */
+.bx-editor-item-row__btn-text--up {
+  border-top: 2px solid var(--bx-text-2);
+  border-left: 2px solid var(--bx-text-2);
+  transform: rotate(45deg);
+}
+
+.bx-editor-item-row__btn-text--down {
+  border-right: 2px solid var(--bx-text-2);
+  border-bottom: 2px solid var(--bx-text-2);
+  transform: rotate(45deg);
+}
+
+/* 已是首 / 尾：箭头变浅表示不可用 */
+.bx-editor-item-row__btn--off .bx-editor-item-row__btn-text--up,
+.bx-editor-item-row__btn--off .bx-editor-item-row__btn-text--down {
+  border-color: var(--bx-line);
+}
+
+/* 删除：两条交叉线（不再用 ✕ 文字符号） */
+.bx-editor-item-row__btn-text--close {
+  position: relative;
+  width: 10px;
+  height: 10px;
+}
+
+.bx-editor-item-row__btn-text--close::before,
+.bx-editor-item-row__btn-text--close::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: var(--bx-danger);
+  border-radius: 1px;
+}
+
+.bx-editor-item-row__btn-text--close::before {
+  transform: rotate(45deg);
+}
+
+.bx-editor-item-row__btn-text--close::after {
+  transform: rotate(-45deg);
 }
 </style>

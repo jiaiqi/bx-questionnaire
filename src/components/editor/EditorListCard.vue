@@ -107,12 +107,16 @@ const period = computed(() => {
 .bx-editor-card {
   display: flex;
   align-items: center;
-  padding: 12px 14px;
-  margin-bottom: 10px;
+  padding: 14px;
   background-color: var(--bx-surface);
   box-shadow: var(--bx-elev-1);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
+}
+
+/* 相邻卡片留间距；用相邻选择器而不是每张卡自带 margin-bottom，末张不会多出一截空白 */
+.bx-editor-card + .bx-editor-card {
+  margin-top: 10px;
 }
 
 .bx-editor-card__main {
@@ -130,6 +134,7 @@ const period = computed(() => {
 
 .bx-editor-card__title {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   font-size: 15px;
   font-weight: 500;
@@ -138,22 +143,24 @@ const period = computed(() => {
   white-space: nowrap;
 }
 
+/* 状态徽章改用语义令牌（此前是硬编码的 rgba(0,180,42,.1) / rgba(255,125,0,.1)） */
 .bx-editor-card__status {
   flex-shrink: 0;
   margin-left: 8px;
-  padding: 1px 8px;
+  padding: 2px 9px;
   font-size: 12px;
-  border-radius: 10px;
+  line-height: 18px;
+  border-radius: var(--bx-radius-chip);
 }
 
 .bx-editor-card__status--running {
   color: var(--bx-success);
-  background-color: rgba(0, 180, 42, 0.1);
+  background-color: var(--bx-success-soft);
 }
 
 .bx-editor-card__status--pending {
   color: var(--bx-warn);
-  background-color: rgba(255, 125, 0, 0.1);
+  background-color: var(--bx-warn-soft);
 }
 
 .bx-editor-card__status--ended {
@@ -165,6 +172,7 @@ const period = computed(() => {
   margin-top: 4px;
   overflow: hidden;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -177,29 +185,49 @@ const period = computed(() => {
   margin-left: 10px;
 }
 
+/* 高度取小控件档（32px）；宽度按文案自适应但保证 ≥52px，三个按钮宽度一致 */
 .bx-editor-card__btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 30px;
-  margin-left: 6px;
-  padding: 0 8px;
+  min-width: 52px;
+  height: var(--bx-control-height-sm);
+  margin-left: 8px;
+  padding: 0 10px;
+  cursor: pointer;
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-sm);
 }
 
+.bx-editor-card__btn:hover,
 .bx-editor-card__btn:active {
-  border-color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
+  border-color: var(--bx-primary-line);
+  background-color: var(--bx-primary-soft);
+}
+
+.bx-editor-card__btn:hover .bx-editor-card__btn-text,
+.bx-editor-card__btn:active .bx-editor-card__btn-text {
+  color: var(--bx-primary);
+}
+
+.bx-editor-card__btn:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
 .bx-editor-card__btn--danger .bx-editor-card__btn-text {
   color: var(--bx-danger);
 }
 
+/* 危险按钮的悬停保持红色，不被上面的通用悬停规则改成主色 */
+.bx-editor-card__btn--danger:hover .bx-editor-card__btn-text,
+.bx-editor-card__btn--danger:active .bx-editor-card__btn-text {
+  color: var(--bx-danger);
+}
+
 .bx-editor-card__btn-text {
   font-size: 13px;
+  line-height: 18px;
   color: var(--bx-text-2);
 }
 </style>
