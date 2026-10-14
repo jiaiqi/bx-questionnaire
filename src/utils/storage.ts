@@ -23,6 +23,8 @@ export const STORAGE_KEYS = {
   ENTRY_PARAMS: `${PREFIX}entry_params`,
   SUBMIT_INFO: `${PREFIX}submit_info`,
   MY_BATCHES: `${PREFIX}my_batches`,
+  /** 「记住我」只记账号，**绝不记密码 */
+  REMEMBERED_USER: `${PREFIX}remembered_user`,
 } as const
 
 /**

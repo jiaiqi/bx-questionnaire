@@ -35,3 +35,36 @@ export function readQuery(
   }
   return safeDecode(String(raw))
 }
+
+/**
+ * 读取页面参数，并**解码到稳定**
+ *
+ * 与 `readQuery` 的区别：uni-app 在 H5 端会把 `reLaunch` 的 URL **再编码一次**，
+ * 于是「自己 `encodeURIComponent` 过一次」的参数到这里是**双重编码**的 ——
+ * 单次解码只解掉外层，页面就会显示 `%E7%99%BB%E5%BD%95...` 这种原文
+ * （实测：会话过期跳登录页时，提示语就是这样露出来的）。
+ *
+ * 循环解码到不再变化即可（最多 3 轮），对未编码的值是幂等的。
+ */
+export function readQueryDeeply(
+  query: Record<string, unknown> | undefined,
+  key: string,
+  fallback = '',
+): string {
+  const raw = query?.[key]
+  if (raw === undefined || raw === null || raw === '') {
+    return fallback
+  }
+
+  let current = String(raw)
+  // 上限给到 6：实测各端叠加出的编码层数并不一致（H5 的 reLaunch、小程序路由、
+  // 宿主 iframe 各会再编码一次），多解几轮是无害的 —— `safeDecode` 对已解码的值幂等。
+  for (let i = 0; i < 6; i += 1) {
+    const next = safeDecode(current)
+    if (next === current) {
+      break
+    }
+    current = next
+  }
+  return current
+}

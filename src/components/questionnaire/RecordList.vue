@@ -169,6 +169,16 @@ function onMoreKeydown(event: KeyboardEvent): void {
   void loadMore()
 }
 
+/**
+ * 未登录时给一个可点的出口
+ *
+ * 空态提示已经写明「登录后可查看账号下的全部记录」，但原来没有任何入口 ——
+ * 用户看完提示仍然不知道去哪里登录。
+ */
+function goLogin(): void {
+  uni.navigateTo({ url: '/pages/login/index' })
+}
+
 defineExpose({ refresh, loadMore })
 
 void fetchPage(true)
@@ -192,13 +202,19 @@ void fetchPage(true)
       </view>
     </view>
 
-    <BxEmpty
-      v-else-if="visibleRows.length === 0 && loaded"
-      text="暂无作答记录"
-      :tip="session.isLogin
-        ? '当前账号在本问卷下还没有作答记录'
-        : '未登录时只显示本机作答记录；换设备或清过浏览器数据就看不到，登录后可查看账号下的全部记录'"
-    />
+    <view v-else-if="visibleRows.length === 0 && loaded" class="records__empty">
+      <BxEmpty
+        text="暂无作答记录"
+        :tip="session.isLogin
+          ? '当前账号在本问卷下还没有作答记录'
+          : '未登录时只显示本机作答记录；换设备或清过浏览器数据就看不到，登录后可查看账号下的全部记录'"
+      />
+      <view v-if="!session.isLogin" class="records__retry">
+        <BxButton type="primary" size="small" @click="goLogin">
+          去登录
+        </BxButton>
+      </view>
+    </view>
 
     <view v-else class="records__list">
       <view v-if="loginHint" class="records__notice">

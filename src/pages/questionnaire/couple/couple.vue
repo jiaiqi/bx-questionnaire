@@ -37,6 +37,8 @@ const items = ref<AssessmentItem[]>([])
 const errorMessage = ref('')
 
 const userNo = computed(() => session.userInfo?.user_no ?? '')
+/** 未登录与「加载失败」必须分开：前者点「重新加载」永远不会成功 */
+const notLoggedIn = computed(() => !userNo.value)
 
 async function load(): Promise<void> {
   loading.value = true
@@ -88,6 +90,17 @@ function openResult(item: AssessmentItem): void {
   uni.navigateTo({ url: resultUrl(item.activityNo, item.batchNo) })
 }
 
+/**
+ * 未登录时给一个明确出口
+ *
+ * 原来这里只有「重新加载」—— 未登录的用户点多少次都不会有变化，
+ * 必须能直接去登录。登录成功后回到本页（`redirect` 由登录页安全解码）。
+ */
+function goLogin(): void {
+  const redirect = encodeURIComponent('/pages/questionnaire/couple/couple')
+  uni.navigateTo({ url: `/pages/login/index?redirect=${redirect}` })
+}
+
 function openRecord(item: AssessmentItem): void {
   uni.navigateTo({ url: answerUrl(item.activityNo, { formType: 'detail', status: '完成', fillBatchNo: item.batchNo }) })
 }
@@ -124,9 +137,15 @@ void load()
       </view>
 
       <view v-else-if="errorMessage" class="cp-page__state">
-        <BxEmpty :text="errorMessage" tip="请确认登录状态后重试" />
+        <BxEmpty
+          :text="errorMessage"
+          :tip="notLoggedIn ? '登录后可查看账号下的全部测评记录' : '请稍后重试'"
+        />
         <view class="cp-page__retry">
-          <BxButton type="ghost" size="small" @click="load">
+          <BxButton v-if="notLoggedIn" type="primary" size="small" @click="goLogin">
+            去登录
+          </BxButton>
+          <BxButton v-else type="ghost" size="small" @click="load">
             重新加载
           </BxButton>
         </view>

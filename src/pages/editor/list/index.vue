@@ -26,6 +26,7 @@ import EditorListCard from '@/components/editor/EditorListCard.vue'
 import { ACTIVITY_STATUS_OPTIONS, useEditorList } from '@/composables/useEditorList'
 import { editorCreateUrl, editorDesignUrl } from '@/domain/editor/routes'
 import { answerUrl } from '@/domain/questionnaire/routes'
+import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { confirmDialog, toast } from '@/utils/ui'
 
@@ -92,6 +93,18 @@ function readInput(event: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
+const session = useSessionStore()
+
+/**
+ * 未登录时的显式入口
+ *
+ * 列表页的所有能力（查询 / 新建 / 编辑 / 删除）都要登录态：会话过期会被请求层
+ * 自动送到登录页，但在那之前用户没有任何主动登录的入口。
+ */
+function onLogin(): void {
+  uni.navigateTo({ url: '/pages/login/index' })
+}
+
 function onKeywordInput(event: unknown): void {
   const value = readInput(event)
   if (value !== null) {
@@ -156,6 +169,17 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   <view class="editor-list">
     <BxNavBar title="问卷列表">
       <template #extra>
+        <view
+          v-if="!session.isLogin"
+          class="editor-list__login"
+          role="button"
+          tabindex="0"
+          aria-label="登录"
+          @click="onLogin"
+          @keydown.enter.prevent="onLogin"
+        >
+          <text class="editor-list__login-text">登录</text>
+        </view>
         <view
           class="editor-list__create"
           role="button"
@@ -291,6 +315,28 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--bx-bg);
+}
+
+.editor-list__login {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  margin-right: 8px;
+  border: 1px solid var(--bx-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* 键盘用户要能看到焦点在哪 */
+.editor-list__login:focus-visible {
+  outline: 2px solid var(--bx-blue);
+  outline-offset: 2px;
+}
+
+.editor-list__login-text {
+  font-size: 13px;
+  color: var(--bx-text-2);
 }
 
 .editor-list__create {

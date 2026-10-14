@@ -53,12 +53,14 @@ describe('页面路径一致性', () => {
   const routes = collectRoutes()
 
   it('应收集到全部页面路由', () => {
-    // 10 个作答/结果页 + 2 个编辑器页（问卷列表、设计器）
-    expect(routes.size).toBe(12)
+    // 10 个作答/结果页 + 2 个编辑器页（问卷列表、设计器）+ 1 个登录页
+    expect(routes.size).toBe(13)
     expect(routes.has('/pages/questionnaire/cover/index')).toBe(true)
     expect(routes.has('/pages/questionnaire/index/index')).toBe(true)
     expect(routes.has('/pages/editor/list/index')).toBe(true)
     expect(routes.has('/pages/editor/design/index')).toBe(true)
+    // 会话过期后由 App.vue 的请求层回调 reLaunch 到这里，路径写错会直接白屏
+    expect(routes.has('/pages/login/index')).toBe(true)
   })
 
   it('代码里硬编码的页面路径都应存在对应页面文件', () => {

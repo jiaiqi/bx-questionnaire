@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { readQuery, safeDecode } from '@/utils/query'
+import { readQuery, readQueryDeeply, safeDecode } from '@/utils/query'
 
 describe('safeDecode（安全解码）', () => {
   it('解码已编码的中文', () => {
@@ -62,5 +62,40 @@ describe('readQuery（读取页面参数）', () => {
   it('formType 支持默认值', () => {
     expect(readQuery({}, 'formType', 'form')).toBe('form')
     expect(readQuery({ formType: 'detail' }, 'formType', 'form')).toBe('detail')
+  })
+})
+
+/**
+ * 解码到稳定
+ *
+ * 回归防护：会话过期跳登录页时，提示语曾以 `%E7%99%BB%E5%BD%95...` 的形式
+ * 显示在页面上 —— uni-app 在 H5 端会把 `reLaunch` 的 URL 再编码一次，
+ * 于是自己 encode 过的参数变成双重编码，单次解码只解掉外层。
+ * 这条红了 = 登录页会重新露出编码原文（或回跳地址被解错）。
+ */
+describe('readQueryDeeply（解码到稳定）', () => {
+  it('双重编码的值能解到原文', () => {
+    const once = encodeURIComponent('登录已过期，请重新登录')
+    const twice = encodeURIComponent(once)
+
+    expect(readQueryDeeply({ notice: twice }, 'notice')).toBe('登录已过期，请重新登录')
+  })
+
+  it('只编码一次的值同样能解（小程序端不会二次编码）', () => {
+    expect(readQueryDeeply({ notice: encodeURIComponent('登录已过期') }, 'notice')).toBe('登录已过期')
+  })
+
+  it('未编码的值是幂等的', () => {
+    expect(readQueryDeeply({ activity_no: '20261010100256000001' }, 'activity_no'))
+      .toBe('20261010100256000001')
+  })
+
+  it('含裸 % 的值不会被解坏，也不会抛错', () => {
+    expect(readQueryDeeply({ title: '完成率 100%' }, 'title')).toBe('完成率 100%')
+  })
+
+  it('缺失或空值时返回默认值', () => {
+    expect(readQueryDeeply(undefined, 'notice', '请登录')).toBe('请登录')
+    expect(readQueryDeeply({ notice: '' }, 'notice', '请登录')).toBe('请登录')
   })
 })
