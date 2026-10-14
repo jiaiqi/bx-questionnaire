@@ -515,7 +515,7 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
 }
 
 .editor-list__pager-btn--off {
-  opacity: 0.4;
+  opacity: var(--bx-disabled-opacity);
 }
 
 .editor-list__pager-text {

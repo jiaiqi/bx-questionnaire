@@ -215,7 +215,7 @@ watch(() => props.field.key, () => {
 }
 
 .bx-ref__control--disabled {
-  opacity: 0.6;
+  opacity: var(--bx-disabled-opacity);
 }
 
 .bx-ref__text {

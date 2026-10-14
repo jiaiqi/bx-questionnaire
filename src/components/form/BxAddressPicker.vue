@@ -267,7 +267,7 @@ const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
 }
 
 .bx-address__control--disabled {
-  opacity: 0.6;
+  opacity: var(--bx-disabled-opacity);
 }
 
 .bx-address__text {

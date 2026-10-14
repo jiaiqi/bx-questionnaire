@@ -133,7 +133,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .bx-button--disabled {
-  opacity: 0.45;
+  opacity: var(--bx-disabled-opacity);
 }
 
 .bx-button__loading {

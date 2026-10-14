@@ -107,7 +107,7 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
 
 .bx-option--disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: var(--bx-disabled-opacity);
 }
 
 /*

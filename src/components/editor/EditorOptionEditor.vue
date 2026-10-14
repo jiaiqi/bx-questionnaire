@@ -371,7 +371,7 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 .bx-editor-option__add--off {
-  opacity: 0.5;
+  opacity: var(--bx-disabled-opacity);
 }
 
 .bx-editor-option__add-text {

@@ -312,7 +312,7 @@ const {
 }
 
 .design__nav-save--off {
-  opacity: 0.6;
+  opacity: var(--bx-disabled-opacity);
 }
 
 .design__nav-save-text {
