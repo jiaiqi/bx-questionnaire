@@ -404,11 +404,20 @@ font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei'
 | a11y 静态扫描 | 通过（`[role]` 均带 `tabindex`、`<image>` 均带 `alt`） |
 | CDP 实测（作答页） | 真实网关数据：4 题渲染、选中 → 进度 +1、空卷提交 → 错误摘要 3 条、滚到底最后一道题在吸底栏上方 84px、横向溢出 0 |
 | CDP 实测（设计器布局） | 1440px：左栏 `flex-basis:320px` + 预览栏 `display:flex`；1000px：预览栏 `display:none` |
+| `pnpm a11y`（parkDev 票据） | **9 页全部通过**：无名称 0 / 缺 alt 0 / 键盘到不了 0 / 焦点不可见 0；另有 1 项平台限制（名称只挂在 `uni-input` 壳上，不计失败） |
+| `pnpm e2e`（parkDev 票据） | **59 项检查全部通过**（默认不提交，只作答到暂存点） |
+| CDP 实测（结果页 / 设计器页，已登录） | 结果页：分数与逐题回顾正常渲染、溢出 0；设计器页：三栏 + 预览栏 `display:flex`、`dvScreen` 渲染、溢出 0 |
 
-### 已知限制（未能覆盖的验证）
+### 收口后补的三处修复（都是本轮验收暴露出来的）
 
-1. **作答结果页与设计器页未在真实登录态下渲染验证**：验证期间 `.env.local` 的联调票据已过期（有效期约 1.5 小时），
-   这两页会 `reLaunch` 到登录页。替代验证：编译 / 类型检查 / `check:mp` / 独立复核页截图 / 静态扫描。
-   补验方式：`BX_USER=<账号> BX_PWD=<密码> node scripts/bx-login.mjs --write` 后重新跑 CDP 检查。
-2. **`pnpm a11y` 与 `pnpm e2e` 未跑**：两者都要求 dev server 可达**且**票据有效，属同一依赖。
-3. **小程序端只做了产物级校验**，未在微信开发者工具里真机/模拟器目视核对。
+| 问题 | 修法 |
+| --- | --- |
+| 吸底栏里「草稿已自动保存」按需出现，会把栏顶高 24px 并盖住贴边选项（实测多选第 2 项距栏只剩 3px） | footer 加 `min-height`（92px + 安全区）让高度恒定；滚动区 `padding-bottom` 84→100px |
+| 设计器题目行把后端自带的「1. 」前缀与左侧序号列同时显示 | 标题改用 `stripQuestionTitleIndex()`，与作答页同一个函数 |
+| 端到端脚本的 `clickSelector` 不滚动就按 rect 派发鼠标事件，且两处断言依赖「页面文本前 400 字」 | `centerOf()` 先 `scrollIntoView({block:'center'})`；两处「有没有跳走」改用 hash 判断 |
+
+### 已知限制
+
+1. **小程序端只做了产物级校验**（`pnpm check:mp`），未在微信开发者工具里真机/模拟器目视核对。
+2. **e2e 只覆盖到暂存草稿为止**（脚本默认不加 `--submit`，避免往服务端写正式作答记录）；提交成功后的结果页跳转由 CDP 实测单独覆盖。
+3. **`a11y` 审计有 1 项平台限制**：`uni-app` 把 `aria-label` 留在 `uni-input` / `uni-textarea` 壳上，不转发给内层原生控件 —— 已由 `useAriaLabel` 尽量补齐，项数从历史值降到 1，但未归零。
