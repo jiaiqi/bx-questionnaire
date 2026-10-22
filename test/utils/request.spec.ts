@@ -450,6 +450,7 @@ describe('resolveGateway（去斜杠与宿主注入）', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
     delete (globalThis as Record<string, unknown>).window
+    delete (globalThis as Record<string, unknown>).sessionStorage
   })
 
   it('网关带末尾斜杠时去掉它，且不误伤首字符', () => {
@@ -499,6 +500,39 @@ describe('resolveGateway（去斜杠与宿主注入）', () => {
         throw new Error('跨域')
       },
     })
+    expect(resolveGateway()).toBe('http://from-env.com/bxapi')
+  })
+
+  /**
+   * 2026-10-21：H5 改为部署在 /quest/，接口前缀优先从站点根目录的 js/server.js 读取。
+   * server.js 在独立打开时把 pathConfig 挂到**当前窗口**（`top.window.pathConfig`，
+   * 非 iframe 时 top 即自身），同时写一份 sessionStorage 副本用于跨域 iframe 兜底。
+   */
+  it('同窗口 pathConfig（server.js 直接注入）优先于构建期环境变量', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://from-env.com/bxapi')
+    ;(globalThis as Record<string, unknown>).window = {
+      pathConfig: { gateway: 'http://from-window.com/bxapi/' },
+    }
+    expect(resolveGateway()).toBe('http://from-window.com/bxapi')
+  })
+
+  it('window 不可读时回退 sessionStorage.pathConfig（跨域 iframe 兜底）', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://from-env.com/bxapi')
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      get() {
+        throw new Error('跨域')
+      },
+    })
+    ;(globalThis as Record<string, unknown>).sessionStorage = {
+      getItem: (k: string) => (k === 'pathConfig' ? JSON.stringify({ gateway: 'http://from-session.com/bxapi' }) : null),
+    }
+    expect(resolveGateway()).toBe('http://from-session.com/bxapi')
+  })
+
+  it('pathConfig 的 gateway 为空串时继续回退到构建期环境变量', () => {
+    vi.stubEnv('VITE_BX_GATEWAY', 'http://from-env.com/bxapi')
+    ;(globalThis as Record<string, unknown>).window = { pathConfig: { gateway: '   ' } }
     expect(resolveGateway()).toBe('http://from-env.com/bxapi')
   })
 })

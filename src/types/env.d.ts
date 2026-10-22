@@ -16,8 +16,10 @@ interface ImportMetaEnv {
   readonly VITE_BX_WX_APPID?: string
   /** 小程序 appid */
   readonly VITE_BX_WX_MP_APPID?: string
-  /** H5 路由基础路径 */
+  /** H5 路由基础路径（生产为 /quest/） */
   readonly VITE_H5_BASE?: string
+  /** 运行时配置脚本地址，默认 /js/server.js（站点根目录，与 vpages、dataview 等 H5 共用） */
+  readonly VITE_SERVER_CONFIG_URL?: string
 }
 
 interface ImportMeta {

@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
 
   return {
-  // H5 部署在子路径时资源路径必须带前缀，否则整站 404（生产为 /questionnaire/）
+  // H5 部署在子路径时资源路径必须带前缀，否则整站 404（生产为 /quest/）
     base: env.VITE_H5_BASE || '/',
     resolve: {
       alias: {
@@ -23,7 +23,21 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
-    // https://uni-helper.js.org/vite-plugin-uni-pages
+      // 生产 H5 部署在站点根目录的 /quest/ 下，接口前缀由**同域根目录**的 /js/server.js 运行时注入
+      // （与 vpages、dataview 等其它 H5 共用同一份配置；它写 window.top.pathConfig.gateway）。
+      // 这里只在构建产物里插入该 script：本地 dev 不会去请求不存在的 /js/server.js（避免 404 噪音），
+      // dev 仍走 .env.development 的 VITE_BX_GATEWAY。
+      // script 放在 </head> 前，先于 <script type="module" src="/src/main.ts">（module 默认 defer）执行，
+      // 保证 resolveGateway() 首次调用时 pathConfig 已就绪。
+      {
+        name: 'bx-inject-server-config',
+        apply: 'build',
+        transformIndexHtml(html: string) {
+          const src = env.VITE_SERVER_CONFIG_URL || '/js/server.js'
+          return html.replace('</head>', `  <script src="${src}"></script>\n</head>`)
+        },
+      },
+      // https://uni-helper.js.org/vite-plugin-uni-pages
       // 启动页 = 问卷列表。刻意不选作答页：作答页必须带 activity_no，
       // 从根路径直接打开只会落到「缺少活动编号」的死路上。
       // 这里与 `pages/editor/list/index.vue` 的 `definePage({ type: 'home' })` 必须一致。
