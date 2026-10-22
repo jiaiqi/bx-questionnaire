@@ -178,7 +178,17 @@ try {
   await sleep(300)
   await cdp.send('Page.navigate', { url: `${BASE}/#/pages/editor/design/index?activity_no=${ACTIVITY_NO}` })
 
-  let text = await cdp.waitText(t => t.includes('题目') && t.includes('保存'))
+  /**
+   * 等「已载入」而不是等任意文本
+   *
+   * 旧条件是 `t.includes('题目') && t.includes('保存')` —— **新建态的壳里同样
+   * 有这两个词**（左栏「题目」分组 + 导航栏「保存」按钮），于是条件立刻成立，
+   * 拿到的是还没 load() 落地的空表单。V2 改造后壳的结构恰好把这两个词摆在了
+   * 前面，这个等待条件就从「偶尔提前命中」变成了「必然提前命中」。
+   *
+   * 判据改成导航标题：已载入是「问卷设计」，新建态是「新建问卷」。
+   */
+  let text = await cdp.waitText(t => t.includes('问卷设计'))
   check('设计器加载出已有问卷', text.includes('问卷设计'), text.slice(0, 40).replace(/\n/g, ' / '))
   check('页面上没有「放弃」按钮（刚载入不算有改动）', !text.includes('放弃'))
 

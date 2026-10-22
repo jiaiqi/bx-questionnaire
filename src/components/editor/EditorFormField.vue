@@ -5,6 +5,8 @@
  * 抽出来的理由是**错误态只有一处实现**：如果每个字段各自决定怎么显示错误，
  * 迟早会出现「有的字段红字提示、有的字段只变个边框」，用户就得学会两套暗示。
  * 这里保证所有字段的报错位置与样式一致。
+ *
+ * 字段间距 16px、分组标题 12/600（规范 §7.6）。
  */
 
 interface Props {
@@ -39,7 +41,8 @@ const props = withDefaults(defineProps<Props>(), {
 .bx-efield {
   display: flex;
   flex-direction: column;
-  margin-bottom: 14px;
+  /* 字段之间 16px（规范 §7.6） */
+  margin-bottom: 16px;
 }
 
 .bx-efield__head {
@@ -50,24 +53,29 @@ const props = withDefaults(defineProps<Props>(), {
 
 .bx-efield__label {
   font-size: 13px;
+  line-height: 20px;
   color: var(--bx-text-2);
 }
 
+/* 必填星号紧跟标签，红色 */
 .bx-efield__req {
   margin-left: 3px;
   font-size: 13px;
+  line-height: 20px;
   color: var(--bx-danger);
 }
 
 .bx-efield__error {
-  margin-top: 5px;
+  margin-top: 6px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-danger);
 }
 
 .bx-efield__hint {
-  margin-top: 5px;
+  margin-top: 6px;
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
 }
 </style>

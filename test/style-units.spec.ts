@@ -89,14 +89,17 @@ describe('样式单位约束', () => {
     }
     const css = readFileSync(wxss, 'utf8')
     /**
-     * 允许清单：UnoCSS 预设产出的固定工具类（本项目未使用，仅随预设带出）
+     * 允许清单：**空**。
      *
-     * 比的是**声明体**而不是整条规则文本：同一个工具类会被生成出多个选择器
-     * （`.px` / `[px=""]` / 哈希占位类），拿整条规则比会在选择器变化时误报，
-     * 而这条约束真正关心的是「rpx 出现在哪条声明里」。
-     * 与 `scripts/check-mp.mjs` 里的产物检查保持同一口径。
+     * 此前这里放过一条 `padding-left:32rpx;padding-right:32rpx`（UnoCSS 预设的
+     * px→rpx 换算产物）。现在已在 `uno.config.ts` 用
+     * `presetUni({ remRpx: false })` **从根源关掉了换算** —— 本项目零 UnoCSS
+     * 工具类引用，关掉没有任何渲染影响。
+     *
+     * 所以这里的容忍度是零：产物里再出现 rpx，要么是有人在 .vue 里写了 rpx，
+     * 要么是有人重新打开了预设的换算开关 —— 两种都要红。
      */
-    const ALLOWED_DECLS = ['padding-left:32rpx;padding-right:32rpx']
+    const ALLOWED_DECLS: string[] = []
     const offenders: string[] = []
     const re = /[^{}]*\{[^{}]*\d(?:\.\d+)?rpx[^{}]*\}/g
     let m = re.exec(css)

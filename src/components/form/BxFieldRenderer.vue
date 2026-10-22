@@ -114,13 +114,14 @@ const kind = computed(() => {
 <style lang="scss" scoped>
 .bx-field-unsupported {
   padding: 10px 12px;
-  background-color: var(--bx-bg);
-  border: 1px dashed var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px dashed var(--bx-line-strong);
   border-radius: var(--bx-radius);
 }
 
 .bx-field-unsupported__text {
-  font-size: 13px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-3);
 }
 </style>

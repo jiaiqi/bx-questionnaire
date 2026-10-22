@@ -14,13 +14,26 @@
  *
  * 之所以一处生效全站：组件引用的是 `--bx-primary`（别名），别名指向 `--bx-blue`，
  * 因此主题只要覆盖 `--bx-blue*` 即可，连历史代码里的 `var(--bx-blue)` 也一起跟随。
+ *
+ * V2（2026-10-21）：「通用」在这里落地 —— 一套结构与排版能配多枚主色。
+ * 新增主题只需覆盖这五个变量，不用碰任何组件。
  */
 
 page[data-theme='health'],
 :root[data-theme='health'] {
-  --bx-blue: #0d9488;
-  --bx-blue-hover: #0b7f75;
-  --bx-blue-active: #096a62;
-  --bx-blue-soft: #ecfdf5;
-  --bx-primary-line: #99f6e4;
+  --bx-blue: #0f766e;
+  --bx-blue-hover: #0c5f59;
+  --bx-blue-active: #094a45;
+  --bx-blue-soft: #f0f9f7;
+  --bx-primary-line: #a7e3db;
+}
+
+/* 石墨主题：主色退成近黑，只保留结构与层次 —— 给「不想有品牌色」的部署用 */
+page[data-theme='ink'],
+:root[data-theme='ink'] {
+  --bx-blue: #23272e;
+  --bx-blue-hover: #14171b;
+  --bx-blue-active: #000000;
+  --bx-blue-soft: #f2f3f5;
+  --bx-primary-line: #dcdee2;
 }

@@ -11,6 +11,9 @@
  *
  * 配置优先取 `item_type_attr`（老工程写法），行上的独立列（servicename / refed_col /
  * key_disp_col / srv_app）作为兜底 —— 真实表里这两种来源都存在。
+ *
+ * V2（规范 §6.2）：选择入口与其它输入类同款（内嵌底 + 描边 + 44px 高）；
+ * 底部弹层用 `--bx-elev-3`，展开 200ms ease-out。
  */
 
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
@@ -244,17 +247,21 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   width: 100%;
 }
 
+/* 选择入口：与其它输入类同款（规范 §6.2） */
 .bx-ref__control {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: var(--bx-control-height);
-  padding: 12px 14px;
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  height: var(--bx-control-height-md);
+  padding: 0 14px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
   cursor: pointer;
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .bx-ref__control:focus-visible {
@@ -264,20 +271,24 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 
 .bx-ref__control--disabled {
   cursor: not-allowed;
-  opacity: var(--bx-disabled-opacity);
+  color: var(--bx-text-2);
+  background-color: var(--bx-surface-2);
+  border-color: transparent;
 }
 
 .bx-ref__text {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
 }
 
 .bx-ref__placeholder {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-4);
 }
 
@@ -302,7 +313,8 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background-color: rgba(16, 24, 40, 0.45);
+  background-color: var(--bx-overlay);
+  animation: bx-ref-mask-in var(--bx-duration-base) var(--bx-ease-out) both;
 }
 
 .bx-ref__panel {
@@ -312,7 +324,32 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   max-height: 70vh;
   padding-bottom: env(safe-area-inset-bottom);
   background-color: var(--bx-surface);
-  border-radius: var(--bx-radius-card) var(--bx-radius-card) 0 0;
+  border-radius: var(--bx-radius-lg) var(--bx-radius-lg) 0 0;
+  box-shadow: var(--bx-elev-3);
+  /* 展开：位移 + 淡入，200ms ease-out（规范 §5.1「展开」档） */
+  animation: bx-ref-panel-in var(--bx-duration-base) var(--bx-ease-out) both;
+}
+
+@keyframes bx-ref-mask-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bx-ref-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .bx-ref__head {
@@ -324,14 +361,15 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 }
 
 .bx-ref__title {
-  font-size: 17px;
+  font-size: var(--bx-font-h2);
   font-weight: 600;
+  line-height: var(--bx-leading-h2);
   color: var(--bx-text);
 }
 
 .bx-ref__close {
   padding: 4px;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
   color: var(--bx-primary);
   cursor: pointer;
 }
@@ -351,14 +389,14 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 }
 
 .bx-ref__state-text {
-  font-size: 13px;
+  font-size: var(--bx-font-sub);
   color: var(--bx-text-3);
 }
 
 .bx-ref__retry {
   display: block;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: var(--bx-font-sub);
   color: var(--bx-primary);
   cursor: pointer;
 }
@@ -378,6 +416,7 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   outline-offset: -2px;
 }
 
+/* 选中：主色浅底（与选项行同一套「落笔」语言） */
 .bx-ref__item--active {
   background-color: var(--bx-primary-soft);
 }
@@ -385,7 +424,8 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 .bx-ref__item-label {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
 }
 
@@ -410,15 +450,17 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 }
 
 .bx-ref__hint {
-  font-size: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
 }
 
+/* 确定：与 BxButton 的 primary 同款（墨蓝实心 + 白字） */
 .bx-ref__confirm {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: var(--bx-control-height-md);
   padding: 0 24px;
   background-color: var(--bx-primary);
   border-radius: var(--bx-radius);
@@ -431,7 +473,7 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 }
 
 .bx-ref__confirm-text {
-  font-size: 15px;
+  font-size: var(--bx-font-body);
   font-weight: 500;
   color: #fff;
 }

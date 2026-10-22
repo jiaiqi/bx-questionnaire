@@ -6,6 +6,9 @@
  * 这里改为按当前用户已完成的作答记录动态聚合，同一问卷多次作答取最近一次。
  *
  * 入参：无（依赖登录态中的 user_no）
+ *
+ * 视觉（docs/UI-UX-V2-设计系统.md §7.4）：
+ * 行式列表 —— 左侧时间 + 标题，右侧状态 chip + 分数；空态用 BxEmpty + 主操作。
  */
 
 import type { DaqRecordReplyRow } from '@/api/daq/types'
@@ -106,6 +109,16 @@ function openRecord(item: AssessmentItem): void {
 }
 
 /**
+ * 空态的主操作：回到问卷列表去挑一份（规范 §7.4）
+ *
+ * 列表页是应用首页（vite.config.ts 的 UniPages.homePage），用 reLaunch 而不是
+ * navigateTo：用户从空态跳走后再回来，看到的仍该是这一页。
+ */
+function goAnswer(): void {
+  uni.reLaunch({ url: '/pages/editor/list/index' })
+}
+
+/**
  * 键盘激活
  *
  * 「查看结果」「查看作答」是可点击的 <text>，天然不可聚焦 —— 键盘用户打不开。
@@ -146,33 +159,40 @@ void load()
           <BxButton v-if="notLoggedIn" type="primary" size="small" @click="goLogin">
             去登录
           </BxButton>
-          <BxButton v-else type="ghost" size="small" @click="load">
+          <BxButton v-else type="secondary" size="small" @click="load">
             重新加载
           </BxButton>
         </view>
       </view>
 
-      <BxEmpty
-        v-else-if="items.length === 0"
-        text="暂无已完成的测评"
-        tip="完成一次问卷后，这里会显示得分与查看入口；列表仅显示当前登录账号的记录"
-      />
+      <view v-else-if="items.length === 0" class="cp-page__state">
+        <BxEmpty
+          text="暂无已完成的测评"
+          tip="完成一次问卷后，这里会显示得分与查看入口；列表仅显示当前登录账号的记录"
+        />
+        <view class="cp-page__retry">
+          <BxButton type="primary" size="small" @click="goAnswer">
+            去答一份问卷
+          </BxButton>
+        </view>
+      </view>
 
+      <!-- 行式列表：一条细线分隔，不做卡片墙 -->
       <view v-else class="cp-list">
-        <view v-for="item in items" :key="item.activityNo" class="cp-card">
-          <view class="cp-card__head">
-            <text class="cp-card__title">{{ item.title }}</text>
-            <text v-if="item.score !== null" class="cp-card__score">{{ item.score }}</text>
+        <view v-for="item in items" :key="item.activityNo" class="cp-row">
+          <view class="cp-row__main">
+            <text class="cp-row__title">{{ item.title }}</text>
+            <text v-if="item.finishedAt" class="cp-row__meta">完成于 {{ item.finishedAt }}</text>
           </view>
 
-          <view class="cp-card__meta">
-            <text v-if="item.finishedAt" class="cp-card__meta-text">完成于 {{ item.finishedAt }}</text>
-            <text class="cp-card__meta-text">批次 {{ item.batchNo }}</text>
+          <view class="cp-row__side">
+            <text class="cp-row__state">已完成</text>
+            <text v-if="item.score !== null" class="cp-row__score">{{ item.score }} 分</text>
           </view>
 
-          <view class="cp-card__actions">
+          <view class="cp-row__actions">
             <text
-              class="cp-card__action"
+              class="cp-row__action"
               role="button"
               tabindex="0"
               @click="openResult(item)"
@@ -181,7 +201,7 @@ void load()
               查看结果
             </text>
             <text
-              class="cp-card__action cp-card__action--ghost"
+              class="cp-row__action cp-row__action--ghost"
               role="button"
               tabindex="0"
               @click="openRecord(item)"
@@ -203,7 +223,7 @@ void load()
 }
 
 .cp-page__body {
-  padding-top: 12px;
+  padding-top: 16px;
   padding-bottom: 32px;
 }
 
@@ -227,7 +247,7 @@ void load()
 }
 
 .cp-skeleton__row {
-  height: 104px;
+  height: 84px;
   background-color: var(--bx-line-2);
   border-radius: var(--bx-radius-card);
 }
@@ -238,84 +258,96 @@ void load()
   flex-direction: column;
   overflow: hidden;
   background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
-  box-shadow: var(--bx-elev-1);
 }
 
-.cp-card {
-  padding: 16px;
+.cp-row {
+  padding: 14px 16px;
 }
 
-.cp-card + .cp-card {
+.cp-row + .cp-row {
   border-top: 1px solid var(--bx-line-2);
 }
 
-.cp-card__head {
+.cp-row__main {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
 }
 
-.cp-card__title {
+.cp-row__title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
   font-weight: 500;
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-/* 分数用等宽数字位：多条记录并排时数字宽度不会跳 */
-.cp-card__score {
-  margin-left: 10px;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--bx-primary);
+.cp-row__meta {
+  flex-shrink: 0;
+  margin-left: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
   font-variant-numeric: tabular-nums;
 }
 
-.cp-card__meta {
+.cp-row__side {
   display: flex;
-  flex-wrap: wrap;
-  margin-top: 8px;
+  align-items: center;
+  margin-top: 6px;
 }
 
-.cp-card__meta-text {
-  margin-right: 12px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-text-3);
+/* 状态做成胶囊徽章 */
+.cp-row__state {
+  padding: 2px 9px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-success);
+  background-color: var(--bx-success-soft);
+  border-radius: var(--bx-radius-chip);
 }
 
-.cp-card__actions {
+/* 分数用等宽数字位：多条记录并排时数字宽度不会跳。
+ * 用墨色而不是主色 —— 一屏十几行全是蓝字会吵（规范 §2.4）。 */
+.cp-row__score {
+  margin-left: 10px;
+  font-size: var(--bx-font-h2);
+  font-weight: 600;
+  line-height: var(--bx-leading-h2);
+  color: var(--bx-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cp-row__actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
-/* 两个动作做成胶囊按钮：主行动描边主色，次行动描边灰 */
-.cp-card__action {
-  padding: 5px 14px;
-  font-size: 13px;
-  line-height: 20px;
+/* 两个动作是文字链接：主行动用主色，次行动用中性色 */
+.cp-row__action {
+  padding: 2px 0;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-primary);
-  border: 1px solid var(--bx-primary);
-  border-radius: var(--bx-radius-chip);
   cursor: pointer;
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */
-.cp-card__action:focus-visible {
+.cp-row__action:focus-visible {
   outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
+  border-radius: var(--bx-radius-xs);
 }
 
-.cp-card__action--ghost {
-  margin-left: 10px;
+.cp-row__action--ghost {
+  margin-left: 16px;
   color: var(--bx-text-2);
-  border-color: var(--bx-line);
 }
 </style>

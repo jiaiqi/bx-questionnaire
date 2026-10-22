@@ -75,15 +75,3 @@ export function toDraftPayload(field: QuestionField, answers: AnswerMap): DraftI
     option_data: values,
   }
 }
-
-/** 组装全卷草稿体（用于「暂存草稿」按钮） */
-export function toDraftPayloads(fields: QuestionField[], answers: AnswerMap): DraftItem[] {
-  const payload: DraftItem[] = []
-  for (const field of fields) {
-    const item = toDraftPayload(field, answers)
-    if (item) {
-      payload.push(item)
-    }
-  }
-  return payload
-}

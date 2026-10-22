@@ -62,7 +62,7 @@ defineExpose({ loadMore, refresh })
 }
 
 .history-page__body {
-  padding-top: 12px;
-  padding-bottom: 24px;
+  padding-top: 16px;
+  padding-bottom: 32px;
 }
 </style>

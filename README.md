@@ -107,7 +107,7 @@ export BX_CHROME_PATH=/opt/google/chrome/chrome
 | --- | --- |
 | `.env` | 各环境共用的应用标识（`VITE_BX_APP` / `VITE_BX_APP_NO` / 微信 appid / 超时） |
 | `.env.development` | 开发网关 `http://192.168.0.214/bxapi`，`VITE_H5_BASE=/` |
-| `.env.production` | 生产网关 `https://www.gxqcxkj.com/bxapi`，`VITE_H5_BASE=/questionnaire/` |
+| `.env.production` | 生产网关 `https://www.gxqcxkj.com/bxapi`（**仅兜底**，运行时优先读 `/js/server.js`），`VITE_H5_BASE=/quest/` |
 | `.env.test` | 测试网关（运行时已无兜底默认值，测试必须显式提供） |
 | `.env.local` | **仅本地**联调票据，已在 `.gitignore` 中，**绝不提交** |
 
@@ -125,23 +125,46 @@ BX_USER=<账号> BX_PWD=<密码> node scripts/bx-login.mjs --write
 
 脚本会取 RSA 公钥、调 `srvuser_login`，并把票据写入 `.env.local`。
 
+**票据失效（`0011`）时的标准动作就是换票，不是重登**：
+
+```bash
+BX_USER=<账号> BX_PWD=<密码> node scripts/bx-login.mjs --write   # 重新登录并写回 .env.local
+```
+
+- 凭据只从环境变量读，**绝不写入仓库**（`.env.local` 已在 `.gitignore` 中）；
+- 登录接口有频次限制，连续失败会锁号 1 小时，所以**只试一次**，失败就停下报告；
+- 前端**不做自动重登**：收到 `0011` 只清登录态并跳登录页（见下节）。
+
 ## 部署
 
 ### H5（公众号 / 浏览器）
 
-生产部署在子路径 `/questionnaire/`，且与网关 `/bxapi/` **同域**（这一点很重要，见下）。
+生产部署在站点根目录下的 **`/quest/`**，与网关 `/bxapi/`、运行时配置 `/js/` **同域**（这一点很重要，见下）。
 
 ```bash
-pnpm build h5   # 产物 dist/build/h5，资源路径自带 /questionnaire/ 前缀
+pnpm build h5   # 产物 dist/build/h5，资源路径自带 /quest/ 前缀
+```
+
+部署后的目录结构（`js/` 与 vpages、dataview 等 H5 子站同级，由平台统一维护）：
+
+```text
+<站点根>/
+├── js/
+│   └── server.js        # 运行时配置：把接口前缀写到 window.top.pathConfig
+├── vpages/              # 其它 H5
+├── dataview/            # 其它 H5
+└── quest/               # 本工程（hash 路由）
+    ├── index.html
+    └── assets/...
 ```
 
 Nginx 参考：
 
 ```nginx
-# 前端静态资源
-location /questionnaire/ {
+# 问卷 H5
+location /quest/ {
     alias /srv/bx-questionnaire/dist/build/h5/;
-    try_files $uri $uri/ /questionnaire/index.html;
+    try_files $uri $uri/ /quest/index.html;
 }
 
 # 网关反向代理，与前端同域（避免跨域，并与生产形态一致）
@@ -154,6 +177,19 @@ location /bxapi/ {
 
 资源前缀由 `vite.config.ts` 的 `base` 读取 `VITE_H5_BASE` 注入。
 **若部署路径变化，必须同步修改 `.env.production` 的 `VITE_H5_BASE`**，否则资源 404、整站白屏。
+
+#### 接口前缀优先取服务器上的 `js/server.js`
+
+构建产物会在 `</head>` 前插入 `<script src="/js/server.js"></script>`（地址可用 `VITE_SERVER_CONFIG_URL` 覆盖）。
+该脚本是平台统一的运行时配置，把接口前缀写到 `window.top.pathConfig.gateway`。运行时的解析优先级：
+
+1. `window.top.pathConfig.gateway` —— 被老门户 iframe 嵌入时，顶层窗口已由门户注入；
+2. `window.pathConfig.gateway` —— 独立打开（公众号 H5 / 小程序 web-view）时，server.js 挂在当前窗口；
+3. `sessionStorage.pathConfig` —— 跨域 iframe 读不到 top 时的同源副本兜底；
+4. 构建期 `VITE_BX_GATEWAY` —— 最后兜底。
+
+所以**换环境 / IP 时只需要改服务器上的 `js/server.js`，不需要重新构建前端**；
+本地 dev 没有 `js/server.js`，自动回退到 `.env.development` 的 `VITE_BX_GATEWAY`（构建期才注入 script，dev 不会产生 404）。
 
 路由使用 **hash 模式**，因此不需要服务端 rewrite 支持（`try_files` 只是保险）。
 
@@ -174,8 +210,25 @@ pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具�
 - 微信小程序 PC 横屏窗口
 - 公众号 H5
 
-布局策略：`.bx-container` 固定最大宽度 `--bx-content-width`（860px）居中，窄屏自动铺满，
-左右内边距 16px（≥760px 时 24px）。
+布局策略：`.bx-container` 固定最大宽度 `--bx-content-width`（720px）居中，窄屏自动铺满，
+左右内边距 16px（≥760px 时 24px）；管理侧（问卷列表 / 设计器）用更宽的
+`--bx-content-width-wide`（1180px），由 `.bx-container--wide` 切换。
+
+设计语言见 `docs/UI-UX-V2-设计系统.md`（墨蓝 · 静卷）：色彩 / 排版 / 形状 / 动效的
+唯一规范，`src/styles/tokens.scss` 是令牌的唯一真源。改造前后的对照图见
+`docs/screenshots/before-v2/` 与 `docs/screenshots/after-v2/`。
+
+视觉令牌：
+
+| 组 | 说明 |
+| --- | --- |
+| 中性 | `--bx-bg` / `--bx-surface` / `--bx-surface-2` + 四级文字 + 三级描边 |
+| 品牌 | `--bx-blue*`（墨蓝 `#2C46C8`），`--bx-primary*` 是它的别名，主题只覆盖前者 |
+| 语义 | danger / success / warn / health，各带「文字 + 浅底 + 描边」三件套 |
+| 动效 | 四档时长 + 四种缓动（`--bx-duration-*` / `--bx-ease-*`） |
+
+动效的**统一降级**写在 `src/styles/global.scss`（`prefers-reduced-motion: reduce`
+时全部动效降为瞬时）；组件内不要重复写降级块。
 
 ## 登录
 

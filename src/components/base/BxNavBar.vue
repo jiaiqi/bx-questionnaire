@@ -1,4 +1,14 @@
 <script setup lang="ts">
+/**
+ * 顶部导航栏
+ *
+ * V2（规范 §6.1）：高 48px + 状态栏占位，标题 17/600 居中，
+ * 返回键点击区 44×44，底部分隔线 `--bx-line`。
+ *
+ * H5 端允许半透明 + 毛玻璃（内容从栏下滑过时能看见层次）；
+ * **小程序端不用 backdrop-filter** —— 微信基础库对它的支持不稳定，
+ * 表现各机型不一，宁可给一块实色。
+ */
 interface Props {
   title?: string
   showBack?: boolean
@@ -89,6 +99,21 @@ function onKeydown(event: KeyboardEvent): void {
   background-color: var(--bx-surface);
 }
 
+/*
+ * H5：半透明 + 毛玻璃
+ *
+ * 规范 §6.1 给的色值是 `#FFFFFFE6`（白 90% 不透明）—— 半透明只做在 H5，
+ * 小程序端保持上面的实色 `--bx-surface`。
+ */
+/* #ifdef H5 */
+.bx-navbar {
+  background-color: #FFFFFFE6;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* #endif */
+
 .bx-navbar--border {
   border-bottom: 1px solid var(--bx-line);
 }
@@ -111,7 +136,15 @@ function onKeydown(event: KeyboardEvent): void {
   width: 44px;
   height: 44px;
   cursor: pointer;
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-sm);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+/* 悬停反馈只给指针设备（规范 §5.3） */
+@media (hover: hover) {
+  .bx-navbar__back:hover {
+    background-color: var(--bx-surface-2);
+  }
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */
@@ -133,8 +166,9 @@ function onKeydown(event: KeyboardEvent): void {
 .bx-navbar__title {
   flex: 1;
   overflow: hidden;
-  font-size: 17px;
+  font-size: var(--bx-font-h2);
   font-weight: 600;
+  line-height: var(--bx-leading-h2);
   color: var(--bx-text);
   text-align: center;
   white-space: nowrap;

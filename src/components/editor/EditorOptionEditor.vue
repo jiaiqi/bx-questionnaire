@@ -48,6 +48,20 @@ const { dragging, fromIndex, overIndex, begin, onMove, onEnd, onCancel } = usePo
 
 const canAdd = computed(() => props.options.length < MAX_OPTIONS)
 
+/**
+ * 落点插在目标行的上边还是下边
+ *
+ * `moveOption(from, to)` 的语义是「把第 from 行挪到第 to 行」：
+ * 往下拖落在目标行之后，往上拖落在目标行之前。插入线画错边，
+ * 落点就与实际落位差一整行。
+ */
+const dropPosition = computed<'before' | 'after' | undefined>(() => {
+  if (!dragging.value || overIndex.value < 0 || fromIndex.value === overIndex.value) {
+    return undefined
+  }
+  return fromIndex.value < overIndex.value ? 'after' : 'before'
+})
+
 /** 选项行高（与样式里的字面值一致，由布局测试守住） */
 const rowHeightStyle = computed(() => `${OPTION_ROW_HEIGHT}px`)
 
@@ -70,11 +84,6 @@ function onPointsInput(index: number, event: unknown): void {
 
 <template>
   <view class="bx-editor-option">
-    <view class="bx-editor-option__head">
-      <text class="bx-editor-option__title">选项</text>
-      <text class="bx-editor-option__count">{{ props.options.length }} / {{ MAX_OPTIONS }}</text>
-    </view>
-
     <view class="bx-editor-option__stage">
       <view class="bx-editor-option-list">
         <view
@@ -162,6 +171,14 @@ function onPointsInput(index: number, event: unknown): void {
           >
             <view class="bx-editor-option-row__btn-text bx-editor-option-row__btn-text--close" aria-hidden="true" />
           </view>
+
+          <!-- 落点：2px 主色插入线（画在行与行之间） -->
+          <view
+            v-if="dragging && overIndex === index && dropPosition"
+            class="bx-editor-option-row__insert"
+            :class="`bx-editor-option-row__insert--${dropPosition}`"
+            aria-hidden="true"
+          />
         </view>
       </view>
 
@@ -175,6 +192,14 @@ function onPointsInput(index: number, event: unknown): void {
         @mousemove="onMove"
         @mouseup="onEnd"
       />
+    </view>
+
+    <!--
+      计数放在列表下面：外层分组标题已经写了「选项」，这里再写一遍
+      标题就变成同一件事标两遍；只剩一个计数，谁都不误导。
+    -->
+    <view class="bx-editor-option__foot">
+      <text class="bx-editor-option__count">{{ props.options.length }} / {{ MAX_OPTIONS }}</text>
     </view>
 
     <view
@@ -202,22 +227,18 @@ function onPointsInput(index: number, event: unknown): void {
   flex-direction: column;
 }
 
-.bx-editor-option__head {
+/* 计数：列表下方右对齐 */
+.bx-editor-option__foot {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.bx-editor-option__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--bx-text);
+  justify-content: flex-end;
+  margin-top: 6px;
 }
 
 .bx-editor-option__count {
   font-size: 12px;
+  line-height: 18px;
   color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
 }
 
 .bx-editor-option__stage {
@@ -239,25 +260,30 @@ function onPointsInput(index: number, event: unknown): void {
  */
 .bx-editor-option-row {
   box-sizing: border-box;
+  position: relative;
   display: flex;
   align-items: center;
   padding: 0 4px;
   overflow: hidden;
   border-bottom: 1px solid var(--bx-line-2);
   background-color: var(--bx-surface);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .bx-editor-option-row:last-child {
   border-bottom: none;
 }
 
+/* 拖起：压下去一点 + 抬起来一点（与题纲行同一套反馈） */
 .bx-editor-option-row--dragging {
-  opacity: 0.6;
-  background-color: var(--bx-primary-soft);
+  z-index: 2;
+  transform: scale(0.98);
+  box-shadow: var(--bx-elev-2);
 }
 
+/* 落点：2px 主色插入线（见模板里的 __insert），不改高度 */
 .bx-editor-option-row--drop {
-  box-shadow: inset 3px 0 0 var(--bx-primary);
+  border-bottom-color: var(--bx-primary-line);
 }
 
 .bx-editor-option-row__handle {
@@ -301,9 +327,20 @@ function onPointsInput(index: number, event: unknown): void {
   flex: 1;
   min-width: 0;
   height: 30px;
-  padding: 0 6px;
+  padding: 0 8px;
   font-size: 13px;
   color: var(--bx-text);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
+  border-radius: var(--bx-radius-sm);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-editor-option-row__input:focus-within {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
 }
 
 .bx-editor-option-row__answer {
@@ -313,9 +350,12 @@ function onPointsInput(index: number, event: unknown): void {
   width: 22px;
   height: 22px;
   cursor: pointer;
-  border: 1px solid var(--bx-line);
+  border: 1px solid var(--bx-line-strong);
   border-radius: 50%;
   background-color: var(--bx-surface);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .bx-editor-option-row__answer--on {
@@ -343,12 +383,24 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 .bx-editor-option-row__points {
-  width: 36px;
+  width: 40px;
   height: 30px;
   margin-left: 4px;
+  padding: 0 4px;
   font-size: 13px;
   color: var(--bx-text);
   text-align: center;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
+  border-radius: var(--bx-radius-sm);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-editor-option-row__points:focus-within {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
 }
 
 .bx-editor-option-row__btn {
@@ -361,9 +413,11 @@ function onPointsInput(index: number, event: unknown): void {
   border-radius: var(--bx-radius-sm);
 }
 
-.bx-editor-option-row__btn:hover,
-.bx-editor-option-row__btn:active {
-  background-color: var(--bx-line-2);
+/* 悬停反馈只给指针设备（触屏端走 hover-class 的按下态） */
+@media (hover: hover) {
+  .bx-editor-option-row__btn:hover {
+    background-color: var(--bx-line-2);
+  }
 }
 
 .bx-editor-option-row__btn-text {
@@ -425,9 +479,27 @@ function onPointsInput(index: number, event: unknown): void {
   bottom: 0;
   left: 0;
   z-index: 10;
-  /* 原来写死的 rgba(0,122,255,.04) 是旧蓝；用主色浅底 + 透明度，主题可跟随 */
+  /* 拖拽时蒙一层极浅的墨蓝（6%），告诉用户「现在是在拖」 */
   opacity: 0.6;
-  background-color: var(--bx-primary-soft);
+  background-color: var(--bx-glow);
+}
+
+/* 落点插入线：2px 主色横线，画在行与行之间 */
+.bx-editor-option-row__insert {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 2px;
+  background-color: var(--bx-primary);
+}
+
+.bx-editor-option-row__insert--before {
+  top: 0;
+}
+
+.bx-editor-option-row__insert--after {
+  bottom: 0;
 }
 
 .bx-editor-option__add {
@@ -437,14 +509,19 @@ function onPointsInput(index: number, event: unknown): void {
   height: 36px;
   margin-top: 8px;
   cursor: pointer;
-  border: 1px dashed var(--bx-line);
+  border: 1px dashed var(--bx-primary-line);
   border-radius: var(--bx-radius);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    border-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-.bx-editor-option__add:hover,
-.bx-editor-option__add:active {
-  border-color: var(--bx-primary);
-  background-color: var(--bx-primary-soft);
+/* 悬停反馈只给指针设备（触屏端走 hover-class 的按下态） */
+@media (hover: hover) {
+  .bx-editor-option__add:hover {
+    border-color: var(--bx-primary);
+    background-color: var(--bx-primary-soft);
+  }
 }
 
 .bx-editor-option__add--off {

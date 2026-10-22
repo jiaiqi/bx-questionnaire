@@ -7,6 +7,9 @@
  * 因此这里对 `datetime` 用「日期 + 时间」两个 picker 组合，避免退化成只能选日期。
  *
  * 同时限制可选年份：uni 的日期 picker 默认从 1876 年开始，选生日要滚很久。
+ *
+ * V2（规范 §6.2）：与其它输入类同款 —— `--bx-surface-2` 底 + 1px
+ * `--bx-line-strong` 描边 + 12px 圆角 + 44px 高。
  */
 
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
@@ -126,37 +129,42 @@ function emitValue(next: string, part: 'date' | 'time'): void {
 <style lang="scss" scoped>
 .bx-picker-row {
   display: flex;
-  gap: 8px;
+  gap: var(--bx-space-sm);
 }
 
 .bx-picker-row .bx-picker {
   flex: 1;
 }
 
-/* 与 BxTextField 同一套：灰底 + 1px 描边 + 48px 高 */
+/* 与 BxTextField 同一套：内嵌底 + 描边 + 44px 高（规范 §6.2） */
 .bx-picker {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--bx-control-height);
+  box-sizing: border-box;
+  height: var(--bx-control-height-md);
   padding: 0 14px;
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
 }
 
 .bx-picker--disabled {
   cursor: not-allowed;
-  opacity: var(--bx-disabled-opacity);
+  color: var(--bx-text-2);
+  background-color: var(--bx-surface-2);
+  border-color: transparent;
 }
 
 .bx-picker__value {
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
 }
 
 .bx-picker__placeholder {
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-4);
 }
 

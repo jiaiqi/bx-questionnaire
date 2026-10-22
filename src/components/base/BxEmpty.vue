@@ -6,7 +6,8 @@
  * 微信小程序不支持 svg 标签，而图标字体/外链图片又会增加主包体积。
  * 一个只由矩形与圆组成的抽象插画，跨四端表现一致。
  *
- * 颜色刻意只用 `--bx-line` / `--bx-line-2`（结构）加一点 `--bx-primary`（视线落点）：
+ * V2（规范 §6.1）：图形 + 一句说明 + 可选的操作。
+ * 颜色刻意只用 `--bx-line*`（结构）加一点 `--bx-primary`（视线落点）：
  * 空态不该比页面上真正的内容更抢眼。
  */
 interface Props {
@@ -40,16 +41,16 @@ const props = withDefaults(defineProps<Props>(), {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 56px 24px;
+  padding: var(--bx-space-2xl) var(--bx-space-lg);
 }
 
 .bx-empty__icon {
   position: relative;
   width: 96px;
   height: 96px;
-  margin-bottom: 14px;
+  margin-bottom: var(--bx-space-md);
   /* currentColor 作为描边色，下面两层共用 */
-  color: var(--bx-line);
+  color: var(--bx-line-strong);
 }
 
 /* 文档主体：一张「还没写内容的纸」 */
@@ -132,16 +133,17 @@ const props = withDefaults(defineProps<Props>(), {
 }
 
 .bx-empty__text {
-  font-size: 15px;
-  line-height: 24px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-2);
+  text-align: center;
 }
 
 .bx-empty__tip {
   max-width: 280px;
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 20px;
+  margin-top: var(--bx-space-xs);
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-3);
   text-align: center;
 }

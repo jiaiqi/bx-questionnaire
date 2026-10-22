@@ -45,6 +45,8 @@ const flag = (name, fallback) => {
 const OUT_DIR = resolve(flag('out', 'docs/screenshots'))
 const NAME = flag('name', 'page')
 const CLICK = flag('click', '')
+/** 截图前把该选择器从 `position: fixed` 改成 absolute（消除整页截图假象） */
+const UNFIX = flag('unfix', '')
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -190,6 +192,38 @@ try {
         })
         await sleep(600)
       }
+    }
+
+    /**
+     * 吸底栏的「整页截图假象」
+     *
+     * `captureBeyondViewport` 拍整页时，Chrome 会把 `position: fixed` 的元素
+     * 画在**当前视口的底边**。页面停在顶部时，吸底操作栏就压在页面中段的题目上，
+     * 看起来像「内容被遮住了」—— 实际滚动时它固定在视口底部，内容区也预留了
+     * 等高 padding，并没有遮挡。
+     *
+     * 处置（两件事一起做）：
+     * 1. 截图前**回到页面顶部** —— 否则 sticky 导航栏会被画在滚动位置上，
+     *    整页图中间凭空多出一条导航栏，比原问题更误导；
+     * 2. `--unfix <选择器>` 把指定的 fixed 元素临时改成 `position: static`，
+     *    让它回到文档流末尾（页面真正的底部）。
+     */
+    await cdp.send('Runtime.evaluate', {
+      expression: 'window.scrollTo(0, 0); 1',
+      returnByValue: true,
+    })
+    await sleep(400)
+
+    if (UNFIX) {
+      await cdp.send('Runtime.evaluate', {
+        expression: `(() => {
+          const style = document.createElement('style')
+          style.textContent = ${JSON.stringify(`${UNFIX} { position: static !important; }`)}
+          document.head.appendChild(style)
+        })()`,
+        returnByValue: true,
+      })
+      await sleep(300)
     }
 
     // 显式给 clip：`captureBeyondViewport` 单独用时，图片宽度会按 innerWidth 算，

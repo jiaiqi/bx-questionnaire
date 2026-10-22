@@ -13,6 +13,11 @@
  * - 移动端触底自动翻页，PC 端底部有翻页器；两者共用 `hasNext` 守卫，
  *   不会因为触底与点击同时发生而重复请求。
  * - 删除是**物理删除**且会连带题目与选项，所以必须二次确认，并把后果写清楚。
+ *
+ * ## 版式：表格，不是卡片墙
+ *
+ * 按设计系统 §7.5：搜索区一行内联（输入 + 搜索 + 重置 + 状态分段控件），
+ * 下面是一行一问卷的表格 —— 左：标题 + 摘要 + 元信息，中：状态 chip，右：操作。
  */
 
 import type { DaqActivityRow } from '@/api/daq/types'
@@ -20,9 +25,12 @@ import type { DaqActivityRow } from '@/api/daq/types'
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 
+import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
-import EditorListCard from '@/components/editor/EditorListCard.vue'
+import BxSkeleton from '@/components/base/BxSkeleton.vue'
+import EditorListRow from '@/components/editor/EditorListRow.vue'
+import EditorSegmented from '@/components/editor/EditorSegmented.vue'
 import { ACTIVITY_STATUS_OPTIONS, useEditorList } from '@/composables/useEditorList'
 import { editorCreateUrl, editorDesignUrl } from '@/domain/editor/routes'
 import { answerUrl } from '@/domain/questionnaire/routes'
@@ -47,7 +55,17 @@ import { confirmDialog, toast } from '@/utils/ui'
  */
 definePage({ type: 'home', style: { enablePullDownRefresh: true } })
 
-const statusOptions = ACTIVITY_STATUS_OPTIONS
+/**
+ * 状态筛选：分段控件
+ *
+ * 「全部」是本地加的清空项 —— 服务端的筛选值本来就是空串表示不过滤
+ * （`useEditorList` 里 `status.value || undefined`），所以它不是新语义，
+ * 只是把「取消筛选」这件事摆到台面上，而不是靠「再点一次同一个」。
+ */
+const statusFilterOptions = [
+  { label: '全部', value: '' },
+  ...ACTIVITY_STATUS_OPTIONS.map(option => ({ label: option, value: option })),
+]
 
 const {
   rows,
@@ -125,9 +143,9 @@ function onReset(): void {
   void reset()
 }
 
-/** 状态筛选是单选开关：再点一次同一个即取消筛选 */
+/** 状态筛选：选「全部」清空筛选；再点一次同一个状态也清空（与旧行为一致） */
 function onStatusFilter(value: string): void {
-  status.value = status.value === value ? '' : value
+  status.value = value && status.value === value ? '' : value
   void search()
 }
 
@@ -174,33 +192,28 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   <view class="editor-list">
     <BxNavBar title="问卷列表">
       <template #extra>
-        <view
+        <BxButton
           v-if="!session.isLogin"
-          class="editor-list__login"
-          role="button"
-          tabindex="0"
+          type="secondary"
+          size="small"
           aria-label="登录"
           @click="onLogin"
-          @keydown.enter.prevent="onLogin"
         >
-          <text class="editor-list__login-text">登录</text>
-        </view>
-        <view
-          class="editor-list__create"
-          role="button"
-          tabindex="0"
-          aria-label="新建问卷"
-          @click="onCreate"
-          @keydown.enter.prevent="onCreate"
-        >
+          登录
+        </BxButton>
+        <BxButton type="primary" size="small" aria-label="新建问卷" @click="onCreate">
           <view class="editor-list__create-icon" aria-hidden="true" />
           <text class="editor-list__create-text">新建</text>
-        </view>
+        </BxButton>
       </template>
     </BxNavBar>
 
     <view class="editor-list__body">
-      <view class="editor-list__search">
+      <!--
+        搜索区：**一行内联**，不堆叠成三块卡片
+        （输入 + 搜索 + 重置 + 状态分段控件）
+      -->
+      <view class="editor-list__toolbar">
         <input
           class="editor-list__input"
           type="text"
@@ -211,41 +224,22 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
           @input="onKeywordInput"
           @confirm="onSearch"
         >
-        <view
-          class="editor-list__search-btn"
-          role="button"
-          tabindex="0"
-          aria-label="搜索"
-          @click="onSearch"
-          @keydown.enter.prevent="onSearch"
-        >
-          <text class="editor-list__search-btn-text">搜索</text>
-        </view>
-        <view
-          class="editor-list__search-btn"
-          role="button"
-          tabindex="0"
-          aria-label="重置搜索条件"
-          @click="onReset"
-          @keydown.enter.prevent="onReset"
-        >
-          <text class="editor-list__search-btn-text">重置</text>
-        </view>
-      </view>
-
-      <view class="editor-list__filters">
-        <view
-          v-for="option in statusOptions"
-          :key="option"
-          class="editor-list__filter"
-          :class="{ 'editor-list__filter--on': status === option }"
-          role="button"
-          tabindex="0"
-          :aria-label="`筛选状态 ${option}`"
-          @click="onStatusFilter(option)"
-          @keydown.enter.prevent="onStatusFilter(option)"
-        >
-          <text class="editor-list__filter-text">{{ option }}</text>
+        <BxButton type="secondary" aria-label="搜索" @click="onSearch">
+          搜索
+        </BxButton>
+        <BxButton type="secondary" aria-label="重置搜索条件" @click="onReset">
+          重置
+        </BxButton>
+        <!--
+          分组语义：分段控件本身给每一项「进行中 / 未开始 / 已结束」这样的名字，
+          单独读出来不知道是筛选用。外面再包一层 group + 组名，读屏就完整了。
+        -->
+        <view class="editor-list__filter" role="group" aria-label="按状态筛选">
+          <EditorSegmented
+            :model-value="status"
+            :options="statusFilterOptions"
+            @update:model-value="onStatusFilter"
+          />
         </view>
       </view>
 
@@ -264,23 +258,39 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
       </view>
 
       <template v-else>
+        <!-- 表头：宽屏才出现（窄屏一行放不下三列，表头反而碍事） -->
+        <view class="editor-list__head">
+          <text class="editor-list__head-cell editor-list__head-cell--main">问卷</text>
+          <text class="editor-list__head-cell editor-list__head-cell--status">状态</text>
+          <text class="editor-list__head-cell editor-list__head-cell--actions">操作</text>
+        </view>
+
+        <view class="editor-list__table">
+          <view
+            v-for="(row, index) in rows"
+            :key="String(row.activity_no)"
+            class="editor-list__row"
+          >
+            <EditorListRow
+              :row="row"
+              :last="index === rows.length - 1"
+              @edit="onEdit(row)"
+              @answer="onAnswer(row)"
+              @remove="onRemove(row)"
+            />
+          </view>
+        </view>
+
         <BxEmpty
           v-if="loaded && !loading && rows.length === 0"
           text="没有找到问卷"
           tip="换个关键字试试，或点右上角「新建」创建一份"
         />
 
-        <EditorListCard
-          v-for="row in rows"
-          :key="String(row.activity_no)"
-          :row="row"
-          @edit="onEdit(row)"
-          @answer="onAnswer(row)"
-          @remove="onRemove(row)"
-        />
-
         <view v-if="loading" class="editor-list__skeleton" aria-busy="true">
-          <view v-for="n in 3" :key="n" class="editor-list__skeleton-row" />
+          <BxSkeleton :lines="1" :height="72" :radius="20" />
+          <BxSkeleton :lines="1" :height="72" :radius="20" />
+          <BxSkeleton :lines="1" :height="72" :radius="20" />
         </view>
       </template>
     </view>
@@ -323,39 +333,6 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   background-color: var(--bx-bg);
 }
 
-.editor-list__login {
-  display: flex;
-  align-items: center;
-  height: 30px;
-  padding: 0 12px;
-  margin-right: 8px;
-  border: 1px solid var(--bx-line);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-/* 键盘用户要能看到焦点在哪 */
-.editor-list__login:focus-visible {
-  outline: 2px solid var(--bx-blue);
-  outline-offset: 2px;
-}
-
-.editor-list__login-text {
-  font-size: 13px;
-  color: var(--bx-text-2);
-}
-
-.editor-list__create {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-  padding: 0 14px;
-  cursor: pointer;
-  background-color: var(--bx-primary);
-  border-radius: var(--bx-radius-sm);
-}
-
 /* 加号用两条线绘制（原为「＋ 新建」里的全角加号，字形随字体变化） */
 .editor-list__create-icon {
   position: relative;
@@ -382,36 +359,44 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   transform: rotate(90deg);
 }
 
-.editor-list__create-text {
-  font-size: 14px;
-  color: #fff;
-}
-
 .editor-list__body {
   box-sizing: border-box;
   width: 100%;
-  max-width: var(--bx-content-width);
+  max-width: var(--bx-content-width-wide);
   margin: 0 auto;
-  padding: 12px;
+  padding: 16px;
 }
 
-.editor-list__search {
+/* ── 搜索区：一行内联 ── */
+
+.editor-list__toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .editor-list__input {
   box-sizing: border-box;
-  flex: 1;
+  flex: 1 1 220px;
   min-width: 0;
-  height: 38px;
-  padding: 0 10px;
-  font-size: 14px;
+  height: 44px;
+  padding: 0 12px;
+  font-size: 15px;
   color: var(--bx-text);
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+/* 聚焦：描边变主色 + 光晕（不用 outline，保证小程序一致） */
+.editor-list__input:focus-within {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
 }
 
 /**
@@ -425,64 +410,98 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
  * （与 BxTextField 里那条规则同一原因）
  */
 :deep(.editor-list__input .uni-input-input:focus-visible) {
-  border-color: var(--bx-blue);
   outline: 2px solid var(--bx-blue);
   outline-offset: 1px;
 }
 
-.editor-list__search-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  margin-left: 8px;
-  padding: 0 12px;
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
-}
-
-.editor-list__search-btn:active {
-  border-color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
-}
-
-.editor-list__search-btn-text {
-  font-size: 14px;
-  color: var(--bx-text-2);
-}
-
-.editor-list__filters {
-  display: flex;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
+/* 状态分段控件：窄屏时整块换行，宽屏跟在按钮后面 */
 .editor-list__filter {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  margin: 0 8px 8px 0;
-  padding: 0 12px;
+  flex: 0 1 auto;
+  margin-left: auto;
+}
+
+/* ── 表格 ── */
+
+/*
+ * 表头与行的列宽必须一致（96 / 180），否则「状态」「操作」两列会错位。
+ * 这两个数字与 EditorListRow 里的 grid-template-columns 是同一套定义。
+ */
+.editor-list__head {
+  display: none;
+  grid-template-columns: minmax(0, 1fr) 96px 180px;
+  gap: 12px 16px;
+  padding: 0 16px 8px;
+}
+
+.editor-list__head-cell {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--bx-text-3);
+}
+
+/* 状态列是居中的（chip 也在列内居中），表头与内容才对得上 */
+.editor-list__head-cell--status {
+  text-align: center;
+}
+
+.editor-list__table {
+  overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
-  border-radius: 15px;
+  border-radius: var(--bx-radius-lg);
 }
 
-.editor-list__filter--on {
-  border-color: var(--bx-blue);
-  background-color: var(--bx-blue-soft);
+/* 行之间只有一条细线（表格的读法）；末行的下边线由行组件自己去掉 */
+
+/*
+ * 进场编排：逐行淡入 + translateY(6px→0)，delay 30ms，最多前 12 项
+ * （设计系统 §5.2 第 12 条）。
+ *
+ * 只在 H5 端做：小程序端长列表逐项动画会掉帧（规范 §5.3）。
+ */
+@media (min-width: 640px) {
+  .editor-list__head {
+    display: grid;
+  }
 }
 
-.editor-list__filter-text {
-  font-size: 13px;
-  color: var(--bx-text-2);
+/* #ifdef H5 */
+.editor-list__row {
+  animation: editor-list-row-in var(--bx-duration-slow) var(--bx-ease-out) both;
 }
 
-.editor-list__filter--on .editor-list__filter-text {
-  color: var(--bx-blue);
+.editor-list__row:nth-child(1) { animation-delay: 0ms; }
+.editor-list__row:nth-child(2) { animation-delay: 30ms; }
+.editor-list__row:nth-child(3) { animation-delay: 60ms; }
+.editor-list__row:nth-child(4) { animation-delay: 90ms; }
+.editor-list__row:nth-child(5) { animation-delay: 120ms; }
+.editor-list__row:nth-child(6) { animation-delay: 150ms; }
+.editor-list__row:nth-child(7) { animation-delay: 180ms; }
+.editor-list__row:nth-child(8) { animation-delay: 210ms; }
+.editor-list__row:nth-child(9) { animation-delay: 240ms; }
+.editor-list__row:nth-child(10) { animation-delay: 270ms; }
+.editor-list__row:nth-child(11) { animation-delay: 300ms; }
+.editor-list__row:nth-child(12) { animation-delay: 330ms; }
+
+/* 超出 12 行就不再参与编排：后面的行一次性出现，不排第二波队 */
+.editor-list__row:nth-child(n+13) {
+  animation: none;
 }
+
+@keyframes editor-list-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* #endif */
+
+/* ── 错误 / 空态 / 骨架 ── */
 
 .editor-list__error {
   display: flex;
@@ -504,13 +523,13 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   height: 32px;
   margin-top: 12px;
   padding: 0 16px;
-  border: 1px solid var(--bx-blue);
+  border: 1px solid var(--bx-primary);
   border-radius: var(--bx-radius);
 }
 
 .editor-list__retry-text {
   font-size: 13px;
-  color: var(--bx-blue);
+  color: var(--bx-primary);
 }
 
 /* 加载：三条骨架保持布局稳定（原来是居中一行「加载中…」） */
@@ -518,13 +537,10 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 12px;
 }
 
-.editor-list__skeleton-row {
-  height: 76px;
-  background-color: var(--bx-line-2);
-  border-radius: var(--bx-radius-card);
-}
+/* ── 翻页器 ── */
 
 .editor-list__pager {
   display: flex;
@@ -532,9 +548,9 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   justify-content: center;
   box-sizing: border-box;
   width: 100%;
-  max-width: var(--bx-content-width);
+  max-width: var(--bx-content-width-wide);
   margin: 0 auto;
-  padding: 0 12px 24px;
+  padding: 16px 16px 24px;
 }
 
 .editor-list__pager-btn {
@@ -545,7 +561,7 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   padding: 0 14px;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-sm);
 }
 
 .editor-list__pager-btn--off {
@@ -561,5 +577,6 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   margin: 0 12px;
   font-size: 13px;
   color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
 }
 </style>

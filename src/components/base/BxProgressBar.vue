@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+/**
+ * 进度条
+ *
+ * V2（规范 §6.1）：3px 高、圆角，底色 `--bx-line-2`，填充主色，
+ * 宽度过渡 320ms（`--bx-duration-slow`）—— 推进是**可感知的反馈**，
+ * 不是装饰。
+ */
 interface Props {
   percent: number
   height?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  // 2px：进度条是「背景状态」而不是主角，细一点就不会和题干抢注意力
-  height: 2,
+  // 3px（规范 §6.1）：2px 太细，在低亮度屏幕上几乎看不出「有进度」
+  height: 3,
 })
 
 const safePercent = computed(() => Math.min(100, Math.max(0, props.percent)))
@@ -30,19 +37,14 @@ const safePercent = computed(() => Math.min(100, Math.max(0, props.percent)))
   width: 100%;
   overflow: hidden;
   background-color: var(--bx-line-2);
+  /* 两端都圆：轨道与填充同半径，推进时右端不会出现硬切的直角 */
+  border-radius: var(--bx-radius-pill);
 }
 
 .bx-progress__bar {
   height: 100%;
   background-color: var(--bx-primary);
-  /* 右端圆角：进度条推进时不会出现硬切的直角 */
-  border-radius: 0 var(--bx-radius-mark) var(--bx-radius-mark) 0;
+  border-radius: var(--bx-radius-pill);
   transition: width var(--bx-duration-slow) var(--bx-ease-out);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bx-progress__bar {
-    transition: none;
-  }
 }
 </style>

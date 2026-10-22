@@ -364,7 +364,7 @@ function onClear(): void {
 .bx-image__list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--bx-space-sm);
 }
 
 .bx-image__cell {
@@ -376,7 +376,7 @@ function onClear(): void {
   width: 88px;
   height: 88px;
   border-radius: var(--bx-radius);
-  background-color: var(--bx-bg);
+  background-color: var(--bx-surface-2);
 }
 
 .bx-image__remove {
@@ -427,14 +427,15 @@ function onClear(): void {
 }
 
 .bx-image__empty {
-  padding: 14px;
+  padding: var(--bx-space-md);
   background-color: var(--bx-surface-2);
-  border: 1px dashed var(--bx-line);
+  border: 1px dashed var(--bx-line-strong);
   border-radius: var(--bx-radius);
 }
 
 .bx-image__empty-text {
-  font-size: 13px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-3);
 }
 
@@ -444,14 +445,20 @@ function onClear(): void {
   margin-top: 12px;
 }
 
+/* 上传：白底 + 描边的次级按钮（主操作位留给问卷的提交） */
 .bx-image__upload {
   display: flex;
   align-items: center;
-  height: 36px;
+  justify-content: center;
+  height: var(--bx-control-height-sm);
   padding: 0 16px;
   cursor: pointer;
-  border: 1px solid var(--bx-primary);
-  border-radius: var(--bx-radius);
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line-strong);
+  border-radius: var(--bx-radius-sm);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    border-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .bx-image__upload:focus-visible {
@@ -465,7 +472,7 @@ function onClear(): void {
 }
 
 .bx-image__upload-text {
-  font-size: 14px;
+  font-size: var(--bx-font-sub);
   color: var(--bx-primary);
 }
 
@@ -475,21 +482,23 @@ function onClear(): void {
 
 .bx-image__hint {
   display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
+  margin-top: var(--bx-space-sm);
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-warn);
 }
 
 .bx-image__clear {
   display: flex;
   align-items: center;
-  height: 36px;
+  justify-content: center;
+  height: var(--bx-control-height-sm);
   margin-left: 10px;
   padding: 0 16px;
   cursor: pointer;
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line-strong);
+  border-radius: var(--bx-radius-sm);
 }
 
 .bx-image__clear:focus-visible {
@@ -498,13 +507,16 @@ function onClear(): void {
 }
 
 .bx-image__clear-text {
-  font-size: 14px;
+  font-size: var(--bx-font-sub);
   color: var(--bx-text-2);
 }
 
+/* 计数：等宽数字，不跳动 */
 .bx-image__count {
   margin-left: 10px;
-  font-size: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
 }
 </style>

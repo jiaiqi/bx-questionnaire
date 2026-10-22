@@ -11,6 +11,8 @@
  *
  * 字段名是 `sug_desc`（老工程两处渲染都用它），不是 sug_content；
  * 老工程也没有使用 min_score / max_score。
+ *
+ * 视觉（规范 §7.3）：建议是**引用块** —— 左侧 2px 主色条，不整块上色。
  */
 
 import type { DaqActivitySugRow } from '@/api/daq/types'
@@ -101,6 +103,15 @@ void load()
     />
 
     <view v-else class="sug__list">
+      <view class="sug__head">
+        <view class="sug__rule" />
+        <text class="sug__title">评估建议</text>
+      </view>
+
+      <!--
+        引用块：左侧 2px 主色条表达「这是一条建议」，
+        比整块浅底更克制 —— 整块上色会让建议看起来像正文的一部分。
+      -->
       <view
         v-for="(item, index) in visible"
         :key="index"
@@ -117,13 +128,15 @@ void load()
 .sug__skeleton {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .sug__skeleton-card {
   height: 76px;
+  padding-left: 14px;
   background-color: var(--bx-line-2);
-  border-radius: var(--bx-radius);
+  border-left: 2px solid var(--bx-line);
+  border-radius: 0 var(--bx-radius-sm) var(--bx-radius-sm) 0;
 }
 
 .sug__list {
@@ -131,23 +144,42 @@ void load()
   flex-direction: column;
 }
 
-.sug-card {
-  padding: 16px;
-  background-color: var(--bx-surface-2);
-  /* 左侧主色竖条表达「这是一条建议」，比整块浅底更克制 */
-  border: 1px solid var(--bx-line);
-  border-left: 3px solid var(--bx-primary);
-  border-radius: var(--bx-radius);
+/* 小节标题：一条短横线 + 文字 */
+.sug__head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-left: 2px;
 }
 
-.sug-card:not(:first-child) {
-  margin-top: 12px;
+.sug__rule {
+  width: 24px;
+  height: 2px;
+  margin-right: 10px;
+  background-color: var(--bx-line-strong);
+  border-radius: 1px;
+}
+
+.sug__title {
+  font-size: var(--bx-font-sub);
+  font-weight: 600;
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text-2);
+}
+
+.sug-card {
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--bx-primary);
+}
+
+.sug-card + .sug-card {
+  margin-top: 16px;
 }
 
 .sug-card__content {
   display: block;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-2);
   word-break: break-all;
 }

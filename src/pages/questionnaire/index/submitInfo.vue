@@ -6,6 +6,10 @@
  * 登记信息实际从未生效。新工程改为写入本地存储，由答题页按题目名称预填。
  *
  * 入参：activity_no
+ *
+ * 视觉（docs/UI-UX-V2-设计系统.md §6.2 输入类）：
+ * 输入框 = surface-2 底 + 1px line-strong 描边 + 12px 圆角 + 44px 高；
+ * 聚焦 = 描边变主色 + 3px 主色光晕（用 box-shadow，H5 与小程序表现一致）。
  */
 
 import { onLoad } from '@dcloudio/uni-app'
@@ -26,6 +30,15 @@ const activityNo = ref('')
 const company = ref('')
 const userName = ref('')
 const userPhone = ref('')
+
+/**
+ * 当前聚焦的输入框
+ *
+ * 聚焦态要落在**外层** uni-input 上（描边与光晕都在外框），而 uni-input 本身
+ * 不可聚焦、`:focus-within` 在小程序端支持不稳，所以用 focus/blur 事件记一个
+ * 状态，由页面自己的 class 表达聚焦样式。
+ */
+const focused = ref('')
 
 // 把可读名称补到内层原生 input 上：aria-label 留在外层 uni-input 时屏幕阅读器读不到
 const companyRef = ref<HTMLElement | null>(null)
@@ -50,6 +63,14 @@ onLoad((query) => {
     void load(activityNo.value, { mode: 'plain' })
   }
 })
+
+function onFocus(name: string): void {
+  focused.value = name
+}
+
+function onBlur(): void {
+  focused.value = ''
+}
 
 function onNext(): void {
   if (!company.value.trim()) {
@@ -78,13 +99,13 @@ function onNext(): void {
     <BxNavBar :title="title" :fallback-url="coverUrl(activityNo)" />
 
     <view class="si-page__body bx-container">
-      <view class="si-card">
-        <text class="si-card__title">{{ title }}</text>
-        <text v-if="intro" class="si-card__desc">{{ intro }}</text>
+      <view class="si-head">
+        <text class="si-head__title">{{ title }}</text>
+        <text v-if="intro" class="si-head__desc">{{ intro }}</text>
       </view>
 
       <view class="si-form">
-        <view class="si-field">
+        <view class="si-field" :class="{ 'si-field--focus': focused === 'company' }">
           <view class="si-field__head">
             <text class="si-field__label">所属单位</text>
             <text class="si-field__required">*</text>
@@ -97,10 +118,12 @@ function onNext(): void {
             placeholder="请输入所属单位"
             placeholder-class="si-field__placeholder"
             :maxlength="60"
+            @focus="onFocus('company')"
+            @blur="onBlur"
           >
         </view>
 
-        <view class="si-field">
+        <view class="si-field" :class="{ 'si-field--focus': focused === 'name' }">
           <view class="si-field__head">
             <text class="si-field__label">姓名</text>
           </view>
@@ -112,10 +135,12 @@ function onNext(): void {
             placeholder="请输入姓名"
             placeholder-class="si-field__placeholder"
             :maxlength="30"
+            @focus="onFocus('name')"
+            @blur="onBlur"
           >
         </view>
 
-        <view class="si-field">
+        <view class="si-field" :class="{ 'si-field--focus': focused === 'phone' }">
           <view class="si-field__head">
             <text class="si-field__label">联系电话</text>
           </view>
@@ -124,10 +149,11 @@ function onNext(): void {
             v-model="userPhone"
             aria-label="联系电话"
             class="si-field__input"
-            type="number"
             placeholder="请输入手机号码"
             placeholder-class="si-field__placeholder"
             :maxlength="11"
+            @focus="onFocus('phone')"
+            @blur="onBlur"
           >
         </view>
       </view>
@@ -149,36 +175,33 @@ function onNext(): void {
 }
 
 .si-page__body {
-  padding-top: 12px;
+  padding-top: 24px;
   padding-bottom: 32px;
 }
 
-.si-card {
-  padding: 20px 16px;
-  background-color: var(--bx-surface);
-  box-shadow: var(--bx-elev-1);
-  border-radius: var(--bx-radius-card);
-}
-
-.si-card__title {
+/* ── 卷首 ───────────────────────────────────────────────────────── */
+.si-head__title {
   display: block;
-  font-size: 20px;
+  font-size: var(--bx-font-title);
   font-weight: 600;
-  line-height: 1.4;
+  line-height: var(--bx-leading-title);
+  letter-spacing: -0.01em;
   color: var(--bx-text);
 }
 
-.si-card__desc {
+.si-head__desc {
   display: block;
   margin-top: 8px;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-2);
 }
 
-/* 表单与信息卡同为白底，靠 1px 描边区分层次 */
+/* ── 表单 ─────────────────────────────────────────────────────────
+ * 白底 + 1px 描边 + 圆角 16：字段之间用细线分隔，不做三张卡。
+ */
 .si-form {
-  margin-top: 12px;
+  margin-top: 20px;
   overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
@@ -200,33 +223,48 @@ function onNext(): void {
 
 /* 标签用 sub 档：它是辅助信息，不该和用户填的内容抢注意力 */
 .si-field__label {
-  font-size: 13px;
-  line-height: 20px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-2);
 }
 
 .si-field__required {
   margin-left: 3px;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-danger);
 }
 
+/* 输入框：surface-2 底 + 1px line-strong 描边 + 12px 圆角 + 44px 高 */
 .si-field__input {
   box-sizing: border-box;
   width: 100%;
-  height: var(--bx-control-height);
+  height: var(--bx-control-height-md);
   margin-top: 8px;
-  padding: 0 14px;
-  font-size: 15px;
+  padding: 0 12px;
+  font-size: var(--bx-font-body);
   color: var(--bx-text);
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .si-field__placeholder {
   color: var(--bx-text-4);
+}
+
+/*
+ * 聚焦态：描边变主色 + 3px 主色光晕
+ *
+ * 用 box-shadow 而不是 outline —— outline 在小程序端的表现与 H5 不一致，
+ * 而 box-shadow 两端一致（规范 §6.2）。
+ */
+.si-field--focus .si-field__input {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
 }
 
 /*
@@ -243,21 +281,19 @@ function onNext(): void {
  *    所以要落到 uni-app 内部的 `.uni-input-input` 上。
  */
 :deep(.si-field__input .uni-input-input:focus-visible) {
-  border-color: var(--bx-primary);
   outline: 2px solid var(--bx-primary);
   outline-offset: 1px;
 }
 
 .si-actions {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .si-actions__tip {
   display: block;
   margin-top: 10px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
-  text-align: center;
 }
 </style>

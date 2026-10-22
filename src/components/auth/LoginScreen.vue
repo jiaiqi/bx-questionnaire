@@ -13,6 +13,10 @@
  *   用户需要知道是「密码错误」还是「账号已锁定」；
  * - 「记住我」只记账号，**绝不记密码**；
  * - 校验失败时抖动对应输入框：只弹一行字很容易被忽略。
+ *
+ * 视觉按设计系统 §7.7：底色是 `--bx-bg` 上的一片**极浅墨蓝晕染**
+ * （主色 6% → 透明），主按钮墨蓝，输入框药丸改浅底 + 焦点环，
+ * 校验失败抖 6px / 400ms，只抖一次。
  */
 
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -39,6 +43,13 @@ const remember = ref(rememberedUser.value !== '')
 const shakingField = ref<'userNo' | 'password' | ''>('')
 let shakeTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * 校验失败：抖一下比只弹一行字更容易被看到
+ *
+ * 幅度 6px、时长 400ms、**只抖一次**（规范 §7.7）：
+ * 循环抖动会让人以为界面卡住了。定时器比动画长一点点，
+ * 保证动画播完再摘掉 class，下一次失败能重新触发。
+ */
 function shake(field: 'userNo' | 'password'): void {
   shakingField.value = field
   if (shakeTimer) {
@@ -46,7 +57,7 @@ function shake(field: 'userNo' | 'password'): void {
   }
   shakeTimer = setTimeout(() => {
     shakingField.value = ''
-  }, 500)
+  }, 420)
 }
 
 // ── 时钟 ────────────────────────────────────────────────
@@ -120,10 +131,6 @@ async function onSubmit(): Promise<void> {
 
 <template>
   <view class="login-screen">
-    <!-- 氛围光：用 radial-gradient 而不是 blur，后者在部分小程序内核上不支持 -->
-    <view class="login-screen__glow login-screen__glow--a" />
-    <view class="login-screen__glow login-screen__glow--b" />
-
     <view class="login-screen__body">
       <view class="login-clock">
         <text class="login-clock__time">{{ clockTime }}</text>
@@ -188,7 +195,7 @@ async function onSubmit(): Promise<void> {
         <text v-if="errorMessage" class="login-card__error" aria-live="assertive">{{ errorMessage }}</text>
 
         <BxButton type="primary" block :loading="submitting" @click="onSubmit">
-          {{ submitting ? '登录中' : '登 录' }}
+          {{ submitting ? '登录中' : '登录' }}
         </BxButton>
 
         <text class="login-card__hint">登录即表示同意按园区规定使用本系统</text>
@@ -198,6 +205,13 @@ async function onSubmit(): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
+/*
+ * 锁屏式全屏
+ *
+ * 底色是 `--bx-bg`，上面覆一层**极浅的墨蓝晕染**（主色 6% → 透明）：
+ * 比旧版三段浅蓝渐变更克制，也不再自带一套「那个蓝」。
+ * 用 radial-gradient 而不是 blur：后者在部分小程序内核上不支持。
+ */
 .login-screen {
   position: relative;
   display: flex;
@@ -205,60 +219,43 @@ async function onSubmit(): Promise<void> {
   justify-content: center;
   min-height: 100vh;
   overflow: hidden;
-  /*
-   * 背景只用令牌：此前是写死的三段浅蓝渐变（#f7faff / #eef3fb），
-   * 换主题时不会跟随，也把「主色」偷偷变成了「那个蓝」。
-   */
   background-color: var(--bx-bg);
-  background-image: radial-gradient(720px 380px at 50% 0%, var(--bx-primary-soft) 0%, rgba(255, 255, 255, 0) 70%);
-}
-
-.login-screen__glow {
-  position: absolute;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-/* 氛围光取主色浅底而不是 rgba(0,122,255,.16)：后者是旧蓝，且不跟随主题 */
-.login-screen__glow--a {
-  top: -160px;
-  left: -120px;
-  background: radial-gradient(circle, var(--bx-primary-soft) 0%, rgba(255, 255, 255, 0) 68%);
-}
-
-.login-screen__glow--b {
-  right: -140px;
-  bottom: -180px;
-  background: radial-gradient(circle, var(--bx-primary-soft) 0%, rgba(255, 255, 255, 0) 70%);
+  background-image:
+    radial-gradient(880px 460px at 50% -6%, var(--bx-glow) 0%, rgba(255, 255, 255, 0) 70%),
+    radial-gradient(640px 420px at 10% 108%, var(--bx-glow) 0%, rgba(255, 255, 255, 0) 72%);
 }
 
 .login-screen__body {
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: var(--bx-content-width);
-  padding: 0 16px 32px;
+  max-width: 380px;
+  min-height: 100vh;
+  padding: 72px 20px 32px;
 }
 
 /* ── 时钟 ── */
 
 .login-clock {
   display: flex;
+  flex: none;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .login-clock__time {
-  /* tabular-nums：秒位变化时数字宽度不跳 */
+  /* tabular-nums：分钟变化时数字宽度不跳 */
   font-variant-numeric: tabular-nums;
   font-size: var(--bx-font-hero);
   font-weight: 600;
   line-height: var(--bx-leading-hero);
   color: var(--bx-text);
-  letter-spacing: 2px;
+  /* 28px 以上加 -0.02em（规范 §3.2） */
+  letter-spacing: -0.02em;
 }
 
 .login-clock__date {
@@ -269,10 +266,20 @@ async function onSubmit(): Promise<void> {
 
 /* ── 卡片 ── */
 
+/*
+ * 纸面：白底 + 1px 描边 + 圆角 20 + 极轻阴影
+ * （描边优先于阴影，规范 §2.4）
+ *
+ * 上下都是 auto 外边距：卡片停在时钟与屏幕底之间的正中，
+ * 锁屏的样子是「上面是时间，下面是解锁」，不是一堆东西挤在左上角。
+ */
 .login-card {
-  padding: 28px 20px 24px;
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: 28px 24px 24px;
   background-color: var(--bx-surface);
-  border-radius: var(--bx-radius-card);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-lg);
   box-shadow: var(--bx-elev-1);
 }
 
@@ -281,6 +288,7 @@ async function onSubmit(): Promise<void> {
   display: block;
   margin-bottom: 20px;
   font-size: 15px;
+  line-height: 24px;
   color: var(--bx-text-2);
   text-align: center;
 }
@@ -310,29 +318,33 @@ async function onSubmit(): Promise<void> {
 }
 
 /*
- * 药丸输入框：白底 + 描边立在浅灰页面上 —— 比「浅灰底 + 无描边」更能看出
- * 这里是可输入的。高度取控件档 48px。
+ * 药丸输入框：浅底 + 强描边立在墨蓝晕染上（规范 §7.7）。
+ * 高度取控件档 48px。
  */
 .login-field__input {
   box-sizing: border-box;
   width: 100%;
   height: var(--bx-control-height);
-  padding: 0 18px;
+  padding: 0 20px;
   font-size: 15px;
   color: var(--bx-text);
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-chip);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
+  border-radius: var(--bx-radius-pill);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
-    background-color var(--bx-duration-fast) var(--bx-ease-out);
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+/* 聚焦：描边变主色 + 一圈光晕（不用 outline，保证小程序一致） */
+.login-field__input:focus-within {
+  border-color: var(--bx-primary);
+  background-color: var(--bx-surface);
+  box-shadow: var(--bx-focus-glow);
 }
 
 /* 外层的描边变化是主指示；内层再补焦点环 —— 可访问性审计读的是 activeElement 自身 */
-.login-field__input:focus-within {
-  border-color: var(--bx-primary);
-}
-
 :deep(.login-field__input .uni-input-input:focus-visible) {
   outline: 2px solid var(--bx-primary);
   outline-offset: -2px;
@@ -342,9 +354,9 @@ async function onSubmit(): Promise<void> {
   color: var(--bx-text-4);
 }
 
-/* 校验失败：抖一下比只弹一行字更容易被看到 */
+/* 校验失败：抖一下（6px / 400ms / 只播一次） */
 .login-field--shake {
-  animation: login-shake 0.42s ease;
+  animation: login-shake 400ms var(--bx-ease-out);
 }
 
 @keyframes login-shake {
@@ -354,15 +366,15 @@ async function onSubmit(): Promise<void> {
   }
 
   20% {
-    transform: translateX(-8px);
+    transform: translateX(-6px);
   }
 
   40% {
-    transform: translateX(7px);
+    transform: translateX(6px);
   }
 
   60% {
-    transform: translateX(-5px);
+    transform: translateX(-4px);
   }
 
   80% {
@@ -386,9 +398,12 @@ async function onSubmit(): Promise<void> {
   width: 20px;
   height: 20px;
   margin-right: 8px;
-  border: 1px solid var(--bx-line);
-  border-radius: 6px;
+  border: 1px solid var(--bx-line-strong);
+  border-radius: var(--bx-radius-xs);
   background-color: var(--bx-surface);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    border-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .login-remember__box--checked {

@@ -19,7 +19,7 @@ import type { AnswerMap, DraftItem, QuestionField } from '@/domain/questionnaire
 import { ref } from 'vue'
 
 import { resultSave } from '@/api/daq/record'
-import { toDraftPayload, toDraftPayloads } from '@/domain/questionnaire'
+import { toDraftPayload } from '@/domain/questionnaire'
 import { extractResponsePayload } from '@/utils/request'
 
 export interface DraftSaveParams {
@@ -136,54 +136,12 @@ export function useDraft() {
     }
   }
 
-  /** 「暂存草稿」按钮：一次提交全部已作答项 */
-  async function saveAll(params: Omit<DraftSaveParams, 'field'> & { fields: QuestionField[] }): Promise<void> {
-    // 全卷组装复用 domain 的 toDraftPayloads：此前这里把「遍历 + 调 toDraftPayload +
-    // 过滤空值」抄了一遍，与 serializer 里的实现逐字重复，且让 toDraftPayloads 成了死代码。
-    const items = toDraftPayloads(params.fields, params.answers)
-    if (items.length === 0) {
-      return
-    }
-
-    // 与 save 保持同一套批次号来源，避免两条路径各写各的
-    if (!currentBatchNo && params.fillBatchNo) {
-      currentBatchNo = params.fillBatchNo
-    }
-
-    saving.value = true
-    failed.value = false
-    savedTip.value = '正在保存草稿…'
-    try {
-      const envelope = await resultSave({
-        activityNo: params.activityNo,
-        fillBatchNo: currentBatchNo || undefined,
-        itemData: items,
-      })
-      const payload = extractResponsePayload<{ fill_batch_no?: string }>(envelope)
-      // 同 flush：批次号首次锁定后不再被服务端回传值覆盖（对齐老工程语义）
-      if (payload?.fill_batch_no && !currentBatchNo) {
-        currentBatchNo = payload.fill_batch_no
-        params.onBatchNo?.(payload.fill_batch_no)
-      }
-      savedTip.value = '草稿已自动保存'
-      savedAt.value = Date.now()
-    }
-    catch {
-      failed.value = true
-      savedTip.value = '草稿保存失败'
-    }
-    finally {
-      saving.value = false
-    }
-  }
-
   return {
     saving,
     savedTip,
     savedAt,
     failed,
     save,
-    saveAll,
     waitIdle,
   }
 }

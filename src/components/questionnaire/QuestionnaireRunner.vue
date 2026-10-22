@@ -4,6 +4,10 @@
  *
  * `index/index` 与 `survey/survey` 共用：两者是老工程同一功能的两个入口，
  * 差异仅在路由与结果页指向。
+ *
+ * 视觉（docs/UI-UX-V2-设计系统.md §7.2）：
+ * 一份问卷 = **一张连续的纸**。纸内题目之间只有细线，没有卡片；
+ * 顶部吸顶进度区，底部吸底操作栏；错误摘要保持可点击清单。
  */
 
 import type { AnswerValue, LocalDraft, QuestionField } from '@/domain/questionnaire'
@@ -16,6 +20,7 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import BxProgressBar from '@/components/base/BxProgressBar.vue'
+import BxSkeleton from '@/components/base/BxSkeleton.vue'
 import BxFieldRenderer from '@/components/form/BxFieldRenderer.vue'
 import { useAnswerModel } from '@/composables/useAnswerModel'
 import { useDraft } from '@/composables/useDraft'
@@ -50,7 +55,7 @@ const emit = defineEmits<{ submitted: [{ batchNo: string }] }>()
 const session = useSessionStore()
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 const { answers, progress, replace } = useAnswerModel(() => fields.value)
-const { savedTip, save: saveDraftItem, saveAll: saveAllDraft, waitIdle: waitDraftIdle } = useDraft()
+const { savedTip, save: saveDraftItem, waitIdle: waitDraftIdle } = useDraft()
 const { submitting, submit } = useSubmit()
 
 // 嵌入场景：内容变高时告诉父页面调整 iframe 高度
@@ -313,19 +318,6 @@ function onAnswerChange(field: QuestionField, value: AnswerValue): void {
   })
 }
 
-async function onSaveDraft(): Promise<void> {
-  // 先等自动保存排空，避免「暂存草稿」与逐题自动保存并发写同一批次
-  await waitDraftIdle()
-  await saveAllDraft({
-    activityNo: props.activityNo,
-    fillBatchNo: session.fillBatchNo || undefined,
-    fields: fields.value,
-    answers,
-    onBatchNo: adoptBatchNo,
-  })
-  toast(savedTip.value)
-}
-
 async function onSubmit(): Promise<void> {
   const issues = validateRequired(fields.value, answers)
   if (issues.length > 0) {
@@ -446,6 +438,8 @@ function onHistoryKeydown(event: KeyboardEvent): void {
           role="button"
           aria-label="答题记录"
           tabindex="0"
+          hover-class="runner__nav-link--hover"
+          :hover-stay-time="60"
           @click="openHistory"
           @keydown="onHistoryKeydown"
         >
@@ -456,24 +450,41 @@ function onHistoryKeydown(event: KeyboardEvent): void {
     <!--
       进度区吸顶在导航栏下方：长问卷里用户随时要知道「还剩多少」，
       进度条随页面滚走等于没有进度提示（骨架把 weak progress cues 列为反模式）。
+
+      结构：白底**通栏**（与导航栏连成一条白色带），内部内容（进度条 + 计数）
+      再用 bx-container 限宽居中 —— 否则进度条会横贯整个视口，
+      与下面那张 720px 的纸对不上。
     -->
     <view class="runner__progress">
-      <BxProgressBar :percent="progress.percent" />
-      <view v-if="!loading && !errorMessage" class="runner__progress-meta">
-        <text class="runner__progress-count">共 {{ progress.total }} 题 · 已答 {{ progress.answered }}</text>
-        <text
-          v-if="!readOnly"
-          class="runner__progress-left"
-          :class="{ 'runner__progress-left--done': requiredLeft === 0 }"
-        >
-          {{ requiredLeft > 0 ? `还差 ${requiredLeft} 题必答` : '必答题已答完' }}
-        </text>
+      <view class="runner__progress-inner bx-container">
+        <BxProgressBar :percent="progress.percent" />
+        <view v-if="!loading && !errorMessage" class="runner__progress-meta">
+          <!--
+            「共 N 题」与「已答 M」是两个独立条目，用竖细线分隔：
+            规范 §3.2 禁止中点连接 meta（`A · B · C`）。
+          -->
+          <view class="runner__progress-count">
+            <text class="runner__progress-count-item">共 {{ progress.total }} 题</text>
+            <view class="runner__progress-divider" />
+            <text class="runner__progress-count-item">已答 {{ progress.answered }}</text>
+          </view>
+          <text
+            v-if="!readOnly"
+            class="runner__progress-left"
+            :class="{ 'runner__progress-left--done': requiredLeft === 0 }"
+          >
+            {{ requiredLeft > 0 ? `还差 ${requiredLeft} 题必答` : '必答题已答完' }}
+          </text>
+        </view>
       </view>
     </view>
 
     <view class="runner__body bx-container">
-      <view v-if="loading" class="runner__state">
+      <view v-if="loading" class="runner__state" aria-busy="true">
         <text class="runner__state-text">正在加载问卷…</text>
+        <view class="runner__state-skeleton">
+          <BxSkeleton :lines="5" :height="18" />
+        </view>
       </view>
 
       <BxEmpty
@@ -483,16 +494,6 @@ function onHistoryKeydown(event: KeyboardEvent): void {
       />
 
       <template v-else>
-        <view class="runner__intro">
-          <text class="runner__intro-title">{{ title }}</text>
-          <text v-if="intro" class="runner__intro-desc">{{ intro }}</text>
-          <view v-if="activity?.answer_times" class="runner__intro-meta">
-            <text class="runner__intro-meta-label">作答次数</text>
-            <text class="runner__intro-meta-text">{{ activity.answer_times }}</text>
-          </view>
-          <text v-if="readOnly" class="runner__intro-readonly">{{ readOnlyTip }}</text>
-        </view>
-
         <!--
           提交失败后的错误摘要
           用 aria-live 而不是 role="alert"：role 会被 scripts/a11y.mjs 的 `[role]`
@@ -516,16 +517,35 @@ function onHistoryKeydown(event: KeyboardEvent): void {
           </view>
         </view>
 
-        <view class="runner__list">
-          <BxFieldRenderer
-            v-for="field in fields"
-            :key="field.key"
-            :field="field"
-            :model-value="answers[field.key]"
-            :error="errors[field.key]"
-            :disabled="readOnly"
-            @update:model-value="value => onAnswerChange(field, value)"
-          />
+        <!--
+          一张纸
+          整卷是一个容器：白底 + 1px 描边 + 圆角 20 + 极轻阴影，
+          题与题之间只有一条细线 —— 层级从「11 个盒子」变成「一份卷」。
+        -->
+        <view class="runner__paper">
+          <!-- 卷首：标题 + 说明 + 细线 + 元信息 -->
+          <view class="runner__intro">
+            <text class="runner__intro-title">{{ title }}</text>
+            <text v-if="intro" class="runner__intro-desc">{{ intro }}</text>
+            <view class="runner__intro-rule" />
+            <view v-if="activity?.answer_times" class="runner__intro-meta">
+              <text class="runner__intro-meta-label">作答次数</text>
+              <text class="runner__intro-meta-text">{{ activity.answer_times }}</text>
+            </view>
+            <text v-if="readOnly" class="runner__intro-readonly">{{ readOnlyTip }}</text>
+          </view>
+
+          <view class="runner__list">
+            <BxFieldRenderer
+              v-for="field in fields"
+              :key="field.key"
+              :field="field"
+              :model-value="answers[field.key]"
+              :error="errors[field.key]"
+              :disabled="readOnly"
+              @update:model-value="value => onAnswerChange(field, value)"
+            />
+          </view>
         </view>
       </template>
     </view>
@@ -533,14 +553,9 @@ function onHistoryKeydown(event: KeyboardEvent): void {
     <view v-if="!loading && !errorMessage && !readOnly" class="runner__footer">
       <text v-if="savedTip" class="runner__footer-tip">{{ savedTip }}</text>
       <view class="runner__footer-actions">
-        <BxButton type="ghost" @click="onSaveDraft">
-          暂存草稿
+        <BxButton :loading="submitting" block @click="onSubmit">
+          {{ activity?.submit_label || '提交问卷' }}
         </BxButton>
-        <view class="runner__footer-primary">
-          <BxButton :loading="submitting" block @click="onSubmit">
-            {{ activity?.submit_label || '提交问卷' }}
-          </BxButton>
-        </view>
       </view>
     </view>
   </view>
@@ -554,13 +569,17 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   background-color: var(--bx-bg);
 }
 
+/* ── 导航栏右侧的「记录」入口 ──────────────────────────────────────
+ * 文字按钮而不是蓝色链接：一屏里主色只留给主操作与进度（规范 §2.4）。
+ */
 .runner__nav-link {
   display: flex;
   align-items: center;
   height: 44px;
-  padding: 0 10px;
+  padding: 0 8px;
   cursor: pointer;
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-sm);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */
@@ -569,37 +588,76 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   outline-offset: -2px;
 }
 
-.runner__nav-link-text {
-  font-size: 15px;
-  color: var(--bx-primary);
+.runner__nav-link--hover {
+  background-color: var(--bx-surface-2);
 }
 
+/*
+ * 桌面端悬停反馈
+ *
+ * uni-app 的 hover-class 在 H5 上是「按下」态而不是「悬停」态，
+ * 所以桌面端的悬停样式要自己写，并包在 @media (hover: hover) 里 ——
+ * 触屏设备走不到这个分支（小程序端用 hover-class）。
+ */
+@media (hover: hover) {
+  .runner__nav-link:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.runner__nav-link-text {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--bx-text-2);
+}
+
+/* ── 吸顶进度区 ────────────────────────────────────────────────────
+ * 白底通栏：与导航栏连成一条白色带，滚动时层次才干净。
+ * 吸在导航栏下沿：导航栏自身高度之外还有状态栏占位。
+ */
 .runner__progress {
   position: sticky;
-  /* 吸在导航栏下沿：导航栏自身高度之外还有状态栏占位 */
   top: calc(var(--bx-navbar-height) + var(--status-bar-height, 0px));
-  z-index: 9;
+  z-index: var(--bx-z-sticky);
   padding-bottom: 10px;
   background-color: var(--bx-surface);
+  /* 下边线：滚动时内容从下方穿过，层次更清楚 */
+  border-bottom: 1px solid var(--bx-line-2);
 }
 
+/* 内部内容限宽居中：进度条与计数跟下面那张纸左对齐 */
 .runner__progress-meta {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  max-width: var(--bx-content-width);
-  margin: 0 auto;
-  padding: 8px 16px 0;
+  padding-top: 8px;
 }
 
 .runner__progress-count {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.runner__progress-count-item {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 竖细线分隔，替代中点连接（规范 §3.2） */
+.runner__progress-divider {
+  width: 1px;
+  height: 10px;
+  margin: 0 8px;
+  background-color: var(--bx-line);
 }
 
 .runner__progress-left {
-  font-size: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-warn);
+  font-variant-numeric: tabular-nums;
 }
 
 .runner__progress-left--done {
@@ -614,43 +672,83 @@ function onHistoryKeydown(event: KeyboardEvent): void {
    *
    * footer 是 sticky：它的**占位**在文档流末尾，但视觉上被「吸」在视口底部，
    * 于是滚动到后半段时它会盖住当前题 —— 现网正是这个问题（第 4 题被操作栏压住）。
-   * 留出一个 footer 的高度即可。
+   *
+   * 留位必须 ≥ 操作栏的实际高度：操作栏恒定 64px（10 + 44 + 10），
+   * 提示行绝对定位在它上方，不占操作栏的高度，所以这里也恒定。
    */
-  padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
 }
 
 .runner__state {
+  position: relative;
   padding: 64px 0;
   text-align: center;
 }
 
+/*
+ * 加载文案只给屏幕阅读器
+ *
+ * 视觉上的加载信号是**骨架屏**（页面在组装），一行「正在加载问卷…」更像出错了；
+ * 但骨架屏是 aria-hidden 的装饰，所以文案仍要留在无障碍树里。
+ */
 .runner__state-text {
-  font-size: 14px;
-  color: var(--bx-text-3);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
 }
 
-.runner__intro {
-  padding: 18px 16px;
-  margin-bottom: 8px;
+/* 骨架：加载态保持版式稳定，比一行「正在加载问卷…」更说明内容马上来 */
+.runner__state-skeleton {
+  margin-top: 24px;
+  padding: 0 16px;
+  text-align: left;
+}
+
+/* ── 一张纸 ─────────────────────────────────────────────────────────
+ * 描边优先于阴影：纸感来自 1px 描边 + 极轻阴影，不是大软阴影。
+ */
+.runner__paper {
+  overflow: hidden;
   background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-lg);
   box-shadow: var(--bx-elev-1);
-  border-radius: var(--bx-radius-card);
+}
+
+/* ── 卷首 ───────────────────────────────────────────────────────── */
+.runner__intro {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--bx-line-2);
 }
 
 .runner__intro-title {
   display: block;
-  font-size: 20px;
+  font-size: var(--bx-font-title);
   font-weight: 600;
-  line-height: 1.5;
+  line-height: var(--bx-leading-title);
+  /* ≥20px 的标题加 -0.01em 字距 */
+  letter-spacing: -0.01em;
   color: var(--bx-text);
 }
 
 .runner__intro-desc {
   display: block;
   margin-top: 8px;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-2);
+}
+
+/* 细线：不是大色块，只把说明与元信息分开 */
+.runner__intro-rule {
+  height: 1px;
+  margin-top: 16px;
+  background-color: var(--bx-line-2);
 }
 
 .runner__intro-meta {
@@ -661,41 +759,42 @@ function onHistoryKeydown(event: KeyboardEvent): void {
 
 .runner__intro-meta-label {
   margin-right: 6px;
-  font-size: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
 }
 
-.runner__intro-meta-text,
-.runner__intro-meta-dot {
-  font-size: 12px;
+.runner__intro-meta-text {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
-}
-
-.runner__intro-meta-dot {
-  margin: 0 6px;
+  font-variant-numeric: tabular-nums;
 }
 
 .runner__intro-readonly {
   display: block;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-warn);
 }
 
-/* 错误摘要：可点击的清单，点一条跳到那道题 */
+/* ── 错误摘要：可点击的清单，点一条跳到那道题 ───────────────────── */
 .runner__summary {
   padding: 14px 16px;
   margin-bottom: 12px;
   background-color: var(--bx-danger-soft);
   border: 1px solid var(--bx-danger-line);
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-md);
+  animation: bx-survey-summary-in var(--bx-duration-base) var(--bx-ease-out) both;
 }
 
 .runner__summary-title {
   display: block;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: var(--bx-font-sub);
   font-weight: 600;
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text);
 }
 
@@ -715,16 +814,18 @@ function onHistoryKeydown(event: KeyboardEvent): void {
 .runner__summary-no {
   flex: none;
   min-width: 20px;
-  font-size: 12px;
-  /* 题号保持中性：蓝色链接已经是这一行的强调，两处同时上色会显得吵 */
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  /* 题号保持中性：这一行已经是强调（链接），两处同时上色会显得吵 */
   color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
 }
 
 .runner__summary-text {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-primary);
   text-decoration: underline;
   word-break: break-all;
@@ -736,14 +837,13 @@ function onHistoryKeydown(event: KeyboardEvent): void {
  * 旧版每题一张独立白卡 + 12px 间距，11 道题就是 11 个同权重的盒子，长问卷看起来
  * 像「盒子山」，题与题之间也看不出从属关系。现在整卷是一个容器，题间用细分隔线
  * 切开 —— 层级从「多张卡」变成「一份卷」。
+ *
+ * 「题目自身不画卡片 / 题间细线分隔 / 错误红条」由 BxQuestionItem 自己实现
+ * （规范 §6.2），本页**不再用 :deep() 覆盖**它们 —— 同一件事只留一处真源。
  */
 .runner__list {
   display: flex;
   flex-direction: column;
-  background-color: var(--bx-surface);
-  border-radius: var(--bx-radius-card);
-  box-shadow: var(--bx-elev-1);
-  overflow: hidden;
 }
 
 /* flex 子项默认 min-width: auto，内部控件一旦溢出就会把容器撑宽 */
@@ -751,65 +851,142 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   min-width: 0;
 }
 
-/* 卡片自身的底色 / 圆角 / 阴影交给容器统一表达 */
-.runner__list :deep(.bx-question) {
-  background-color: transparent;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.runner__list :deep(.bx-question:not(:first-child)) {
-  border-top: 1px solid var(--bx-line-2);
-}
-
 /*
- * 错误态要盖回容器规则
+ * 题组小节：一条 24px 短横线 + 13/600 文字（规范 §7.2）
  *
- * 上面 `:deep(.bx-question)` 的特异性是 (0,3,0)（两个 class 加作用域属性），
- * 高于 BxQuestionItem 自己的 `.bx-question--error[data-v-x]`（0,2,0），
- * 会把浅红底与左侧色条一起清掉。这里显式恢复。
+ * 短横线用中性强描边而不是主色 —— 主色一屏只留给主操作与进度（规范 §2.4）。
+ * 小节标题本身的字号/字重/颜色由 BxQuestionItem 负责，这里只补那条短横线。
  */
-.runner__list :deep(.bx-question--error) {
-  background-color: var(--bx-danger-soft);
-  box-shadow: inset 3px 0 0 var(--bx-danger);
+.runner__list :deep(.bx-question--section)::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  margin-bottom: 8px;
+  background-color: var(--bx-line-strong);
+  border-radius: 1px;
 }
 
+/* ── 吸底操作栏 ─────────────────────────────────────────────────────
+ * 只剩一个主操作：提交问卷，撑满内容列宽。
+ *
+ * 此前这里还有「暂存草稿」按钮，已按需求去掉 —— 草稿本来就是**逐题自动保存**
+ * 的（每答一题就落一次库，见 useDraft.save），「暂存草稿」只是把同一件事
+ * 再手动做一遍；去掉入口不丢功能。
+ */
 .runner__footer {
-  position: sticky;
+  position: fixed;
+  right: 0;
   bottom: 0;
+  left: 0;
   z-index: var(--bx-z-fixed);
   /*
-   * 固定高度（含一行「草稿已自动保存」提示）。
+   * 高度恒定 64px（10 + 44 + 10）。
    *
-   * 提示按需出现：不预留高度时它一出现吸底栏就变高 24px，把当前视野里的选项
-   * 往下推、甚至盖住 —— 连续多选时用户可能点到提示条而不是选项。
-   * （端到端脚本的坐标点击正是被这一点打偏的：多选第 2 项距吸底栏只剩 3px。）
-   * 恒定高度比省下这 24px 重要。
+   * 「草稿已自动保存」提示按需出现，若让它参与文档流，它一出现吸底栏就变高
+   * 24px，把当前视野里的选项往下推、甚至盖住 —— 连续多选时用户可能点到提示条
+   * 而不是选项。所以提示行绝对定位在操作栏**上方**（见 .runner__footer-tip），
+   * 操作栏自身高度永远不变，内容区也就能按固定值留位。
    */
-  min-height: calc(92px + env(safe-area-inset-bottom));
+  min-height: calc(64px + env(safe-area-inset-bottom));
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   background-color: var(--bx-surface);
   /* 向上的一条线表达「浮起」，不用阴影：阴影压在题目上会发脏 */
   box-shadow: var(--bx-elev-sticky);
+  /* 首次出现：上移 10px + 淡入（规范 §5.2 第 8 条） */
+  animation: bx-survey-footer-in 240ms var(--bx-ease-out) both;
 }
 
+/*
+ * 保存提示：绝对定位在操作栏上方，不占操作栏的高度
+ *
+ * pointer-events: none —— 它浮在内容之上，不能挡住下面那一行的点击
+ * （提示条挡住选项正是此前修过的那个缺陷）。
+ */
 .runner__footer-tip {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
   display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
+  padding: 6px 16px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
   text-align: center;
+  background-color: var(--bx-surface);
+  pointer-events: none;
 }
 
 .runner__footer-actions {
   display: flex;
   align-items: center;
+  /* 固定高度：操作栏的总高因此是常量，与按钮自身高度无关 */
+  height: var(--bx-control-height-md);
   max-width: var(--bx-content-width);
   margin: 0 auto;
 }
 
-.runner__footer-primary {
-  flex: 1;
-  margin-left: 10px;
+/* ── 动效 ─────────────────────────────────────────────────────────
+ * 首屏编排（规范 §5.2 第 1 条）：题块淡入 + translateY(8px→0)，
+ * 逐块 delay 24ms，480ms ease-out，只播一次。
+ *
+ * 逐项动画只在 H5 端做：小程序端长列表逐项动画会掉帧（规范 §5.3）。
+ */
+/* #ifdef H5 */
+@keyframes bx-survey-question-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.runner__list :deep(.bx-question) {
+  animation-name: bx-survey-question-enter;
+  animation-duration: var(--bx-duration-slower);
+  animation-timing-function: var(--bx-ease-out);
+  animation-fill-mode: both;
+}
+/* #endif */
+
+/*
+ * 逐块 delay（24ms 递增）
+ *
+ * 规则本身放在条件编译之外：没有 animation-name 时 animation-delay 不生效，
+ * 小程序端自然退化为「无动画」。
+ */
+@for $i from 1 through 12 {
+  .runner__list :deep(.bx-question:nth-child(#{$i})) {
+    animation-delay: #{($i - 1) * 24}ms;
+  }
+}
+
+/* 错误摘要淡入（规范 §5.2 第 5 条） */
+@keyframes bx-survey-summary-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* 吸底栏首次出现（规范 §5.2 第 8 条） */
+@keyframes bx-survey-footer-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

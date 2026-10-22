@@ -255,34 +255,39 @@ const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
   width: 100%;
 }
 
+/* 与其它输入类同款：内嵌底 + 描边 + 44px 高（规范 §6.2） */
 .bx-address__control {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: var(--bx-control-height);
-  padding: 12px 14px;
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  height: var(--bx-control-height-md);
+  padding: 0 14px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
 }
 
 .bx-address__control--disabled {
   cursor: not-allowed;
-  opacity: var(--bx-disabled-opacity);
+  color: var(--bx-text-2);
+  background-color: var(--bx-surface-2);
+  border-color: transparent;
 }
 
 .bx-address__text {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
 }
 
 .bx-address__placeholder {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text-4);
 }
 

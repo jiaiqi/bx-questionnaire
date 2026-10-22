@@ -52,13 +52,14 @@ const emit = defineEmits<{
 }
 
 .type-picker__title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  line-height: 26px;
   color: var(--bx-text);
 }
 
 .type-picker__close {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--bx-text-2);
 }
 
@@ -76,9 +77,13 @@ const emit = defineEmits<{
   width: calc(50% - 8px);
   margin: 4px;
   padding: 12px;
+  cursor: pointer;
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
-  background-color: var(--bx-surface);
+  border-radius: var(--bx-radius-sm);
+  background-color: var(--bx-surface-2);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    border-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .type-picker__cell:active {
@@ -87,15 +92,16 @@ const emit = defineEmits<{
 }
 
 .type-picker__name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
+  line-height: 22px;
   color: var(--bx-text);
 }
 
 .type-picker__hint {
   margin-top: 4px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 18px;
   color: var(--bx-text-3);
 }
 

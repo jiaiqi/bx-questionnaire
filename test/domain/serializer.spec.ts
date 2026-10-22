@@ -5,7 +5,7 @@ import type { DaqItemRow } from '@/api/daq/types'
 import type { FieldOption, QuestionField } from '@/domain/questionnaire'
 import { describe, expect, it } from 'vitest'
 import { toQuestionFields } from '@/domain/questionnaire/mapper'
-import { toDraftPayload, toDraftPayloads, toSubmitPayload } from '@/domain/questionnaire/serializer'
+import { toDraftPayload, toSubmitPayload } from '@/domain/questionnaire/serializer'
 import { activity8, buildRealistic19, realistic19Answers } from '../fixtures/questionnaire'
 
 describe('serializer · 提交体', () => {
@@ -88,7 +88,6 @@ describe('serializer · 草稿体', () => {
   it('空值不产生草稿项', () => {
     const fields = toQuestionFields([{ item_no: 'q1', item_seq: 1, item_type: '文本' }])
     expect(toDraftPayload(fields[0]!, {})).toBeNull()
-    expect(toDraftPayloads(fields, {})).toHaveLength(0)
   })
 })
 
@@ -135,17 +134,6 @@ describe('serializer · 边界值', () => {
   it('草稿：空数组不产生草稿项（不发起无意义的请求）', () => {
     const field = makeField({ key: 'k4', widget: 'checkbox' })
     expect(toDraftPayload(field, { k4: [] })).toBeNull()
-  })
-
-  it('全卷草稿跳过未作答与分节符', () => {
-    const fields = [
-      makeField({ key: 'a', widget: 'section' }),
-      makeField({ key: 'b', widget: 'text' }),
-      makeField({ key: 'c', widget: 'text' }),
-    ]
-    expect(toDraftPayloads(fields, { b: 'hello' })).toEqual([
-      { item_no: 'b', option_data: ['hello'] },
-    ])
   })
 
   it('选项类判空按选项主键 option_no，不存在的选项不会混进提交体', () => {

@@ -4,6 +4,9 @@
  *
  * `history/history` 与 `survey/history` 共用。
  * 分页与触底加载由页面调用 `loadMore`，避免组件内依赖页面级生命周期。
+ *
+ * 视觉（docs/UI-UX-V2-设计系统.md §7.4）：
+ * 一行一条记录 —— 左侧时间 + 标题，右侧状态 chip + 分数；行间用细线，不做卡片墙。
  */
 
 import type { DaqRecordReplyRow } from '@/api/daq/types'
@@ -146,7 +149,7 @@ function openDetail(row: DaqRecordReplyRow): void {
 /**
  * 键盘激活
  *
- * 记录卡片与「加载更多」都是可点击的 <view> / <text>，天然不可聚焦 ——
+ * 记录行与「加载更多」都是可点击的 <view> / <text>，天然不可聚焦 ——
  * 键盘用户看不到也打不开这些记录。与 BxButton / BxOptionList 同一类问题。
  */
 function isActivateKey(event: KeyboardEvent): boolean {
@@ -179,6 +182,11 @@ function goLogin(): void {
   uni.navigateTo({ url: '/pages/login/index' })
 }
 
+/** 空态的主操作：回到这份问卷去答（规范 §7.4） */
+function goAnswer(): void {
+  uni.navigateTo({ url: answerUrl(props.activityNo, { status: '进行中' }) })
+}
+
 defineExpose({ refresh, loadMore })
 
 void fetchPage(true)
@@ -197,7 +205,7 @@ void fetchPage(true)
         tip="网络恢复后可以重新加载"
       />
       <view class="records__retry">
-        <BxButton type="ghost" size="small" @click="refresh">
+        <BxButton type="secondary" size="small" @click="refresh">
           重新加载
         </BxButton>
       </view>
@@ -210,8 +218,11 @@ void fetchPage(true)
           ? '当前账号在本问卷下还没有作答记录'
           : '未登录时只显示本机作答记录；换设备或清过浏览器数据就看不到，登录后可查看账号下的全部记录'"
       />
-      <view v-if="!session.isLogin" class="records__retry">
-        <BxButton type="primary" size="small" @click="goLogin">
+      <view class="records__retry">
+        <BxButton type="primary" size="small" @click="goAnswer">
+          去答一份问卷
+        </BxButton>
+        <BxButton v-if="!session.isLogin" type="ghost" size="small" @click="goLogin">
           去登录
         </BxButton>
       </view>
@@ -224,6 +235,10 @@ void fetchPage(true)
         </text>
       </view>
 
+      <!--
+        一行一条记录：左侧标题 + 时间，右侧状态 chip + 分数。
+        记录是同质条目，每行都「浮」起来会变成盒子墙 —— 这里用一条细线分隔。
+      -->
       <view
         v-for="row in visibleRows"
         :key="String(row.fill_batch_no)"
@@ -236,30 +251,29 @@ void fetchPage(true)
         @click="openDetail(row)"
         @keydown="onCardKeydown($event, row)"
       >
-        <view class="record__head">
+        <view class="record__main">
           <text class="record__title">{{ row.title || row.activity_no }}</text>
+          <view class="record__meta">
+            <text v-if="formatDateTime(row.start_time)" class="record__meta-text">
+              {{ formatDateTime(row.start_time) }}
+            </text>
+            <view v-if="formatDateTime(row.start_time) && row.fill_batch_no" class="record__meta-divider" />
+            <text v-if="row.fill_batch_no" class="record__meta-text">
+              批次 {{ row.fill_batch_no }}
+            </text>
+          </view>
+        </view>
+
+        <view class="record__side">
           <text
             class="record__state"
             :class="row.state === '未完成' ? 'record__state--pending' : 'record__state--done'"
           >
             {{ row.state || '已完成' }}
           </text>
-        </view>
-
-        <view class="record__meta">
-          <text v-if="formatDateTime(row.start_time)" class="record__meta-text">
-            开始 {{ formatDateTime(row.start_time) }}
-          </text>
-          <text v-if="formatDateTime(row.end_time)" class="record__meta-text">
-            结束 {{ formatDateTime(row.end_time) }}
-          </text>
-        </view>
-
-        <view class="record__foot">
           <text v-if="row.score !== null && row.score !== undefined" class="record__score">
-            得分 {{ row.score }}
+            {{ row.score }} 分
           </text>
-          <text class="record__batch">批次 {{ row.fill_batch_no }}</text>
         </view>
       </view>
 
@@ -305,7 +319,7 @@ void fetchPage(true)
 }
 
 .records__skeleton-row {
-  height: 92px;
+  height: 68px;
   background-color: var(--bx-line-2);
   border-radius: var(--bx-radius-card);
 }
@@ -317,30 +331,37 @@ void fetchPage(true)
   margin-top: 16px;
 }
 
+/* 两个动作之间留间距 */
+.records__retry > :not(:first-child) {
+  margin-left: 10px;
+}
+
 /* 列表容器化：一条分割线代替逐卡阴影 —— 记录是同质条目，不该每行都「浮」起来 */
 .records__list {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
-  box-shadow: var(--bx-elev-1);
 }
 
 .records__notice {
   padding: 10px 16px;
-  background-color: var(--bx-primary-soft);
-  border-bottom: 1px solid var(--bx-primary-line);
+  background-color: var(--bx-surface-2);
+  border-bottom: 1px solid var(--bx-line);
 }
 
 .records__notice-text {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-text-2);
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
 }
 
 .record {
-  padding: 16px;
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
   cursor: pointer;
 }
 
@@ -358,30 +379,57 @@ void fetchPage(true)
   background-color: var(--bx-surface-2);
 }
 
-.record__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.record__main {
+  flex: 1;
+  min-width: 0;
 }
 
 .record__title {
-  flex: 1;
-  min-width: 0;
+  display: block;
   overflow: hidden;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
   font-weight: 500;
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
+.record__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.record__meta-text {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 竖细线分隔，替代中点连接（规范 §3.2） */
+.record__meta-divider {
+  width: 1px;
+  height: 10px;
+  margin: 0 8px;
+  background-color: var(--bx-line);
+}
+
+.record__side {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: 12px;
+}
+
 /* 状态做成胶囊徽章：纯彩色文字在长列表里几乎扫不出来 */
 .record__state {
   flex-shrink: 0;
-  margin-left: 10px;
   padding: 2px 9px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   border-radius: var(--bx-radius-chip);
 }
 
@@ -395,45 +443,27 @@ void fetchPage(true)
   background-color: var(--bx-warn-soft);
 }
 
-.record__meta {
-  display: flex;
-  flex-wrap: wrap;
-  margin-top: 6px;
-}
-
-.record__meta-text {
-  margin-right: 12px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-text-3);
-}
-
-.record__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-}
-
+/* 分数用等宽数字位：多条记录并排时数字宽度不会跳。
+ * 用墨色而不是主色 —— 一屏十几行全是蓝字会吵（规范 §2.4）。 */
 .record__score {
-  font-size: 13px;
-  color: var(--bx-primary);
+  flex-shrink: 0;
+  margin-left: 10px;
+  font-size: var(--bx-font-h2);
+  font-weight: 600;
+  line-height: var(--bx-leading-h2);
+  color: var(--bx-text);
   font-variant-numeric: tabular-nums;
 }
 
-.record__batch {
-  font-size: 12px;
-  color: var(--bx-text-3);
-}
-
 .records__more {
-  padding: 16px;
+  padding: 14px 16px;
   border-top: 1px solid var(--bx-line-2);
   text-align: center;
 }
 
 .records__more-text {
-  font-size: 13px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-3);
   cursor: pointer;
 }
@@ -442,5 +472,44 @@ void fetchPage(true)
   outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
   border-radius: var(--bx-radius-sm);
+}
+
+/* ── 动效 ─────────────────────────────────────────────────────────
+ * 列表行进场：淡入 + translateY(6px→0)，逐行 delay 30ms，最多前 12 项
+ * （规范 §5.2 第 12 条）。
+ *
+ * 逐项动画只在 H5 端做（规范 §5.3）：小程序端长列表逐项动画会掉帧。
+ */
+/* #ifdef H5 */
+@keyframes bx-survey-record-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.record {
+  animation-name: bx-survey-record-in;
+  animation-duration: 360ms;
+  animation-timing-function: var(--bx-ease-out);
+  animation-fill-mode: both;
+}
+/* #endif */
+
+/*
+ * 逐行 delay（30ms 递增，最多前 12 项）
+ *
+ * 规则放在条件编译之外：没有 animation-name 时 animation-delay 不生效，
+ * 小程序端自然退化为「无动画」。
+ */
+@for $i from 1 through 12 {
+  .record:nth-child(#{$i}) {
+    animation-delay: #{($i - 1) * 30}ms;
+  }
 }
 </style>

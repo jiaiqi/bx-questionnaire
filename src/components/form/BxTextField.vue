@@ -25,6 +25,22 @@ const text = computed(() => {
 const isTextarea = computed(() => props.field.widget === 'textarea')
 const isNumber = computed(() => props.field.widget === 'number')
 
+/**
+ * 聚焦态
+ *
+ * 小程序端没有 `:focus-within` 这类可靠的选择器，改用 focus / blur 事件挂类，
+ * 两端表现一致（规范 §6.2：聚焦 = 描边转主色 + 3px 柔光）。
+ */
+const focused = ref(false)
+
+function onFocus(): void {
+  focused.value = true
+}
+
+function onBlur(): void {
+  focused.value = false
+}
+
 // 把可读名称补到内层原生控件上：aria-label 留在外层 uni-input 时屏幕阅读器读不到
 const rootRef = ref<HTMLElement | null>(null)
 useAriaLabel(rootRef, () => props.field.label)
@@ -40,25 +56,35 @@ function onInput(event: { detail: { value: string } }): void {
       v-if="isTextarea"
       :aria-label="props.field.label"
       class="bx-text__control bx-text__control--area"
-      :class="{ 'bx-text__control--disabled': props.disabled }"
+      :class="{
+        'bx-text__control--disabled': props.disabled,
+        'bx-text__control--focus': focused,
+      }"
       :value="text"
       :disabled="props.disabled"
       :maxlength="props.maxlength"
       placeholder="请输入"
       placeholder-class="bx-text__placeholder"
+      @focus="onFocus"
+      @blur="onBlur"
       @input="onInput"
     />
     <input
       v-else
       :aria-label="props.field.label"
       class="bx-text__control"
-      :class="{ 'bx-text__control--disabled': props.disabled }"
+      :class="{
+        'bx-text__control--disabled': props.disabled,
+        'bx-text__control--focus': focused,
+      }"
       :value="text"
       :disabled="props.disabled"
       :type="isNumber ? 'digit' : 'text'"
       :maxlength="isNumber ? 20 : props.maxlength"
       placeholder="请输入"
       placeholder-class="bx-text__placeholder"
+      @focus="onFocus"
+      @blur="onBlur"
       @input="onInput"
     >
 
@@ -72,21 +98,25 @@ function onInput(event: { detail: { value: string } }): void {
 }
 
 /*
- * 输入框
+ * 输入框（规范 §6.2）
  *
- * 底色比卡片深一档（--bx-bg）+ 1px 描边：只靠描边时，白卡片里的输入区在
- * 低亮度屏幕上几乎看不到边界。
+ * 内嵌档底色 `--bx-surface-2` + 1px `--bx-line-strong` 描边 + 12px 圆角 + 44px 高。
+ * 「这里可以输入」要看得出来：白底白卡里的输入区在低亮度屏幕上等于隐形。
  */
 .bx-text__control {
   box-sizing: border-box;
   width: 100%;
-  height: var(--bx-control-height);
+  height: var(--bx-control-height-md);
   padding: 0 14px;
-  font-size: 15px;
+  font-size: var(--bx-font-body);
+  line-height: var(--bx-leading-body);
   color: var(--bx-text);
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 .bx-text__control--area {
@@ -94,12 +124,15 @@ function onInput(event: { detail: { value: string } }): void {
   min-height: 96px;
   /* 底部留出计数器的位置，避免最后一行被压在计数文字下面 */
   padding: 12px 14px 26px;
-  line-height: 1.6;
+  line-height: var(--bx-leading-body);
 }
 
+/* 只读态：底色不变，描边去掉（规范 §6.2） */
 .bx-text__control--disabled {
   cursor: not-allowed;
-  opacity: var(--bx-disabled-opacity);
+  color: var(--bx-text-2);
+  background-color: var(--bx-surface-2);
+  border-color: transparent;
 }
 
 .bx-text__placeholder {
@@ -107,34 +140,39 @@ function onInput(event: { detail: { value: string } }): void {
 }
 
 /*
- * 焦点可见性
+ * 聚焦：描边转主色 + 3px 柔光
  *
- * uni-app 内置样式把 outline 设成了 none，实测聚焦前后完全一样
- * （outlineStyle: none、boxShadow: none、父元素边框色也不变），
- * 页面里没有任何 :focus 规则 —— 键盘用户看不到焦点在哪。
+ * 用 box-shadow 而不是 outline：outline 在小程序端的表现不统一，
+ * 而 box-shadow 两端一致（规范 §6.2）。
  *
- * 用 :focus-visible 补回来：只在键盘聚焦时显示，鼠标点击不显示，不影响视觉简洁。
+ * H5 端靠 :focus-within（样式直接挂在控件上），小程序端靠 focus/blur 事件挂类。
+ */
+.bx-text__control:focus-within,
+.bx-text__control--focus {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
+}
+
+/*
+ * 焦点环同时画在真正被聚焦的内层原生控件上
  *
- * 选择器必须落到 `.uni-input-input`：uni-app 的 postcss 插件会把选择器里的
- * `input` 改写成 `uni-input`（外层自定义元素），而真正被聚焦的是内层原生 input，
- * 写 `input` 编译出来是 `uni-input:focus-visible`，永远不会触发。
- * 真实结构：UNI-INPUT > DIV.uni-input-wrapper > INPUT.uni-input-input
- *
- * 也刻意不改成「外层 :focus-within 光晕」：可访问性审计读的是 document.activeElement
- * 自身的 outline / box-shadow，焦点环画在外层会被判成「不可见」。
+ * 可访问性审计（scripts/a11y.mjs）读的是 document.activeElement 自身的
+ * outline / box-shadow；环只画在外层 :focus-within 上会被判成「焦点不可见」。
+ * 这里在内层画一圈内描边，与外层柔光叠在一起仍是同一套「墨蓝」语言。
  */
 :deep(.bx-text__control .uni-input-input:focus-visible),
 :deep(.bx-text__control .uni-textarea-textarea:focus-visible) {
-  border-color: var(--bx-primary);
-  outline: 2px solid var(--bx-primary);
-  outline-offset: 1px;
+  box-shadow: inset 0 0 0 3px var(--bx-blue-soft);
 }
 
+/* 字数统计：元信息色 + 等宽数字（规范 §6.2） */
 .bx-text__counter {
   position: absolute;
   right: 12px;
   bottom: 8px;
-  font-size: 12px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
 }
 </style>

@@ -120,15 +120,15 @@ describe('useDraft · 批次号', () => {
     expect(mocks.resultSave.mock.calls[1]?.[0]).toMatchObject({ fillBatchNo: 'B1' })
   })
 
-  it('整卷保存同样不覆盖已锁定的批次号', async () => {
+  it('后续保存不覆盖已锁定的批次号', async () => {
     mocks.resultSave.mockResolvedValue(okWithBatch('B1'))
 
     const draft = useDraft()
     await draft.save({ activityNo: 'A1', field: fieldOf('k1'), answers: { k1: 'x' } })
-    await draft.saveAll({
+    await draft.save({
       activityNo: 'A1',
       fillBatchNo: 'B-other',
-      fields: [fieldOf('k2')],
+      field: fieldOf('k2'),
       answers: { k2: 'y' },
     })
 
@@ -184,23 +184,6 @@ describe('useDraft · 批次号', () => {
     expect(mocks.resultSave.mock.calls[2]?.[0]).toMatchObject({ fillBatchNo: 'B1' })
     // 回调也只应播报一次，避免调用方（session）把批次号改掉
     expect(got).toEqual(['B1'])
-  })
-
-  it('「暂存草稿」整卷保存同样锁定首次批次号', async () => {
-    mocks.resultSave
-      .mockResolvedValueOnce(okWithBatch('C1'))
-      .mockResolvedValueOnce(okWithBatch('C2'))
-      .mockResolvedValueOnce(okWithBatch('C3'))
-
-    const draft = useDraft()
-    // 需要三次：覆盖行为影响的是「下一次」请求，两次调用时第二次已经用旧值发出，看不出差别
-    await draft.saveAll({ activityNo: 'A1', fields: [fieldOf('k1')], answers: { k1: 'x' } })
-    await draft.saveAll({ activityNo: 'A1', fields: [fieldOf('k2')], answers: { k2: 'y' } })
-    await draft.saveAll({ activityNo: 'A1', fields: [fieldOf('k3')], answers: { k3: 'z' } })
-
-    expect(mocks.resultSave.mock.calls[0]?.[0]).toMatchObject({ fillBatchNo: undefined })
-    expect(mocks.resultSave.mock.calls[1]?.[0]).toMatchObject({ fillBatchNo: 'C1' })
-    expect(mocks.resultSave.mock.calls[2]?.[0]).toMatchObject({ fillBatchNo: 'C1' })
   })
 })
 

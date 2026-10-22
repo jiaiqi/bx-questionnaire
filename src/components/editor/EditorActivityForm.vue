@@ -67,6 +67,7 @@ const periodChoices = toChoices(MODIFY_PERIOND_OPTIONS)
 const moreOpen = ref(false)
 
 // ── 分类 ──
+
 const classifyRows = ref<DaqClassifyRow[]>([])
 const classifyError = ref('')
 
@@ -114,6 +115,7 @@ function onClassifyChange(event: unknown): void {
 }
 
 // ── 封面 ──
+
 const coverUrl = ref('')
 const uploading = ref(false)
 
@@ -174,6 +176,7 @@ async function uploadCover(filePath: string): Promise<void> {
 }
 
 // ── 时间 ──
+
 function splitDateTime(value: string): { date: string, time: string } {
   const digits = value.replace(/\D/g, '')
   const date = digits.length >= 8
@@ -205,6 +208,7 @@ function onTimeChange(field: 'startTime' | 'endTime', event: unknown): void {
 }
 
 // ── 文本输入 ──
+
 function readInput(event: unknown): string | null {
   const value = (event as { detail?: { value?: string } })?.detail?.value
   return typeof value === 'string' ? value : null
@@ -227,153 +231,175 @@ function errorFor(field: string): string {
 
 <template>
   <view class="bx-eaf">
-    <EditorFormField label="问卷标题" required :error="errorFor('title')">
-      <input
-        class="bx-eaf__input"
-        type="text"
-        :value="props.activity.title"
-        aria-label="问卷标题"
-        placeholder="例如：员工满意度调查"
-        @input="onTextInput('title', $event)"
-      >
-    </EditorFormField>
+    <!-- ── 基本信息 ── -->
+    <view class="bx-eaf__group">
+      <text class="bx-eaf__group-title">基本信息</text>
 
-    <EditorFormField
-      label="分类"
-      required
-      :error="errorFor('classify')"
-      :hint="classifyError ? `分类加载失败：${classifyError}` : '分类同时决定信息采集类型（服务端派生）'"
-    >
-      <picker
-        mode="selector"
-        :range="classifyLabels"
-        :value="classifyIndex"
-        @change="onClassifyChange"
+      <EditorFormField label="问卷标题" required :error="errorFor('title')">
+        <input
+          class="bx-eaf__input"
+          type="text"
+          :value="props.activity.title"
+          aria-label="问卷标题"
+          placeholder="例如：员工满意度调查"
+          @input="onTextInput('title', $event)"
+        >
+      </EditorFormField>
+
+      <EditorFormField
+        label="分类"
+        required
+        :error="errorFor('classify')"
+        :hint="classifyError ? `分类加载失败：${classifyError}` : '分类同时决定信息采集类型（服务端派生）'"
       >
-        <view class="bx-eaf__picker" :class="{ 'bx-eaf__picker--empty': !props.activity.classify }">
-          <text class="bx-eaf__picker-text">
-            {{ classifyLabel || (classifyLabels.length ? '请选择分类' : '暂无可用分类') }}
-          </text>
-          <text class="bx-eaf__picker-arrow">▼</text>
+        <picker
+          mode="selector"
+          :range="classifyLabels"
+          :value="classifyIndex"
+          @change="onClassifyChange"
+        >
+          <view class="bx-eaf__picker" :class="{ 'bx-eaf__picker--empty': !props.activity.classify }">
+            <text class="bx-eaf__picker-text">
+              {{ classifyLabel || (classifyLabels.length ? '请选择分类' : '暂无可用分类') }}
+            </text>
+            <view class="bx-eaf__picker-arrow" aria-hidden="true" />
+          </view>
+        </picker>
+      </EditorFormField>
+
+      <EditorFormField label="关键字" required :error="errorFor('keyword')" hint="用于列表搜索与归档">
+        <input
+          class="bx-eaf__input"
+          type="text"
+          :value="props.activity.keyword"
+          aria-label="关键字"
+          placeholder="例如：满意度"
+          @input="onTextInput('keyword', $event)"
+        >
+      </EditorFormField>
+
+      <EditorFormField label="问卷描述" required :error="errorFor('remark')">
+        <textarea
+          class="bx-eaf__textarea"
+          :value="props.activity.remark"
+          aria-label="问卷描述"
+          placeholder="填写问卷说明"
+          @input="onTextInput('remark', $event)"
+        />
+      </EditorFormField>
+    </view>
+
+    <!-- ── 封面与时间 ── -->
+    <view class="bx-eaf__group">
+      <text class="bx-eaf__group-title">封面与时间</text>
+
+      <EditorFormField label="封面图" required :error="errorFor('activityImage')">
+        <view
+          class="bx-eaf__cover"
+          role="button"
+          tabindex="0"
+          aria-label="上传封面图"
+          @click="chooseCover"
+          @keydown.enter.prevent="chooseCover"
+        >
+          <image v-if="coverUrl" class="bx-eaf__cover-img" :src="coverUrl" mode="aspectFill" alt="问卷封面预览" />
+          <view v-else class="bx-eaf__cover-empty">
+            <view class="bx-eaf__cover-plus" aria-hidden="true" />
+            <text class="bx-eaf__cover-tip">{{ uploading ? '上传中…' : '点击上传' }}</text>
+          </view>
         </view>
-      </picker>
-    </EditorFormField>
+      </EditorFormField>
 
-    <EditorFormField label="关键字" required :error="errorFor('keyword')" hint="用于列表搜索与归档">
-      <input
-        class="bx-eaf__input"
-        type="text"
-        :value="props.activity.keyword"
-        aria-label="关键字"
-        placeholder="例如：满意度"
-        @input="onTextInput('keyword', $event)"
-      >
-    </EditorFormField>
-
-    <EditorFormField label="封面图" required :error="errorFor('activityImage')">
-      <view class="bx-eaf__cover" role="button" tabindex="0" aria-label="上传封面图" @click="chooseCover">
-        <image v-if="coverUrl" class="bx-eaf__cover-img" :src="coverUrl" mode="aspectFill" alt="问卷封面预览" />
-        <view v-else class="bx-eaf__cover-empty">
-          <view class="bx-eaf__cover-plus" aria-hidden="true" />
-          <text class="bx-eaf__cover-tip">{{ uploading ? '上传中…' : '点击上传' }}</text>
+      <EditorFormField label="启用时间" required :error="errorFor('startTime')">
+        <view class="bx-eaf__times">
+          <picker mode="date" :value="startParts.date" @change="onDateChange('startTime', $event)">
+            <view class="bx-eaf__picker bx-eaf__picker--flex">
+              <text class="bx-eaf__picker-text">{{ startParts.date || '选择日期' }}</text>
+            </view>
+          </picker>
+          <picker mode="time" :value="startParts.time" @change="onTimeChange('startTime', $event)">
+            <view class="bx-eaf__picker bx-eaf__picker--flex">
+              <text class="bx-eaf__picker-text">{{ startParts.time }}</text>
+            </view>
+          </picker>
         </view>
-      </view>
-    </EditorFormField>
+      </EditorFormField>
 
-    <EditorFormField label="启用时间" required :error="errorFor('startTime')">
-      <view class="bx-eaf__times">
-        <picker mode="date" :value="startParts.date" @change="onDateChange('startTime', $event)">
-          <view class="bx-eaf__picker bx-eaf__picker--flex">
-            <text class="bx-eaf__picker-text">{{ startParts.date || '选择日期' }}</text>
-          </view>
-        </picker>
-        <picker mode="time" :value="startParts.time" @change="onTimeChange('startTime', $event)">
-          <view class="bx-eaf__picker bx-eaf__picker--flex">
-            <text class="bx-eaf__picker-text">{{ startParts.time }}</text>
-          </view>
-        </picker>
-      </view>
-    </EditorFormField>
+      <EditorFormField label="结束时间" required :error="errorFor('endTime')">
+        <view class="bx-eaf__times">
+          <picker mode="date" :value="endParts.date" @change="onDateChange('endTime', $event)">
+            <view class="bx-eaf__picker bx-eaf__picker--flex">
+              <text class="bx-eaf__picker-text">{{ endParts.date || '选择日期' }}</text>
+            </view>
+          </picker>
+          <picker mode="time" :value="endParts.time" @change="onTimeChange('endTime', $event)">
+            <view class="bx-eaf__picker bx-eaf__picker--flex">
+              <text class="bx-eaf__picker-text">{{ endParts.time }}</text>
+            </view>
+          </picker>
+        </view>
+      </EditorFormField>
+    </view>
 
-    <EditorFormField label="结束时间" required :error="errorFor('endTime')">
-      <view class="bx-eaf__times">
-        <picker mode="date" :value="endParts.date" @change="onDateChange('endTime', $event)">
-          <view class="bx-eaf__picker bx-eaf__picker--flex">
-            <text class="bx-eaf__picker-text">{{ endParts.date || '选择日期' }}</text>
-          </view>
-        </picker>
-        <picker mode="time" :value="endParts.time" @change="onTimeChange('endTime', $event)">
-          <view class="bx-eaf__picker bx-eaf__picker--flex">
-            <text class="bx-eaf__picker-text">{{ endParts.time }}</text>
-          </view>
-        </picker>
-      </view>
-    </EditorFormField>
+    <!-- ── 规则 ── -->
+    <view class="bx-eaf__group">
+      <text class="bx-eaf__group-title">规则</text>
 
-    <EditorFormField label="问卷描述" required :error="errorFor('remark')">
-      <textarea
-        class="bx-eaf__textarea"
-        :value="props.activity.remark"
-        aria-label="问卷描述"
-        placeholder="填写问卷说明"
-        @input="onTextInput('remark', $event)"
-      />
-    </EditorFormField>
+      <EditorFormField label="状态" hint="服务端不会自动改成「进行中」，必须显式选择">
+        <EditorSegmented
+          :model-value="props.activity.status"
+          :options="statusChoices"
+          @update:model-value="value => emit('patch', { status: value })"
+        />
+      </EditorFormField>
 
-    <EditorFormField label="状态" hint="服务端不会自动改成「进行中」，必须显式选择">
-      <EditorSegmented
-        :model-value="props.activity.status"
-        :options="statusChoices"
-        @update:model-value="value => emit('patch', { status: value })"
-      />
-    </EditorFormField>
+      <EditorFormField label="权限类型">
+        <EditorSegmented
+          :model-value="props.activity.permType"
+          :options="permChoices"
+          @update:model-value="value => emit('patch', { permType: value })"
+        />
+      </EditorFormField>
 
-    <EditorFormField label="权限类型">
-      <EditorSegmented
-        :model-value="props.activity.permType"
-        :options="permChoices"
-        @update:model-value="value => emit('patch', { permType: value })"
-      />
-    </EditorFormField>
+      <EditorFormField label="用户填写次数">
+        <EditorSegmented
+          :model-value="props.activity.answerTimes"
+          :options="answerTimesChoices"
+          @update:model-value="value => emit('patch', { answerTimes: value })"
+        />
+      </EditorFormField>
 
-    <EditorFormField label="用户填写次数">
-      <EditorSegmented
-        :model-value="props.activity.answerTimes"
-        :options="answerTimesChoices"
-        @update:model-value="value => emit('patch', { answerTimes: value })"
-      />
-    </EditorFormField>
+      <EditorFormField label="问题显示方式" hint="「逐个」= 一题一屏">
+        <EditorSegmented
+          :model-value="props.activity.itemDispWay"
+          :options="dispWayChoices"
+          @update:model-value="value => emit('patch', { itemDispWay: value })"
+        />
+      </EditorFormField>
 
-    <EditorFormField label="问题显示方式" hint="「逐个」= 一题一屏">
-      <EditorSegmented
-        :model-value="props.activity.itemDispWay"
-        :options="dispWayChoices"
-        @update:model-value="value => emit('patch', { itemDispWay: value })"
-      />
-    </EditorFormField>
+      <EditorFormField label="选项" hint="「评分」会启用分数与通过分数">
+        <EditorSegmented
+          :model-value="props.activity.actOption"
+          :options="actOptionChoices"
+          @update:model-value="value => emit('patch', { actOption: value })"
+        />
+      </EditorFormField>
 
-    <EditorFormField label="选项" hint="「评分」会启用分数与通过分数">
-      <EditorSegmented
-        :model-value="props.activity.actOption"
-        :options="actOptionChoices"
-        @update:model-value="value => emit('patch', { actOption: value })"
-      />
-    </EditorFormField>
-
-    <EditorFormField
-      v-if="props.activity.actOption === '评分'"
-      label="通过分数"
-      :error="errorFor('passingMark')"
-    >
-      <input
-        class="bx-eaf__input"
-        type="text"
-        :value="props.activity.passingMark"
-        aria-label="通过分数"
-        placeholder="例如：60"
-        @input="onTextInput('passingMark', $event)"
+      <EditorFormField
+        v-if="props.activity.actOption === '评分'"
+        label="通过分数"
+        :error="errorFor('passingMark')"
       >
-    </EditorFormField>
+        <input
+          class="bx-eaf__input"
+          type="text"
+          :value="props.activity.passingMark"
+          aria-label="通过分数"
+          placeholder="例如：60"
+          @input="onTextInput('passingMark', $event)"
+        >
+      </EditorFormField>
+    </view>
 
     <!-- ── 更多设置：默认收起，避免主流程被十几项配置淹没 ── -->
     <view
@@ -385,10 +411,10 @@ function errorFor(field: string): string {
       @keydown.enter.prevent="moreOpen = !moreOpen"
     >
       <text class="bx-eaf__more-text">更多设置</text>
-      <text class="bx-eaf__more-arrow">{{ moreOpen ? '▲' : '▼' }}</text>
+      <view class="bx-eaf__more-arrow" :class="{ 'bx-eaf__more-arrow--open': moreOpen }" aria-hidden="true" />
     </view>
 
-    <template v-if="moreOpen">
+    <view v-if="moreOpen" class="bx-eaf__group">
       <EditorFormField label="提交后是否可修改">
         <EditorSegmented
           :model-value="props.activity.modifyAfterSubmit"
@@ -457,7 +483,7 @@ function errorFor(field: string): string {
           @input="onTextInput('endRemark', $event)"
         />
       </EditorFormField>
-    </template>
+    </view>
   </view>
 </template>
 
@@ -468,28 +494,67 @@ function errorFor(field: string): string {
   padding: 16px;
 }
 
+/* ── 分组 ── */
+
+.bx-eaf__group {
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--bx-line-2);
+}
+
+/* 分组标题：12/600（规范 §7.6） */
+.bx-eaf__group-title {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--bx-text-2);
+  letter-spacing: 0.02em;
+}
+
+/* ── 控件 ── */
+
+/* 输入类：浅底 + 强描边，聚焦时描边变主色并加一圈光晕（规范 §6.2） */
 .bx-eaf__input {
   box-sizing: border-box;
   width: 100%;
-  height: 38px;
-  padding: 0 10px;
-  font-size: 14px;
+  height: 44px;
+  padding: 0 12px;
+  font-size: 15px;
   color: var(--bx-text);
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-eaf__input:focus-within {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
 }
 
 .bx-eaf__textarea {
   box-sizing: border-box;
   width: 100%;
-  height: 72px;
-  padding: 8px 10px;
-  font-size: 14px;
+  height: 88px;
+  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 24px;
   color: var(--bx-text);
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-eaf__textarea:focus-within {
+  border-color: var(--bx-primary);
+  box-shadow: var(--bx-focus-glow);
 }
 
 .bx-eaf__picker {
@@ -497,10 +562,10 @@ function errorFor(field: string): string {
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  height: 38px;
-  padding: 0 10px;
-  background-color: var(--bx-bg);
-  border: 1px solid var(--bx-line);
+  height: 44px;
+  padding: 0 12px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line-strong);
   border-radius: var(--bx-radius);
 }
 
@@ -515,16 +580,21 @@ function errorFor(field: string): string {
 
 .bx-eaf__picker-text {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--bx-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 下拉箭头：两条边框旋转 45°（不用 ▼ 文字符号，字形随字体变化） */
 .bx-eaf__picker-arrow {
+  flex: none;
+  width: 8px;
+  height: 8px;
   margin-left: 8px;
-  font-size: 10px;
-  color: var(--bx-text-3);
+  border-top: 1.5px solid var(--bx-text-3);
+  border-right: 1.5px solid var(--bx-text-3);
+  transform: rotate(45deg);
 }
 
 .bx-eaf__times {
@@ -539,9 +609,10 @@ function errorFor(field: string): string {
   width: 120px;
   height: 80px;
   overflow: hidden;
-  background-color: var(--bx-bg);
-  border: 1px dashed var(--bx-line);
+  background-color: var(--bx-surface-2);
+  border: 1px dashed var(--bx-line-strong);
   border-radius: var(--bx-radius);
+  cursor: pointer;
 }
 
 .bx-eaf__cover-img {
@@ -585,12 +656,15 @@ function errorFor(field: string): string {
   color: var(--bx-text-3);
 }
 
+/* ── 更多设置 ── */
+
 .bx-eaf__more {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 38px;
-  margin-bottom: 14px;
+  height: 40px;
+  margin-bottom: 16px;
+  cursor: pointer;
   border-top: 1px solid var(--bx-line-2);
   border-bottom: 1px solid var(--bx-line-2);
 }
@@ -600,9 +674,18 @@ function errorFor(field: string): string {
   color: var(--bx-text-2);
 }
 
+/* 箭头：两条边框旋转 45°，展开时翻转 */
 .bx-eaf__more-arrow {
+  width: 8px;
+  height: 8px;
   margin-left: 6px;
-  font-size: 10px;
-  color: var(--bx-text-3);
+  border-right: 1.5px solid var(--bx-text-3);
+  border-bottom: 1.5px solid var(--bx-text-3);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--bx-duration-base) var(--bx-ease-out);
+}
+
+.bx-eaf__more-arrow--open {
+  transform: rotate(-135deg) translate(-2px, -2px);
 }
 </style>
