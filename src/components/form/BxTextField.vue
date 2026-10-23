@@ -98,41 +98,51 @@ function onInput(event: { detail: { value: string } }): void {
 }
 
 /*
- * 输入框（规范 §6.2）
+ * 输入框（V6 §5.2）
  *
- * 内嵌档底色 `--bx-surface-2` + 1px `--bx-line-strong` 描边 + 12px 圆角 + 44px 高。
- * 「这里可以输入」要看得出来：白底白卡里的输入区在低亮度屏幕上等于隐形。
+ * 白底 + 1px `--bx-line` 描边 + 10px 圆角 + 44px 高。
+ * 白面而不是浅灰面：纸面本身已是白面，浅灰输入区在低亮度屏上会显脏；
+ * 「这里可以输入」由描边与聚焦环承担。
  */
 .bx-text__control {
   box-sizing: border-box;
   width: 100%;
   height: var(--bx-control-height-md);
-  padding: 0 14px;
+  padding: 0 12px;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
-    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+    box-shadow var(--bx-duration-base) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
+/* 多行：最小 104 高（V6 §5.2），可以纵向 resize 的部位由内部原生 textarea 决定 */
 .bx-text__control--area {
   height: auto;
-  min-height: 96px;
+  min-height: 104px;
   /* 底部留出计数器的位置，避免最后一行被压在计数文字下面 */
-  padding: 12px 14px 26px;
-  line-height: var(--bx-leading-body);
+  padding: 12px 12px 26px;
+  line-height: 1.6;
 }
 
-/* 只读态：底色不变，描边去掉（规范 §6.2） */
+/* 悬停：描边强一档，底色不变（浅灰底会让「可输入」与「禁用」混淆） */
+@media (hover: hover) {
+  .bx-text__control:hover {
+    border-color: var(--bx-line-strong);
+  }
+}
+
+/* 禁用态：内嵌浅面 + 描边保留，仍能看出控件边界（V6 §5.1 disabled 语义） */
 .bx-text__control--disabled {
   cursor: not-allowed;
-  color: var(--bx-text-2);
+  color: var(--bx-text-3);
   background-color: var(--bx-surface-2);
-  border-color: transparent;
+  border-color: var(--bx-line);
 }
 
 .bx-text__placeholder {
@@ -140,10 +150,10 @@ function onInput(event: { detail: { value: string } }): void {
 }
 
 /*
- * 聚焦：描边转主色 + 3px 柔光
+ * 聚焦：描边转主色 + 3px 柔光环（V6 §5.2）
  *
  * 用 box-shadow 而不是 outline：outline 在小程序端的表现不统一，
- * 而 box-shadow 两端一致（规范 §6.2）。
+ * 而 box-shadow 两端一致。
  *
  * H5 端靠 :focus-within（样式直接挂在控件上），小程序端靠 focus/blur 事件挂类。
  */
@@ -158,14 +168,14 @@ function onInput(event: { detail: { value: string } }): void {
  *
  * 可访问性审计（scripts/a11y.mjs）读的是 document.activeElement 自身的
  * outline / box-shadow；环只画在外层 :focus-within 上会被判成「焦点不可见」。
- * 这里在内层画一圈内描边，与外层柔光叠在一起仍是同一套「墨蓝」语言。
+ * 这里在内层画一圈内描边，与外层柔光叠在一起仍是同一套「靛蓝」语言。
  */
 :deep(.bx-text__control .uni-input-input:focus-visible),
 :deep(.bx-text__control .uni-textarea-textarea:focus-visible) {
-  box-shadow: inset 0 0 0 3px var(--bx-blue-soft);
+  box-shadow: inset 0 0 0 3px var(--bx-primary-soft);
 }
 
-/* 字数统计：元信息色 + 等宽数字（规范 §6.2） */
+/* 字数统计：12px 元信息色 + 等宽数字（V6 §5.2） */
 .bx-text__counter {
   position: absolute;
   right: 12px;

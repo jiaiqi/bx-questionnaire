@@ -95,7 +95,7 @@ describe('initViewSelect', () => {
 
   it('题目按 item_seq 升序，否则题目顺序会乱', () => {
     initViewSelect({ activityNo: 'A1' })
-    expect(lastSelectArg().order).toEqual([{ colName: 'item_seq', ruleType: 'asc' }])
+    expect(lastSelectArg().order).toEqual([{ colName: 'item_seq', orderType: 'asc' }])
   })
 })
 

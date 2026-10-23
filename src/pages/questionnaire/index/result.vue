@@ -7,7 +7,10 @@
  *
  * 入参：activity_no（必填）、fill_batch_no
  *
- * 视觉（docs/UI-UX-V2-设计系统.md §7.3）：分数是主角，维度逐条细条，建议用引用块。
+ * 视觉（docs/UI-UX-V6-设计系统.md §5/§6）：
+ * 状态条 → 分数环 → 答对/答错/未答三栏 → 逐题回顾（我的作答 / 正确答案两列）→
+ * 说明卡 → 底部动作。分数环用 **CSS conic-gradient + 内圆挖孔** 绘制，
+ * 不引入 `<svg>`（微信小程序不支持该标签），也不使用 `color-mix`。
  */
 
 import { computed, nextTick, ref, watch } from 'vue'
@@ -15,8 +18,13 @@ import { computed, nextTick, ref, watch } from 'vue'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
+import { posterTimeLabel } from '@/components/share/poster'
+import ShareSheet from '@/components/share/ShareSheet.vue'
 import { useEmbedResize } from '@/composables/useEmbedResize'
 import { useResultPage } from '@/composables/useResultPage'
+import { useShare } from '@/composables/useShare'
+import { answerUrl } from '@/domain/questionnaire/routes'
+import { toast } from '@/utils/ui'
 
 // 逐题回顾列表长度取决于题目数，嵌入场景下高度变化明显
 useEmbedResize()
@@ -42,10 +50,10 @@ const {
 } = useResultPage()
 
 /**
- * 分数计数动画（规范 §5.2 第 10 条）：0 → 目标值，900ms ease-out
+ * 分数计数动画（规范 §6.1）：0 → 目标值，900ms ease-out
  *
  * 只在**数值**上插值，字重与字距全程不变 —— 数字一动就改字重会抖。
- * 容器宽度用 min-width 固定，单位（「/ 100 分」）不会跟着数字长度左右跳。
+ * 分数环的角度由同一个数值算出来，两者天然同步。
  */
 const displayScore = ref(0)
 const scoreAnimated = ref(false)
@@ -110,13 +118,24 @@ watch(
   { immediate: true },
 )
 
-/** 分数容器的固定宽度：数字位数取「得分 / 满分」的较大者 */
-const scoreValueStyle = computed(() => {
-  const digits = Math.max(
-    String(Math.round(Number(score.value.score) || 0)).length,
-    String(Math.round(Number(score.value.total) || 0)).length,
-  )
-  return { minWidth: `${digits}ch` }
+/**
+ * 分数环的填充角度
+ *
+ * 用 conic-gradient 画弧：不支持该函数的旧内核会退化成「只有轨道」，
+ * 分数数字仍然可读 —— 不会出现空白。
+ */
+const ringDeg = computed(() => {
+  const total = Math.round(Number(score.value.total) || 0)
+  if (total <= 0) {
+    return 0
+  }
+  const ratio = Math.max(0, Math.min(1, Number(displayScore.value) / total))
+  return ratio * 360
+})
+
+const ringImage = computed(() => {
+  const deg = ringDeg.value
+  return `conic-gradient(var(--bx-primary) 0deg, var(--bx-primary) ${deg}deg, transparent ${deg}deg, transparent 360deg)`
 })
 
 /** 等级标签：只有设了合格线的活动才有等级 */
@@ -146,28 +165,31 @@ const verdictText = computed(() => {
  * 没有真正的「维度」数据源（merge 服务返回的也是逐题汇总），
  * 所以这一段是**逐题得分率**，不是维度分；标题与口径保持一致。
  *
- * 只列**计分题**（points > 0）：演示问卷里 11 题有 9 题没有分值，
- * 全列出来就是一列「不计分」的灰字，把得分本身淹掉了。
- * 不计分的题在下面的「逐题回顾」里仍然看得到，信息没丢。
+ * 只列**能判分的计分题**（有分值且存在正确答案）：
+ * - 没分值的题（演示问卷里 11 题有 9 题没分值）列出来只会淹掉得分；
+ * - 有分值但没有正确答案的题（脏数据）无法判分，列出来会出现
+ *   「计分题 4 道，答对 + 答错 + 未答却只有 2」的自相矛盾。
+ * 两类题在下面的「逐题回顾」里仍然看得到，信息没丢。
  */
 const scoreRows = computed(() =>
   rows.value
-    .filter(row => row.points > 0)
+    .filter(row => row.points > 0 && row.verdict !== 'unjudged')
     .map(row => ({
       key: row.key,
       title: row.title,
-      /** 无正确答案的题不计分，不画条 */
-      judged: row.verdict !== 'unjudged',
-      percent: row.points > 0 ? Math.round((row.earned / row.points) * 100) : 0,
+      percent: Math.round((row.earned / row.points) * 100),
       earned: row.earned,
       points: row.points,
     })),
 )
 
+/** 口径说明里的「计分题」数量：与上面的逐题得分、下面的三栏统计同源 */
+const countedCount = computed(() => scoreRows.value.length)
+
 /**
  * 逐题得分条是否做进场动画
  *
- * 逐项动画只在 H5 端做（规范 §5.3）：小程序端长列表逐项动画会掉帧。
+ * 逐项动画只在 H5 端做（规范 §6.1）：小程序端长列表逐项动画会掉帧。
  */
 const barsAnimated = ref(false)
 // #ifdef H5
@@ -200,6 +222,61 @@ watch(
 function barWidth(percent: number): string {
   return `${barsReady.value ? percent : 0}%`
 }
+
+/** 逐题结论的短标签：颜色之外还要有文字，状态不能只靠颜色 */
+function verdictTag(verdict: string): string {
+  if (verdict === 'correct') {
+    return '答对'
+  }
+  if (verdict === 'wrong') {
+    return '答错'
+  }
+  if (verdict === 'unanswered') {
+    return '未答'
+  }
+  return '不计分'
+}
+
+// ── 分享（H5） ─────────────────────────────────────────────────────
+
+const shareOpen = ref(false)
+const { shareLink } = useShare()
+
+/**
+ * 分享链接是「邀请作答」链接
+ *
+ * 保留 activity_no / status（对方打开落在答题页），**不带**当前页的 fill_batch_no
+ * 与票据：批次号能让人看到这次作答的逐题内容，票据更是直接泄露身份。
+ */
+const shareUrl = computed(() =>
+  shareLink(answerUrl(activityNo.value, { status: String(activity.value?.status ?? '进行中') })),
+)
+
+/** 等级语气：海报与页面共用同一份判定 */
+const levelTone = computed<'ok' | 'fail' | 'none'>(() => {
+  if (!levelChip.value) {
+    return 'none'
+  }
+  return levelChip.value.cls === 'r-chip--fail' ? 'fail' : 'ok'
+})
+
+/** 海报数据；绘制与导出由 ShareSheet 负责 */
+const posterData = computed(() => ({
+  title: activity.value?.title || '问卷',
+  score: hasScore.value ? String(Math.round(Number(score.value.score) || 0)) : '',
+  total: hasScore.value ? String(Math.round(Number(score.value.total) || 0)) : '',
+  level: levelChip.value?.text || '',
+  levelTone: levelTone.value,
+  timeText: posterTimeLabel(batchNo.value),
+}))
+
+function openShare(): void {
+  if (!shareUrl.value) {
+    toast('当前环境无法生成分享链接')
+    return
+  }
+  shareOpen.value = true
+}
 </script>
 
 <template>
@@ -209,7 +286,8 @@ function barWidth(percent: number): string {
     <view class="r-page__body bx-container">
       <!-- 加载：骨架保持布局稳定，比一行「正在加载结果…」更符合预期 -->
       <view v-if="loading" class="r-skeleton" aria-busy="true">
-        <view class="r-skeleton__hero" />
+        <view class="r-skeleton__status" />
+        <view class="r-skeleton__ring" />
         <view class="r-skeleton__row" />
         <view class="r-skeleton__row" />
       </view>
@@ -221,141 +299,207 @@ function barWidth(percent: number): string {
       />
 
       <template v-else>
+        <!-- 状态条：成功点 + 文字，右侧批次号 -->
+        <view class="r-status">
+          <view class="r-status__dot" aria-hidden="true" />
+          <text class="r-status__text">已提交</text>
+          <text v-if="batchNo" class="r-status__meta">批次 {{ batchNo }}</text>
+        </view>
+
         <!--
-          分数是这一页的主角：提交标记 → 标题 → 分数 → 等级 → 结论 → 统计
+          分数是这一页的主角：标题 → 分数环 → 等级 → 结论 → 口径
         -->
         <view class="r-hero">
-          <view class="r-hero__mark">
-            <view class="r-hero__check" aria-hidden="true" />
-            <text class="r-hero__mark-text">已提交</text>
-          </view>
-
           <text class="r-hero__title">{{ activity?.title || '问卷' }}</text>
 
-          <view v-if="hasScore" class="r-score">
-            <text class="r-score__value" :style="scoreValueStyle">{{ displayScore }}</text>
-            <text class="r-score__unit">/ {{ score.total }} 分</text>
-          </view>
+          <template v-if="hasScore">
+            <text class="r-hero__label">你的得分</text>
 
-          <view v-if="levelChip" class="r-chip" :class="levelChip.cls">
-            <text class="r-chip__text">{{ levelChip.text }}</text>
-          </view>
+            <view class="r-ring">
+              <view class="r-ring__track" aria-hidden="true" />
+              <view class="r-ring__val" :style="{ backgroundImage: ringImage }" aria-hidden="true" />
+              <view class="r-ring__hole" aria-hidden="true" />
+              <view class="r-ring__center">
+                <text class="r-ring__score">{{ displayScore }}</text>
+                <text class="r-ring__total">/ {{ score.total }}</text>
+              </view>
+            </view>
+
+            <view v-if="levelChip" class="r-chip" :class="levelChip.cls">
+              <text class="r-chip__text">{{ levelChip.text }}</text>
+            </view>
+          </template>
 
           <text class="r-verdict">{{ verdictText }}</text>
 
-          <view v-if="hasScore" class="r-stats">
-            <view class="r-stat">
-              <text class="r-stat__value">{{ score.correctCount }}</text>
-              <text class="r-stat__label">答对</text>
-            </view>
-            <view class="r-stat__divider" />
-            <view class="r-stat">
-              <text class="r-stat__value">{{ score.wrongCount }}</text>
-              <text class="r-stat__label">答错</text>
-            </view>
-            <view class="r-stat__divider" />
-            <view class="r-stat">
-              <text class="r-stat__value">{{ score.unansweredCount }}</text>
-              <text class="r-stat__label">未答</text>
-            </view>
-          </view>
-
-          <text v-if="batchNo" class="r-hero__batch">批次号 {{ batchNo }}</text>
+          <text v-if="hasScore" class="r-hero__cap">
+            计分题 {{ countedCount }} 道 · 满分 {{ score.total }} 分
+          </text>
         </view>
 
-        <!-- 逐题得分：一条细进度条 + 得分（规范 §7.3） -->
+        <!-- 答对 / 答错 / 未答：细线分隔的一行三栏，不做三个卡 -->
+        <view v-if="hasScore" class="r-stats">
+          <view class="r-stat">
+            <text class="r-stat__num r-stat__num--ok">{{ score.correctCount }}</text>
+            <text class="r-stat__label">答对</text>
+          </view>
+          <view class="r-stat">
+            <text class="r-stat__num r-stat__num--bad">{{ score.wrongCount }}</text>
+            <text class="r-stat__label">答错</text>
+          </view>
+          <view class="r-stat">
+            <text class="r-stat__num">{{ score.unansweredCount }}</text>
+            <text class="r-stat__label">未答</text>
+          </view>
+        </view>
+
+        <!-- 逐题得分：一条细进度条 + 得分（保留既有能力，按 V6 收敛视觉） -->
         <view v-if="scoreRows.length > 0" class="r-section">
           <view class="r-section__head">
-            <view class="r-section__rule" />
             <text class="r-section__title">逐题得分</text>
+            <text class="r-section__meta">{{ scoreRows.length }} 道计分题</text>
           </view>
 
           <view class="r-scores">
             <view v-for="row in scoreRows" :key="row.key" class="r-bar-row">
               <text class="r-bar-row__title">{{ row.title }}</text>
-              <view v-if="row.judged" class="r-bar-row__track">
+              <view class="r-bar-row__track">
                 <view class="r-bar-row__fill" :style="{ width: barWidth(row.percent) }" />
               </view>
-              <text class="r-bar-row__value" :class="{ 'r-bar-row__value--none': !row.judged }">
-                {{ row.judged ? `${row.earned} / ${row.points}` : '不计分' }}
-              </text>
+              <text class="r-bar-row__value">{{ row.earned }} / {{ row.points }}</text>
             </view>
           </view>
         </view>
 
-        <!-- 逐题回顾：同质条目用分割线，不用逐条阴影 -->
-        <view v-if="rows.length > 0" class="r-list">
-          <view v-for="row in rows" :key="row.key" class="r-item">
-            <view class="r-item__head">
-              <text class="r-item__label">{{ row.title }}</text>
-              <text
-                v-if="row.verdict !== 'unjudged'"
-                class="r-badge"
-                :class="`r-badge--${row.verdict}`"
-              >
-                {{ row.verdictText }}
-              </text>
-            </view>
-            <view class="r-item__line">
-              <text class="r-item__key">我的作答</text>
-              <view v-if="row.isImage" class="r-item__images">
-                <image
-                  v-for="(img, index) in row.images"
-                  :key="index"
-                  class="r-item__image"
-                  :src="img"
-                  mode="aspectFill"
-                  :alt="`第 ${index + 1} 张作答图片`"
-                />
-                <text v-if="row.images.length === 0" class="r-item__value">
-                  {{ row.mine }}{{ answerImagesFailed ? '（图片暂时读不到）' : '' }}
+        <!-- 逐题回顾：我的作答 / 正确答案两列 -->
+        <view v-if="rows.length > 0" class="r-review">
+          <view class="r-section__head">
+            <text class="r-section__title">逐题回顾</text>
+            <text class="r-section__meta">{{ rows.length }} 道题</text>
+          </view>
+
+          <view class="r-review__card">
+            <view v-for="row in rows" :key="row.key" class="r-rq">
+              <view class="r-rq__head">
+                <text class="r-rq__title">{{ row.title }}</text>
+                <text
+                  class="r-rq__tag"
+                  :class="{
+                    'r-rq__tag--ok': row.verdict === 'correct',
+                    'r-rq__tag--bad': row.verdict === 'wrong',
+                  }"
+                >
+                  {{ verdictTag(row.verdict) }}
+                </text>
+                <text
+                  v-if="row.verdict !== 'unjudged'"
+                  class="r-rq__score"
+                  :class="{ 'r-rq__score--ok': row.verdict === 'correct', 'r-rq__score--bad': row.verdict === 'wrong' }"
+                >
+                  {{ row.earned }} / {{ row.points }}
                 </text>
               </view>
-              <text v-else class="r-item__value">{{ row.mine }}</text>
-            </view>
-            <view v-if="row.expected" class="r-item__line">
-              <text class="r-item__key">正确答案</text>
-              <text class="r-item__value r-item__value--right">{{ row.expected }}</text>
-            </view>
-            <view v-if="row.verdict !== 'unjudged'" class="r-item__line">
-              <text class="r-item__key">本题得分</text>
-              <text class="r-item__value" :class="{ 'r-item__value--right': row.earned > 0 }">
-                {{ row.earned }} / {{ row.points }} 分
-              </text>
-            </view>
-            <view v-if="row.analysis" class="r-item__line">
-              <text class="r-item__key">解析</text>
-              <text class="r-item__value">{{ row.analysis }}</text>
+
+              <view class="r-rq__cols">
+                <view class="r-rq__col">
+                  <text class="r-rq__label">我的作答</text>
+                  <view v-if="row.isImage" class="r-rq__images">
+                    <image
+                      v-for="(img, index) in row.images"
+                      :key="index"
+                      class="r-rq__image"
+                      :src="img"
+                      mode="aspectFill"
+                      :lazy-load="true"
+                      :alt="`第 ${index + 1} 张作答图片`"
+                    />
+                    <text
+                      v-if="row.images.length === 0"
+                      class="r-rq__val"
+                      :class="{
+                        'r-rq__val--ok': row.verdict === 'correct',
+                        'r-rq__val--bad': row.verdict === 'wrong',
+                      }"
+                    >
+                      {{ row.mine }}{{ answerImagesFailed ? '（图片暂时读不到）' : '' }}
+                    </text>
+                  </view>
+                  <text
+                    v-else
+                    class="r-rq__val"
+                    :class="{
+                      'r-rq__val--ok': row.verdict === 'correct',
+                      'r-rq__val--bad': row.verdict === 'wrong',
+                    }"
+                  >
+                    {{ row.mine }}
+                  </text>
+                </view>
+
+                <view v-if="row.expected" class="r-rq__col">
+                  <text class="r-rq__label">正确答案</text>
+                  <text class="r-rq__val">{{ row.expected }}</text>
+                </view>
+              </view>
+
+              <text v-if="row.analysis" class="r-rq__analysis">解析：{{ row.analysis }}</text>
             </view>
           </view>
         </view>
 
-        <!-- 提交提示 / 结束语：引用块，不整块上色 -->
-        <view v-if="activity?.submitted_tip" class="r-quote">
-          <text class="r-quote__text">{{ activity.submitted_tip }}</text>
+        <!-- 提交提示 / 结束语：浅底说明卡，不整块上色 -->
+        <view v-if="activity?.submitted_tip" class="r-note">
+          <text class="r-note__text">{{ activity.submitted_tip }}</text>
         </view>
 
-        <view v-if="activity?.end_remark" class="r-quote">
-          <text class="r-quote__text">{{ activity.end_remark }}</text>
+        <view v-if="activity?.end_remark" class="r-note">
+          <text class="r-note__text">{{ activity.end_remark }}</text>
         </view>
 
+        <!-- 建议卡：按分数区间生成的评估建议入口（白底卡，不做整块色） -->
+        <view v-if="showSuggestionEntry" class="r-suggest">
+          <text class="r-suggest__title">评估建议</text>
+          <text class="r-suggest__desc">
+            系统已按本次得分匹配对应的建议区间，可继续查看完整评估结果。
+          </text>
+          <view class="r-suggest__action">
+            <BxButton type="secondary" block @click="openSuggestion">
+              查看评估结果
+            </BxButton>
+          </view>
+        </view>
+
+        <!-- 底部动作：主行动在前 -->
         <view class="r-page__actions">
-          <BxButton v-if="canRetry" block @click="restart">
+          <BxButton v-if="canRetry" size="large" block @click="restart">
             重新测试
           </BxButton>
-          <BxButton v-if="showSuggestionEntry" type="secondary" block @click="openSuggestion">
-            查看评估结果
+          <!-- #ifdef H5 -->
+          <BxButton type="secondary" block @click="openShare">
+            分享结果
           </BxButton>
+          <!-- #endif -->
           <BxButton type="ghost" block @click="goHome">
             返回问卷封面
           </BxButton>
         </view>
       </template>
     </view>
+
+    <!-- 分享面板（H5；小程序端组件内保存按钮会降级为提示） -->
+    <ShareSheet
+      v-if="!loading && !errorMessage"
+      :open="shareOpen"
+      :url="shareUrl"
+      :title="activity?.title || '问卷'"
+      :poster="posterData"
+      @close="shareOpen = false"
+    />
   </view>
 </template>
 
 <style lang="scss" scoped>
+/* ── 页面骨架 ────────────────────────────────────────────────────── */
 .r-page {
   min-height: 100vh;
   background-color: var(--bx-bg);
@@ -366,17 +510,26 @@ function barWidth(percent: number): string {
   padding-bottom: 32px;
 }
 
-/* 加载骨架 */
+/* ── 加载骨架 ────────────────────────────────────────────────────── */
 .r-skeleton {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
-.r-skeleton__hero {
-  height: 208px;
+.r-skeleton__status {
+  width: 100%;
+  height: 44px;
   background-color: var(--bx-line-2);
-  border-radius: var(--bx-radius-lg);
+  border-radius: var(--bx-radius-sm);
+}
+
+.r-skeleton__ring {
+  width: 132px;
+  height: 132px;
+  margin: 0 auto;
+  background-color: var(--bx-line-2);
+  border-radius: 50%;
 }
 
 .r-skeleton__row {
@@ -385,83 +538,125 @@ function barWidth(percent: number): string {
   border-radius: var(--bx-radius-card);
 }
 
-/* ── 分数主角 ─────────────────────────────────────────────────────── */
-.r-hero {
-  padding: 24px 20px 20px;
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-lg);
-  box-shadow: var(--bx-elev-1);
-}
-
-/* 提交成功标记：一枚主色对勾（纯 CSS 绘制，不用 svg） */
-.r-hero__mark {
+/* ── 状态条 ──────────────────────────────────────────────────────── */
+.r-status {
   display: flex;
   align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--bx-line-2);
 }
 
-.r-hero__check {
-  position: relative;
+.r-status__dot {
   flex: none;
-  width: 22px;
-  height: 22px;
-  background-color: var(--bx-primary);
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+  background-color: var(--bx-success);
 }
 
-/* 对勾：两条边框转出来的，不用图标字体也不用 svg */
-.r-hero__check::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  left: 8px;
-  width: 5px;
-  height: 9px;
-  border-right: 2px solid #fff;
-  border-bottom: 2px solid #fff;
-  transform: rotate(45deg);
-}
-
-.r-hero__mark-text {
-  margin-left: 8px;
+.r-status__text {
   font-size: var(--bx-font-sub);
-  font-weight: 600;
+  font-weight: 500;
   line-height: var(--bx-leading-sub);
-  color: var(--bx-primary);
+  color: var(--bx-success);
+}
+
+.r-status__meta {
+  flex-shrink: 1;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── 分数主角 ────────────────────────────────────────────────────── */
+.r-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 20px;
 }
 
 .r-hero__title {
-  display: block;
-  margin-top: 12px;
-  font-size: var(--bx-font-title);
+  font-size: var(--bx-font-h2);
   font-weight: 600;
-  line-height: var(--bx-leading-title);
-  letter-spacing: -0.01em;
+  line-height: 1.5;
   color: var(--bx-text);
-  text-align: left;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
-/* 分数：hero 档（40/48）+ 等宽数字位 */
-.r-score {
+.r-hero__label {
+  margin-top: 4px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  letter-spacing: 0.08em;
+  color: var(--bx-text-3);
+}
+
+/*
+ * 分数环：conic-gradient 画弧 + 内圆挖孔
+ *
+ * - 轨道是 4px 的 line 色圆环，弧在它上面覆盖；
+ * - conic-gradient 不支持时弧不渲染，只剩轨道，数字仍然可读；
+ * - 不用 `<svg>`：微信小程序不支持该标签。
+ */
+.r-ring {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  margin-top: 12px;
+}
+
+.r-ring__track,
+.r-ring__val,
+.r-ring__hole {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.r-ring__track {
+  inset: 0;
+  border: 4px solid var(--bx-line);
+}
+
+.r-ring__val {
+  inset: 0;
+}
+
+.r-ring__hole {
+  inset: 4px;
+  background-color: var(--bx-surface);
+}
+
+.r-ring__center {
+  position: absolute;
+  inset: 0;
   display: flex;
-  align-items: baseline;
-  margin-top: 10px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
-.r-score__value {
-  font-size: var(--bx-font-hero);
+.r-ring__score {
+  font-size: var(--bx-font-display);
   font-weight: 600;
-  line-height: var(--bx-leading-hero);
-  color: var(--bx-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--bx-text);
   font-variant-numeric: tabular-nums;
-  /* 容器宽度固定：数字从 0 数到目标值时，单位不会左右跳 */
-  text-align: right;
 }
 
-.r-score__unit {
-  margin-left: 8px;
-  font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
+.r-ring__total {
+  margin-top: 4px;
+  font-size: var(--bx-font-caption);
+  line-height: 1;
   color: var(--bx-text-3);
   font-variant-numeric: tabular-nums;
 }
@@ -471,14 +666,14 @@ function barWidth(percent: number): string {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
-  margin-top: 12px;
+  margin-top: 16px;
   border: 1px solid transparent;
   border-radius: var(--bx-radius-chip);
 }
 
 .r-chip__text {
   font-size: var(--bx-font-caption);
-  font-weight: 600;
+  font-weight: 500;
   line-height: var(--bx-leading-caption);
 }
 
@@ -495,91 +690,100 @@ function barWidth(percent: number): string {
 }
 
 .r-verdict {
-  display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: var(--bx-font-body);
   line-height: var(--bx-leading-body);
   color: var(--bx-text-2);
+  text-align: center;
 }
 
-/* 答对 / 答错 / 未答：细线分隔的一行，不做分格盒子 */
+.r-hero__cap {
+  margin-top: 4px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 答对 / 答错 / 未答 ──────────────────────────────────────────── */
 .r-stats {
-  display: flex;
-  align-items: center;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--bx-line-2);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--bx-line);
+  border-bottom: 1px solid var(--bx-line);
 }
 
 .r-stat {
-  display: flex;
-  align-items: baseline;
+  padding: 12px 0;
+  text-align: center;
 }
 
-.r-stat__value {
+.r-stat + .r-stat {
+  border-left: 1px solid var(--bx-line-2);
+}
+
+.r-stat__num {
+  display: block;
   font-size: var(--bx-font-h2);
-  font-weight: 600;
-  line-height: var(--bx-leading-h2);
+  font-weight: 500;
+  line-height: 1.3;
   color: var(--bx-text);
   font-variant-numeric: tabular-nums;
 }
 
+.r-stat__num--ok {
+  color: var(--bx-success);
+}
+
+.r-stat__num--bad {
+  color: var(--bx-danger);
+}
+
 .r-stat__label {
-  margin-left: 4px;
+  display: block;
+  margin-top: 2px;
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
+  letter-spacing: 0.08em;
   color: var(--bx-text-3);
 }
 
-.r-stat__divider {
-  width: 1px;
-  height: 12px;
-  margin: 0 12px;
-  background-color: var(--bx-line);
+/* ── 小节标题 ────────────────────────────────────────────────────── */
+.r-section,
+.r-review {
+  margin-top: 16px;
 }
 
-.r-hero__batch {
-  display: block;
-  margin-top: 14px;
+.r-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.r-section__title {
+  font-size: var(--bx-font-h2);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--bx-text);
+}
+
+.r-section__meta {
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 小节标题：一条短横线 + 文字 ────────────────────────────────── */
-.r-section {
-  margin-top: 20px;
-}
-
-.r-section__head {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  padding-left: 2px;
-}
-
-.r-section__rule {
-  width: 24px;
-  height: 2px;
-  margin-right: 10px;
-  background-color: var(--bx-line-strong);
-  border-radius: 1px;
-}
-
-.r-section__title {
-  font-size: var(--bx-font-sub);
-  font-weight: 600;
-  line-height: var(--bx-leading-sub);
-  color: var(--bx-text-2);
-}
-
-/* ── 逐题得分 ─────────────────────────────────────────────────────── */
-.r-scores {
+/* ── 逐题得分 ────────────────────────────────────────────────────── */
+.r-scores,
+.r-review__card {
   overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .r-bar-row {
@@ -605,9 +809,9 @@ function barWidth(percent: number): string {
 
 .r-bar-row__track {
   flex: none;
-  width: 84px;
+  width: 96px;
   height: 4px;
-  margin-left: 12px;
+  margin-left: 16px;
   overflow: hidden;
   background-color: var(--bx-line-2);
   border-radius: var(--bx-radius-pill);
@@ -652,131 +856,183 @@ function barWidth(percent: number): string {
   }
 }
 
-/* ── 逐题回顾 ─────────────────────────────────────────────────────── */
-.r-list {
-  margin-top: 20px;
-  overflow: hidden;
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-card);
-}
-
-.r-item {
+/* ── 逐题回顾 ────────────────────────────────────────────────────── */
+.r-rq {
   padding: 16px;
 }
 
-.r-item + .r-item {
+.r-rq + .r-rq {
   border-top: 1px solid var(--bx-line-2);
 }
 
-.r-item__head {
+.r-rq__head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.r-item__label {
+.r-rq__title {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  font-weight: 500;
+  line-height: 1.55;
   color: var(--bx-text);
+  overflow-wrap: anywhere;
 }
 
-.r-badge {
-  flex-shrink: 0;
-  padding: 2px 9px;
-  margin-left: 10px;
+.r-rq__tag {
+  flex: none;
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
-  border-radius: var(--bx-radius-chip);
+  color: var(--bx-text-3);
 }
 
-/* 判定徽章改用语义令牌（此前是硬编码的 rgba(0,180,42,.1) 之类） */
-.r-badge--correct {
+.r-rq__tag--ok {
   color: var(--bx-success);
-  background-color: var(--bx-success-soft);
 }
 
-.r-badge--wrong {
+.r-rq__tag--bad {
   color: var(--bx-danger);
-  background-color: var(--bx-danger-soft);
 }
 
-.r-badge--unanswered {
-  color: var(--bx-text-3);
-  background-color: var(--bx-line-2);
-}
-
-.r-item__line {
-  display: flex;
-  margin-top: 8px;
-}
-
-.r-item__key {
-  flex-shrink: 0;
-  width: 62px;
-  font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
-  color: var(--bx-text-3);
-}
-
-.r-item__value {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
+.r-rq__score {
+  flex: none;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-text-2);
-  word-break: break-all;
+  font-variant-numeric: tabular-nums;
 }
 
-.r-item__value--right {
+.r-rq__score--ok {
   color: var(--bx-success);
+}
+
+.r-rq__score--bad {
+  color: var(--bx-danger);
+}
+
+/* 我的作答 / 正确答案：两列，标签在上、值在下 */
+.r-rq__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.r-rq__col {
+  min-width: 0;
+}
+
+.r-rq__label {
+  display: block;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  letter-spacing: 0.08em;
+  color: var(--bx-text-3);
+}
+
+.r-rq__val {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--bx-font-sub);
+  line-height: 1.6;
+  color: var(--bx-text);
+  overflow-wrap: anywhere;
+}
+
+.r-rq__val--ok {
+  color: var(--bx-success);
+}
+
+.r-rq__val--bad {
+  color: var(--bx-danger);
 }
 
 /* 图片题：作答值是文件批次号，必须先换成真实图片再展示 */
-.r-item__images {
-  box-sizing: border-box;
+.r-rq__images {
   display: flex;
-  flex: 1;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  margin-top: 4px;
 }
 
-.r-item__image {
+.r-rq__image {
   width: 64px;
   height: 64px;
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-sm);
 }
 
-/* ── 引用块：左侧 2px 主色条，不整块上色 ────────────────────────── */
-.r-quote {
-  padding: 4px 0 4px 14px;
-  margin-top: 16px;
-  border-left: 2px solid var(--bx-primary);
+.r-rq__analysis {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--bx-font-caption);
+  line-height: 1.7;
+  color: var(--bx-text-3);
+  overflow-wrap: anywhere;
 }
 
-.r-quote__text {
+/* ── 说明卡（提交提示 / 结束语） ─────────────────────────────────── */
+.r-note {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-md);
+}
+
+.r-note__text {
+  display: block;
   font-size: var(--bx-font-sub);
+  line-height: 1.75;
+  color: var(--bx-text-2);
+  overflow-wrap: anywhere;
+}
+
+/* ── 建议卡 ──────────────────────────────────────────────────────── */
+.r-suggest {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
+}
+
+.r-suggest__title {
+  display: block;
+  font-size: var(--bx-font-sub);
+  font-weight: 600;
   line-height: var(--bx-leading-sub);
+  color: var(--bx-text);
+}
+
+.r-suggest__desc {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--bx-font-caption);
+  line-height: 1.75;
   color: var(--bx-text-2);
 }
 
-/* 动作区：主操作在前，次级与返回在后 */
-.r-page__actions {
-  margin-top: 24px;
+.r-suggest__action {
+  margin-top: 12px;
 }
 
-/* 两个按钮之间留间距；不依赖子组件根元素能否被作用域样式命中 */
-.r-page__actions > :not(:first-child) {
-  margin-top: 10px;
+/* ── 底部动作 ────────────────────────────────────────────────────── */
+.r-page__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 /* ── 动效 ─────────────────────────────────────────────────────────
- * 逐题得分条：宽度 0 → 目标，逐条 delay 60ms（规范 §5.2 第 11 条）。
+ * 逐题得分条：宽度 0 → 目标。
  *
- * 逐项动画只在 H5 端做（规范 §5.3）：小程序端长列表逐项动画会掉帧。
+ * 逐项动画只在 H5 端做（规范 §6.1）：小程序端长列表逐项动画会掉帧。
  */
 /* #ifdef H5 */
 .r-bar-row__fill {

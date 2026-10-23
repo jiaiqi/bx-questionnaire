@@ -5,120 +5,106 @@
  * 小程序端支持 CSS 变量；`page` 会被 uni-app 编译为各端根节点。
  *
  * 这是**唯一真源**：`uno.config.ts` 的 theme 必须与之同值（由 test/design-tokens.spec.ts
- * 守护）。`src/uni.scss` 不再保留 `$bx-*` 副本 —— 那 16 个变量在 src 内引用次数为 0，
- * 留着只会让人以为"还有第三处在用"。
+ * 守护）。`src/uni.scss` 不再保留 `$bx-*` 副本。
  *
- * ## V2（2026-10-21）：墨蓝 · 静卷
+ * ## V6「清简」（2026-10-22）
  *
- * 旧版是「蓝白灰 + 等距白卡 + 同款阴影」，换掉 logo 就能给任何系统用，
- * 因此既不美也不通用。V2 把视觉语言收敛到三件事：
- *   1. **一张纸** —— 描边优先于阴影，纸面容器承载内容，题目之间只留细线；
- *   2. **一次落笔** —— 墨蓝是唯一品牌色，只出现在选中态、主操作、焦点与进度；
- *   3. **一次推进** —— 进度、分数、维度条都在动，动画是反馈而不是装饰。
+ * 设计原型见 `design/prototype-v6/`，规范见 `docs/UI-UX-V6-设计系统.md`。
+ * 相对 V2「墨蓝 · 静卷」只换气质，不换结构：
+ *   1. **冷白画布** —— 底色由偏灰的 #F4F5F7 提到 #F5F6F8，白面更干净；
+ *   2. **一笔更亮的靛蓝** —— 主色 #2C46C8 → #3B4EDB，白字 6.4:1，仍只用于进度、
+ *      选中、主行动三处；
+ *   3. **更利落的形状** —— 卡片 16 → 14、控件 12 → 10、小圆角 10 → 8；
+ *   4. **更中性的投影与描边** —— 阴影改用冷黑 rgba(16,24,40)，描边 #E5E7EB。
  *
- * 对比度约束：文字与语义色按 WCAG AA（正文 ≥4.5:1）选定。本轮实测值：
- *   text #15181C / 白底 17.4:1 ｜ text-2 #4E555E 7.6:1 ｜ text-3 #6B7280 4.8:1
- *   blue #2C46C8 / 白字 7.5:1 ｜ danger #C42B1F 5.7:1 ｜ success #17784A 5.5:1
- *   warn #A85A0A 5.1:1 ｜ health #0F766E 5.9:1
+ * 对比度约束（WCAG 2.1 实测，白底）：text 18.1 ｜ text-2 7.6 ｜ text-3 5.0（画布 4.6）
+ * ｜ 白字/主色 6.4 ｜ danger 5.6（浅底 5.2）｜ success 5.3 ｜ warn 5.9。
  * 改色值前请用对比度公式复核，并同步 uno.config.ts。
  */
 
 page,
 :root {
-  /* ── 品牌色：墨蓝 ────────────────────────────────────────────────
-   * 取 #2C46C8 而不是系统蓝 #007AFF / #0067db：后者是"任何 App 都这样"的蓝，
-   * 且在小程序与 H5 上会和微信、支付宝的原生控件撞色。#2C46C8 偏紫而沉，
-   * 在企业工具里显得专业，又与"健康语义绿"明确区分。
+  /* ── 品牌色：靛蓝 ────────────────────────────────────────────────
+   * 比 V2 的墨蓝亮一档：在冷白画布上更有电，但不至于变成「任何 SaaS 都这样」
+   * 的系统蓝；与微信、支付宝原生控件也不撞色。
    */
-  --bx-blue: #2c46c8;
-  --bx-blue-hover: #2439a4;
-  --bx-blue-active: #1d2f86;
-  --bx-blue-soft: #eef0fd;
-  /* 选中底上的浅晕：登录页背景的墨蓝晕染也用它，保证同一片"墨" */
-  --bx-glow: rgba(44, 70, 200, 0.06);
+  --bx-blue: #3b4edb;
+  --bx-blue-hover: #2f41c2;
+  --bx-blue-active: #26359e;
+  --bx-blue-soft: #eef1fd;
+  /* 选中底 / 登录环境光的浅晕 */
+  --bx-glow: rgba(59, 78, 219, 0.07);
 
-  /* ── 中性色：近石墨，带一点冷 ───────────────────────────────────
-   * bg 比旧版浅一档（#F2F4F7 → #F4F5F7）：旧版底色偏灰，白卡浮起来像"盒子"；
-   * 浅底 + 描边才是"纸"。
-   */
-  --bx-bg: #f4f5f7;
+  /* ── 中性色：冷调近石墨 ─────────────────────────────────────────── */
+  --bx-bg: #f5f6f8;
   --bx-surface: #ffffff;
-  /* 内嵌区：输入框底、只读区、骨架屏。旧版是 #FAFBFC，与白底几乎不可分，
-   * "这里可以输入"看不出来。 */
-  --bx-surface-2: #f7f8fa;
-  --bx-text: #15181c;
-  --bx-text-2: #4e555e;
-  --bx-text-3: #6b7280;
-  /* text-4 **仅**用于占位符与装饰（白底 2.6:1），不得承载任何信息文字 */
-  --bx-text-4: #9aa1a9;
-  --bx-line: #e4e7ec;
-  --bx-line-2: #f0f2f5;
+  /* 内嵌区：输入框底、只读区、骨架屏 */
+  --bx-surface-2: #fafbfc;
+  --bx-text: #14161a;
+  --bx-text-2: #4b5563;
+  --bx-text-3: #667080;
+  /* text-4 **仅**用于占位符与装饰（白底 2.5:1），不得承载任何信息文字 */
+  --bx-text-4: #9ca3af;
+  --bx-line: #e5e7eb;
+  --bx-line-2: #f0f1f4;
   /* 强描边：输入框、聚焦前的控件边框 */
-  --bx-line-strong: #d3d8de;
+  --bx-line-strong: #d3d7de;
 
-  /* ── 语义色：文字 / 浅底 / 描边 三件套 ────────────────────────────
-   * 补浅底与描边，是因为此前同一个 danger 浅底出现了 `#fff5f5` 与
-   * `rgba(245,63,63,.1)` 两种写法 —— 没有配对令牌，各处只能自己编一个。
-   */
-  --bx-danger: #c42b1f;
-  --bx-danger-soft: #fdf1ef;
-  --bx-danger-line: #f3c9c3;
-  --bx-success: #17784a;
-  --bx-success-soft: #edf7f1;
-  --bx-success-line: #bfe3ce;
-  --bx-warn: #a85a0a;
-  --bx-warn-soft: #fdf3e7;
-  --bx-warn-line: #f0d3ae;
+  /* ── 语义色：文字 / 浅底 / 描边 三件套 ──────────────────────────── */
+  --bx-danger: #c22f24;
+  --bx-danger-soft: #fef3f2;
+  --bx-danger-line: #f4c7c3;
+  --bx-success: #0f7a5a;
+  --bx-success-soft: #ecf7f2;
+  --bx-success-line: #b3ddcd;
+  --bx-warn: #a34a08;
+  --bx-warn-soft: #fdf5ea;
+  --bx-warn-line: #efd3ac;
 
   /* ── 健康测评语义色 ───────────────────────────────────────────────
-   * 「健康分数 / 评估等级」用一个独立于品牌主色的色相表达：品牌主色将来
-   * 无论换成什么，健康语义都保持稳定。取 teal-700（比旧版 #0D9488 更深，
-   * 白字 5.9:1）。
+   * V6 收敛为一种语义绿：结果分数 / 等级不再需要独立色相，
+   * 成功与健康共用同一组值，减少一屏里的色相数量。
    */
-  --bx-health: #0f766e;
-  --bx-health-soft: #f0f9f7;
-  --bx-health-line: #a7e3db;
+  --bx-health: #0f7a5a;
+  --bx-health-soft: #ecf7f2;
+  --bx-health-line: #b3ddcd;
 
-  /* ── 遮罩 ─────────────────────────────────────────────────────────
-   * 弹窗遮罩单独成令牌：旧版各处写 rgba(0,0,0,.4) 之类的裸值，
-   * 叠在墨蓝底上会显脏。
-   */
-  --bx-overlay: rgba(21, 24, 28, 0.45);
-  /* 骨架屏扫光高光 */
+  /* ── 遮罩 ───────────────────────────────────────────────────────── */
+  --bx-overlay: rgba(20, 24, 33, 0.34);
   --bx-skeleton-sheen: rgba(255, 255, 255, 0.65);
 
   /* ── 字阶 ─────────────────────────────────────────────────────────
-   * 此前全工程出现 12 种字号（12/13/14 三分天下、共 128 处），没有阶梯就没有层级。
-   * display：登录页时钟与结果页分数；title：页面/卡片主标题；h2：题组标题；
-   * body：题干与正文；sub：选项与辅助正文；caption：元信息（下限 12px）。
-   * V2 调整：body 行高 24→26（中文需要比西文更松），display 行高 36→38。
+   * display：封面主标题、登录主张；hero：结果页分数；
+   * title：页面标题；h2：区块/题干；body：正文；sub：辅助说明；caption：元信息。
+   * V6 把 display 由 28 提到 32、title 由 20 提到 22，行高按 1.25–1.32 收紧。
+   *
+   * 字阶乘 `--bx-font-scale`：适老化 / 系统字号偏大时由 appearance 设置整体放大，
+   * 组件不需要各自改字号。行高同步乘，避免放大后文字被裁。
    */
-  --bx-font-hero: 40px;
-  --bx-leading-hero: 48px;
-  --bx-font-display: 28px;
-  --bx-leading-display: 38px;
-  --bx-font-title: 20px;
-  --bx-leading-title: 28px;
-  --bx-font-h2: 17px;
-  --bx-leading-h2: 26px;
-  --bx-font-body: 15px;
-  --bx-leading-body: 26px;
-  --bx-font-sub: 13px;
-  --bx-leading-sub: 20px;
-  --bx-font-caption: 12px;
+  --bx-font-scale: 1;
+  --bx-font-hero: calc(40px * var(--bx-font-scale));
+  --bx-leading-hero: calc(48px * var(--bx-font-scale));
+  --bx-font-display: calc(32px * var(--bx-font-scale));
+  --bx-leading-display: calc(40px * var(--bx-font-scale));
+  --bx-font-title: calc(22px * var(--bx-font-scale));
+  --bx-leading-title: calc(30px * var(--bx-font-scale));
+  --bx-font-h2: calc(17px * var(--bx-font-scale));
+  --bx-leading-h2: calc(26px * var(--bx-font-scale));
+  --bx-font-body: calc(15px * var(--bx-font-scale));
+  --bx-leading-body: calc(26px * var(--bx-font-scale));
+  --bx-font-sub: calc(13px * var(--bx-font-scale));
+  --bx-leading-sub: calc(21px * var(--bx-font-scale));
+  --bx-font-caption: calc(12px * var(--bx-font-scale));
   --bx-leading-caption: 18px;
 
   /* ── 字体栈 ───────────────────────────────────────────────────────
-   * 刻意不加载 Web Font：微信小程序需 wx.loadFontFace + 域名白名单，
-   * H5 侧要额外 ~100KB 与首屏阻塞。中文子集化的收益不足以抵消这些约束，
-   * 个性改由字重、字距与结构承担。
+   * 刻意不加载 Web Font（小程序需白名单、H5 阻塞首屏）；个性由字重、
+   * 字距与结构承担。V6 不引入衬线。
    */
   --bx-font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
-    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    'MiSans', 'Source Han Sans SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
-  /* ── 间距：4 基数 ────────────────────────────────────────────────
-   * 用法：卡片内 md、卡片间 sm、区块间 lg、页面左右 md/lg。
-   */
+  /* ── 间距：4 基数 ──────────────────────────────────────────────── */
   --bx-space-xs: 4px;
   --bx-space-sm: 8px;
   --bx-space-md: 16px;
@@ -126,94 +112,73 @@ page,
   --bx-space-xl: 32px;
   --bx-space-2xl: 48px;
 
-  /* ── 圆角：按语义分档 ─────────────────────────────────────────────
-   * 此前令牌之外还散着 4 / 10 / 15 / 2px 与硬编码的 `12px 12px 0 0`。
-   * V2 补齐 sm（旧代码引用 var(--bx-radius-sm) 但令牌缺失，实际回退成无效值）。
-   */
-  --bx-radius: 12px;
-  --bx-radius-xs: 6px;
-  --bx-radius-sm: 10px;
-  --bx-radius-md: 14px;
-  --bx-radius-card: 16px;
+  /* ── 圆角：按语义分档（V6 收紧一档） ────────────────────────────── */
+  --bx-radius: 10px;
+  --bx-radius-xs: 4px;
+  --bx-radius-sm: 8px;
+  --bx-radius-md: 12px;
+  --bx-radius-card: 14px;
   --bx-radius-lg: 20px;
   --bx-radius-chip: 999px;
-  /* pill 与 chip 同值：chip 是旧名，pill 是规范里的新名，两个都留着 */
   --bx-radius-pill: 999px;
   --bx-radius-mark: 4px;
 
   /* ── 层级阴影：四级 ───────────────────────────────────────────────
-   * V2 原则：**描边优先于阴影**。纸面靠 1px 描边 + 极轻阴影成立，
-   * 而不是靠一圈大软阴影（旧版全站同一个 rgba(0,0,0,.05)，界面因此发糊）。
+   * 描边优先于阴影；阴影只表达「浮起」，全部使用冷黑、极低透明度。
    */
-  --bx-elev-1: 0 1px 2px rgba(21, 24, 28, 0.04), 0 8px 24px rgba(21, 24, 28, 0.05);
-  --bx-elev-2: 0 4px 12px rgba(21, 24, 28, 0.08);
-  --bx-elev-3: 0 16px 40px rgba(21, 24, 28, 0.14);
-  /* 兼容旧名（原卡片阴影）：指向 elev-1 */
+  --bx-elev-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px -8px rgba(16, 24, 40, 0.08);
+  --bx-elev-2: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 12px 32px -12px rgba(16, 24, 40, 0.14);
+  --bx-elev-3: 0 8px 24px rgba(16, 24, 40, 0.1), 0 24px 56px -24px rgba(16, 24, 40, 0.2);
   --bx-shadow-card: var(--bx-elev-1);
-  /* 吸底栏用「向上的一条线」表达浮起，而不是阴影：阴影压在内容上会发脏 */
+  /* 主按钮的浅靛投影：只给实心主行动，不用于其它元素 */
+  --bx-elev-primary: 0 1px 2px rgba(59, 78, 219, 0.18), 0 6px 16px -8px rgba(59, 78, 219, 0.36);
   --bx-elev-sticky: 0 -1px 0 var(--bx-line);
 
   /* ── 控件尺寸与交互 ───────────────────────────────────────────────
-   * 48px 此前手写 7 遍的 44px；禁用态透明度此前有 .4 / .45 / .5 / .6 四档。
-   * 取 48 而不是 44：44 是 iOS 的下限，安卓是 48dp，问卷的选项与按钮都用同一档，
-   * 拇指落在选项上的容错更大。
-   *
-   * V2 拆分三档（规范 §6.1）：
-   * - `--bx-control-height` 48：选项行、通用控件（拇指友好，保留旧值）
-   * - `--bx-control-height-md` 44：按钮 normal、输入框（PC 端密度更高）
-   * - `--bx-control-height-lg` 52：按钮 large（封面页主操作）
-   * - `--bx-control-height-sm` 32：按钮 small、标签
+   * - control-height 48：选项行（触摸容错最大）
+   * - control-height-md 44：按钮 normal、输入框
+   * - control-height-lg 50：按钮 large（封面主操作）
+   * - control-height-sm 32：按钮 small、标签
    */
   --bx-control-height: 48px;
   --bx-control-height-md: 44px;
-  --bx-control-height-lg: 52px;
+  --bx-control-height-lg: 50px;
   --bx-control-height-sm: 32px;
   --bx-navbar-height: 48px;
   --bx-disabled-opacity: 0.45;
   --bx-focus-ring: 2px solid var(--bx-blue);
-  /* 聚焦光晕：输入框用 box-shadow 而非 outline，保证 H5 与小程序表现一致 */
   --bx-focus-glow: 0 0 0 3px var(--bx-blue-soft);
 
   /* ── 动效 ────────────────────────────────────────────────────────
-   * V2 把动效当成交互反馈的一部分，因此拆出四档时长与四种缓动：
-   * 快（悬停/按下）、基础（选中）、慢（进度/抽屉）、更慢（进场编排）。
+   * V6 只保留三档状态时长 + 一档进场：
+   * 快（悬停/按下 120）、基础（选中/切换 180）、慢（进度/抽屉 260）、
+   * 进场（一次性淡入 420）。
    */
   --bx-duration-fast: 120ms;
-  --bx-duration-base: 200ms;
-  --bx-duration-slow: 320ms;
-  --bx-duration-slower: 480ms;
-  /* 强减速：进场与展开 */
+  --bx-duration-base: 180ms;
+  --bx-duration-slow: 260ms;
+  --bx-duration-slower: 420ms;
   --bx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  /* 对称：位移类 */
-  --bx-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  /* 轻微回弹：选中态 */
+  --bx-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --bx-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --bx-ease-linear: linear;
 
-  /* ── 叠层：z-index 此前是 1 / 10 / 40 / 60 / 900 五个裸值 ─────────── */
+  /* ── 叠层 ─────────────────────────────────────────────────────── */
   --bx-z-sticky: 10;
   --bx-z-fixed: 40;
   --bx-z-overlay: 60;
   --bx-z-modal: 900;
 
-  /* 内容列宽：PC 端居中定宽，移动端全宽（由容器宽度决定布局，见 §5.4）
-   * 720px 约等于 42 个汉字的舒适阅读宽度；管理侧另有自己的宽列宽，不走这个令牌。
-   */
+  /* 内容列宽：720 ≈ 42 个汉字的舒适阅读宽度；管理侧用宽列宽 */
   --bx-content-width: 720px;
-  /* 管理侧（问卷列表 / 设计器）用的宽列宽 */
   --bx-content-width-wide: 1180px;
 
   /* ── 语义主色别名（主题切换的唯一入口）────────────────────────────
    * 组件一律引用 --bx-primary*，不要直接写 --bx-blue*。
-   * 主题块只覆盖 --bx-blue*，而 --bx-primary 是它的别名（CSS 变量动态解析），
-   * 因此「改一处、全站跟随」，连旧代码里的 --bx-blue* 也一起跟随。
-   *
-   * 别名不写十六进制，所以不必同步 uno.config.ts —— design-tokens.spec.ts
-   * 只比对「以 # 开头的颜色令牌」。
    */
   --bx-primary: var(--bx-blue);
   --bx-primary-hover: var(--bx-blue-hover);
   --bx-primary-active: var(--bx-blue-active);
   --bx-primary-soft: var(--bx-blue-soft);
-  --bx-primary-line: #d7dcf8;
+  --bx-primary-line: #c9d1f7;
 }

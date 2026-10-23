@@ -4,48 +4,45 @@
  *
  * ## 为什么是「一张纸」而不是一列卡片
  *
- * 规范 §0 的核心比喻是「一份问卷 = 一张连续的卷（不是 11 个盒子）」。
- * 题纲（EditorItemRow）回答「有哪些题」，画布回答「**这份问卷长什么样**」——
- * 两者的信息量不同，混在一栏里就都要不清。
+ * 「一份问卷 = 一张连续的纸」。题纲（`EditorItemRow`）回答「有哪些题」，
+ * 画布回答「**这份问卷长什么样**」—— 两者的信息量不同，混在一栏里就都要不清。
  *
- * 画布上：
- * - 整份问卷是**一张连续的纸**（白底 + 1px 描边 + 圆角 20 + 极轻阴影）；
- * - 题目之间只有一条细线（纸上的分节），不画各自的卡片；
- * - 每道题左侧有 2px 的**类型色条**，区分题型（色条按作答形态分三族，
- *   细节见 `typeTone.ts`）；
- * - 选中的那道题**展开**成作答时的控件形态（选项 / 输入框），
- *   其余题只给题干 —— 画布是「结构示意」，不承担像素级还原。
+ * V6「清简」的纸面（见 `design/prototype-v6/assets/admin.css` 的 `.adm-paper`）：
+ * 白面卡片、1px 描边、圆角 14、最大宽 640；顶部是**封面区**（活动编号 / 截止 /
+ * 题数 + 标题 + 说明），下面是题目卡（纸上的分节，不是各自的盒子）：
+ * - 未选中：白底 + 1px 描边；
+ * - 选中：浅靛底 + 靛蓝描边 + 左侧 2px 靛蓝条，并**展开**成作答时的控件形态。
+ * 其余题只给题干 —— 画布是「结构示意」，不承担像素级还原。
  *
- * 复用旧「实时预览」的能力，但不再只显示一道题。
+ * 点击封面区会发出 `selectActivity`，页面据此把右栏切回「问卷信息」。
  */
 
-import type { EditorItem } from '@/domain/editor'
+import type { EditorActivity, EditorItem } from '@/domain/editor'
 
 import { computed } from 'vue'
 
 import { isSingleChoice, typeHasOptions } from '@/domain/editor'
 import { stripQuestionTitleIndex } from '@/domain/questionnaire'
 import { plainText } from './plainText'
-import { typeTone } from './typeTone'
 
 interface Props {
   items: EditorItem[]
-  /** 当前选中的题目（`clientKey`） */
+  /** 问卷基本信息：封面区展示编号 / 标题 / 说明 */
+  activity: EditorActivity
+  /** 当前选中的题目（`clientKey`）；空串表示选中了封面 */
   selectedKey: string
 }
 
 const props = defineProps<Props>()
 
-const emit = defineEmits<{ select: [clientKey: string] }>()
+const emit = defineEmits<{
+  select: [clientKey: string]
+  selectActivity: []
+}>()
 
 /** 题干：与题纲用同一个函数剥掉后端自带的「1. 」前缀；先净化掉富文本标签 */
 function titleOf(item: EditorItem): string {
   return stripQuestionTitleIndex(plainText(item.title)) || '（未填写题干）'
-}
-
-/** 语气（色条） */
-function toneOf(item: EditorItem): string {
-  return `editor-canvas__q--tone-${typeTone(item.type)}`
 }
 
 /** 是否多选：单选画圆环，多选画方框 */
@@ -76,111 +73,245 @@ function isOpen(item: EditorItem): boolean {
   return item.clientKey === props.selectedKey
 }
 
+/** 题号补零到两位（原型：01 / 02 …），数字用等宽字形 */
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
 const hasItems = computed(() => props.items.length > 0)
+
+const coverTitle = computed(() => plainText(props.activity.title) || '未命名问卷')
+
+/** 副标题：分享摘要优先，其次问卷描述 */
+const coverSub = computed(() => plainText(props.activity.summary))
+
+const coverIntro = computed(() => plainText(props.activity.remark))
+
+const deadline = computed(() => String(props.activity.endTime ?? '').slice(0, 10) || '未设置')
+
+const activityNo = computed(() => String(props.activity.activityNo ?? '') || '未编号')
 </script>
 
 <template>
   <view class="editor-canvas">
-    <view v-if="!hasItems" class="editor-canvas__empty">
-      <text class="editor-canvas__empty-text">添加题目后，这里会显示问卷的样子</text>
-    </view>
-
-    <view v-else class="editor-canvas__sheet">
+    <view class="editor-canvas__sheet">
+      <!-- 封面区：点它 = 选中「问卷信息」，右栏切到基本信息表单 -->
       <view
-        v-for="(item, index) in props.items"
-        :key="item.clientKey"
-        class="editor-canvas__q"
-        :class="[toneOf(item), { 'editor-canvas__q--on': isOpen(item) }]"
+        class="editor-canvas__cover"
+        :class="{ 'editor-canvas__cover--on': !props.selectedKey }"
         role="button"
         tabindex="0"
-        :aria-label="`第 ${index + 1} 题 ${titleOf(item)}`"
-        @click="emit('select', item.clientKey)"
-        @keydown.enter.prevent="emit('select', item.clientKey)"
+        aria-label="编辑问卷信息"
+        @click="emit('selectActivity')"
+        @keydown.enter.prevent="emit('selectActivity')"
       >
-        <view class="editor-canvas__q-head">
-          <text class="editor-canvas__q-no">{{ index + 1 }}</text>
-          <text class="editor-canvas__q-title">
-            {{ titleOf(item) }}
-            <text v-if="item.required" class="editor-canvas__q-req">*</text>
-          </text>
-          <text class="editor-canvas__q-type">{{ item.type }}</text>
+        <view class="editor-canvas__eyebrow">
+          <text>{{ activityNo }}</text>
+          <text class="editor-canvas__sep" aria-hidden="true">·</text>
+          <text>截止 {{ deadline }}</text>
+          <text class="editor-canvas__sep" aria-hidden="true">·</text>
+          <text>共 {{ props.items.length }} 题</text>
         </view>
+        <text class="editor-canvas__cover-title">{{ coverTitle }}</text>
+        <text v-if="coverSub" class="editor-canvas__cover-sub">{{ coverSub }}</text>
+        <text v-if="coverIntro" class="editor-canvas__cover-intro">{{ coverIntro }}</text>
+      </view>
 
-        <!-- 选中的题展开成作答时的控件形态 -->
-        <view v-if="isOpen(item)" class="editor-canvas__q-body">
-          <view v-if="typeHasOptions(item.type) && item.options.length > 0" class="editor-canvas__opts">
-            <view
-              v-for="option in item.options"
-              :key="option.clientKey"
-              class="editor-canvas__opt"
-            >
-              <view
-                class="editor-canvas__mark"
-                :class="{ 'editor-canvas__mark--box': isMulti(item) }"
-                aria-hidden="true"
-              />
-              <text class="editor-canvas__opt-text">{{ plainText(option.value) || '（未填写选项）' }}</text>
-            </view>
+      <view class="editor-canvas__rule" />
+
+      <view v-if="!hasItems" class="editor-canvas__empty">
+        <text class="editor-canvas__empty-text">添加题目后，这里会显示问卷的样子</text>
+      </view>
+
+      <view v-else class="editor-canvas__list">
+        <view
+          v-for="(item, index) in props.items"
+          :key="item.clientKey"
+          class="editor-canvas__q"
+          :class="{ 'editor-canvas__q--on': isOpen(item) }"
+          role="button"
+          tabindex="0"
+          :aria-label="`第 ${index + 1} 题 ${titleOf(item)}`"
+          @click="emit('select', item.clientKey)"
+          @keydown.enter.prevent="emit('select', item.clientKey)"
+        >
+          <view class="editor-canvas__q-head">
+            <text class="editor-canvas__q-no">{{ pad2(index + 1) }}</text>
+            <text class="editor-canvas__q-title">
+              {{ titleOf(item) }}
+              <text v-if="item.required" class="editor-canvas__q-req">*</text>
+            </text>
+            <text class="editor-canvas__q-type">{{ item.type }}</text>
           </view>
 
-          <view v-else class="editor-canvas__control">
-            <text class="editor-canvas__placeholder">{{ placeholderOf(item) }}</text>
-            <view v-if="item.type !== '文本' && item.type !== '数字'" class="editor-canvas__arrow" aria-hidden="true" />
+          <!-- 选中的题展开成作答时的控件形态 -->
+          <view v-if="isOpen(item)" class="editor-canvas__q-body">
+            <view
+              v-if="typeHasOptions(item.type) && item.options.length > 0"
+              class="editor-canvas__opts"
+            >
+              <view
+                v-for="option in item.options"
+                :key="option.clientKey"
+                class="editor-canvas__opt"
+              >
+                <view
+                  class="editor-canvas__mark"
+                  :class="{ 'editor-canvas__mark--box': isMulti(item) }"
+                  aria-hidden="true"
+                />
+                <text class="editor-canvas__opt-text">{{ plainText(option.value) || '（未填写选项）' }}</text>
+              </view>
+            </view>
+
+            <view v-else class="editor-canvas__control">
+              <text class="editor-canvas__placeholder">{{ placeholderOf(item) }}</text>
+              <view
+                v-if="item.type !== '文本' && item.type !== '数字'"
+                class="editor-canvas__arrow"
+                aria-hidden="true"
+              />
+            </view>
           </view>
         </view>
       </view>
+
+      <text class="editor-canvas__foot">问卷纸面 · 点选题目编辑右侧属性</text>
     </view>
   </view>
 </template>
 
 <style lang="scss" scoped>
 .editor-canvas {
-  padding: 16px;
+  width: 100%;
 }
 
-/* 一张纸：白底 + 1px 描边 + 圆角 20 + 极轻阴影（描边优先于阴影） */
+/* 一张纸：白面 + 1px 描边 + 圆角 14 + 极轻阴影（描边优先于阴影） */
 .editor-canvas__sheet {
-  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-lg);
+  border-radius: var(--bx-radius-card);
   box-shadow: var(--bx-elev-1);
 }
 
-/*
- * 一道题
- *
- * 左侧 2px 类型色条是**唯一**的类型标识（其余靠题型标签上的文字），
- * 题目之间只留一条细线 —— 纸上的分节，不是各自的盒子。
- */
-.editor-canvas__q {
-  padding: 16px 16px 16px 18px;
-  border-left: 2px solid var(--bx-line);
-  border-bottom: 1px solid var(--bx-line-2);
+/* ── 封面区 ── */
+
+.editor-canvas__cover {
+  padding: 12px 16px;
+  margin: -12px -16px 24px;
+  border-radius: var(--bx-radius);
   cursor: pointer;
-  transition: background-color var(--bx-duration-base) var(--bx-ease-out);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-.editor-canvas__q:last-child {
-  border-bottom: none;
+@media (hover: hover) {
+  .editor-canvas__cover:hover {
+    background-color: var(--bx-surface-2);
+  }
 }
 
-/* 类型色条：三族语气，全用既有令牌 */
-.editor-canvas__q--tone-choice {
-  border-left-color: var(--bx-primary);
+/* 选中封面：浅靛底 + 左侧 2px 靛蓝条（与题纲 / 画布同一套选中语言） */
+.editor-canvas__cover--on {
+  background-color: var(--bx-primary-soft);
+  box-shadow: inset 2px 0 0 var(--bx-primary);
 }
 
-.editor-canvas__q--tone-fill {
-  border-left-color: var(--bx-text-3);
+.editor-canvas__cover:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
-.editor-canvas__q--tone-ref {
-  border-left-color: var(--bx-text-4);
+/* 眉标：11 / 500，字距 .08em，元信息灰 */
+.editor-canvas__eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--bx-text-3);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 选中的题：极浅主色底 + 题号变主色（「落笔」的那一刻） */
+.editor-canvas__sep {
+  color: var(--bx-text-4);
+}
+
+.editor-canvas__cover-title {
+  display: block;
+  margin-top: 8px;
+  color: var(--bx-text);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 26px;
+  word-break: break-word;
+}
+
+.editor-canvas__cover-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--bx-text-2);
+  font-size: 13px;
+  line-height: 20px;
+  word-break: break-word;
+}
+
+.editor-canvas__cover-intro {
+  display: block;
+  margin-top: 10px;
+  color: var(--bx-text-2);
+  font-size: 13px;
+  line-height: 1.75;
+  word-break: break-word;
+}
+
+.editor-canvas__rule {
+  height: 1px;
+  margin: 0 0 20px;
+  background-color: var(--bx-line-2);
+}
+
+/* ── 题目卡 ── */
+
+.editor-canvas__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor-canvas__q {
+  position: relative;
+  box-sizing: border-box;
+  padding: 16px 16px 16px 20px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius);
+  cursor: pointer;
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    border-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .editor-canvas__q:hover {
+    border-color: var(--bx-line-strong);
+  }
+}
+
+/* 选中：浅靛底 + 靛蓝描边 + 左侧 2px 靛蓝条 */
 .editor-canvas__q--on {
   background-color: var(--bx-primary-soft);
+  border-color: var(--bx-primary-line);
+  box-shadow: inset 2px 0 0 var(--bx-primary);
 }
 
 .editor-canvas__q:focus-visible {
@@ -190,56 +321,57 @@ const hasItems = computed(() => props.items.length > 0)
 
 .editor-canvas__q-head {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 /* 题号：中性色 + 等宽数字 */
 .editor-canvas__q-no {
   flex: none;
-  min-width: 20px;
-  font-size: 13px;
-  line-height: 20px;
+  width: 22px;
+  padding-top: 2px;
   color: var(--bx-text-3);
-  text-align: right;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
 }
 
 .editor-canvas__q--on .editor-canvas__q-no {
   color: var(--bx-primary);
-  font-weight: 600;
 }
 
-/* 题干：h2 档（17/600） */
+/* 题干：14 / 500 */
 .editor-canvas__q-title {
   flex: 1;
   min-width: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 26px;
   color: var(--bx-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
   word-break: break-word;
+}
+
+.editor-canvas__q--on .editor-canvas__q-title {
+  color: var(--bx-primary);
 }
 
 .editor-canvas__q-req {
   margin-left: 2px;
   color: var(--bx-danger);
+  font-weight: 600;
 }
 
-/* 题型标签：中性小签，不与色条抢 */
+/* 题型标签：11 元信息，右对齐 */
 .editor-canvas__q-type {
   flex: none;
-  padding: 1px 8px;
-  font-size: 12px;
+  padding-top: 2px;
+  color: var(--bx-text-3);
+  font-size: 11px;
+  font-weight: 500;
   line-height: 18px;
-  color: var(--bx-text-2);
-  background-color: var(--bx-surface-2);
-  border-radius: var(--bx-radius-xs);
-}
-
-.editor-canvas__q--on .editor-canvas__q-type {
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-primary-line);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
 /* ── 展开的控件形态 ── */
@@ -252,26 +384,25 @@ const hasItems = computed(() => props.items.length > 0)
 .editor-canvas__opts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
+/* 选项行：只有标记 + 文字，不做成一个个小盒子（纸面上的一行而已） */
 .editor-canvas__opt {
   display: flex;
   align-items: center;
-  min-height: 40px;
-  padding: 8px 12px;
-  background-color: var(--bx-surface-2);
-  border-radius: var(--bx-radius-sm);
+  gap: 8px;
+  min-height: 28px;
 }
 
 /* 标记：单选圆环 / 多选方框（与作答侧同一套形状） */
 .editor-canvas__mark {
+  box-sizing: border-box;
   flex: none;
-  width: 16px;
-  height: 16px;
-  margin-right: 10px;
-  border: 1.5px solid var(--bx-text-4);
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--bx-line-strong);
   border-radius: 50%;
+  background-color: var(--bx-surface);
 }
 
 .editor-canvas__mark--box {
@@ -279,51 +410,71 @@ const hasItems = computed(() => props.items.length > 0)
 }
 
 .editor-canvas__opt-text {
-  flex: 1;
   min-width: 0;
-  font-size: 15px;
-  line-height: 22px;
   color: var(--bx-text-2);
+  font-size: 13px;
+  line-height: 20px;
   word-break: break-word;
 }
 
+/* 非选项类：一个 32 高的假输入框（只示意形态，不接受输入） */
 .editor-canvas__control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 44px;
-  padding: 10px 12px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 300px;
+  height: 32px;
+  padding: 0 12px;
   background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
 }
 
 .editor-canvas__placeholder {
-  font-size: 15px;
   color: var(--bx-text-4);
+  font-size: 13px;
 }
 
 /* 下拉箭头：两条边框旋转 45° */
 .editor-canvas__arrow {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   margin-left: 10px;
   border-top: 1.5px solid var(--bx-text-3);
   border-right: 1.5px solid var(--bx-text-3);
   transform: rotate(45deg);
 }
 
-/* ── 空态 ── */
+/* ── 页脚 / 空态 ── */
+
+.editor-canvas__foot {
+  display: block;
+  margin-top: 24px;
+  color: var(--bx-text-3);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
 
 .editor-canvas__empty {
-  padding: 48px 16px;
+  padding: 40px 16px;
   text-align: center;
 }
 
 .editor-canvas__empty-text {
+  color: var(--bx-text-3);
   font-size: 13px;
   line-height: 20px;
-  color: var(--bx-text-3);
+}
+
+/* 窄屏：纸面内边距收一档，题目卡之间的间隙保持 */
+@media (max-width: 759px) {
+  .editor-canvas__sheet {
+    padding: 20px;
+  }
 }
 </style>

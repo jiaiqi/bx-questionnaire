@@ -5,7 +5,7 @@
  */
 
 /** 请求动作段 */
-export type BxAction = 'select' | 'operate' | 'add' | 'update' | 'delete'
+export type BxAction = 'select' | 'multi' | 'operate' | 'add' | 'update' | 'delete'
 
 /** 平台返回的整体状态 */
 export type BxState = 'SUCCESS' | 'FAILURE' | (string & {})
@@ -27,7 +27,38 @@ export interface BxCondition {
 /** 排序条件 */
 export interface BxOrder {
   colName: string
-  ruleType: 'asc' | 'desc' | (string & {})
+  /** 官方字段名（order 段） */
+  orderType?: 'asc' | 'desc'
+  /** @deprecated 历史代码别名，平台分组查询会报错；新代码一律用 orderType */
+  ruleType?: 'asc' | 'desc' | (string & {})
+}
+
+/**
+ * 聚合分组（官方 select 参数文档）
+ *
+ * `by` 分组；`sum/min/max/avg/count/count_all/distinct_count` 聚合；
+ * `by_year/by_month/by_week/by_date/by_hour/...` 时间维度分组。
+ * 聚合列可以 `aliasName`，`order` 里用别名排序。
+ */
+export interface BxGroup {
+  colName: string
+  type: 'by' | 'sum' | 'min' | 'max' | 'avg' | 'count' | 'count_all' | 'distinct_count'
+    | 'by_year' | 'by_month' | 'by_week' | 'by_date' | 'by_hour' | 'by_minute' | 'by_second'
+    | 'by_month_of_year' | 'by_week_of_year' | 'by_date_of_year'
+    | 'by_hour_of_date' | 'by_minute_of_date' | 'by_cus_minute_of_date'
+    | (string & {})
+  aliasName?: string
+  /** `by_cus_minute_of_date` 的粒度值（分钟，0-60） */
+  value?: string | number
+}
+
+/** multi/select 单个子请求的响应 */
+export interface BxMultiItem<T = unknown> {
+  data?: T[] | null
+  page?: BxPage | null
+  state?: BxState
+  resultCode?: string
+  resultMessage?: string
 }
 
 /** select 请求体（平铺） */
@@ -44,6 +75,7 @@ export interface BxSelectParams {
   condition?: BxCondition[]
   relation_condition?: unknown[]
   order?: BxOrder[]
+  group?: BxGroup[]
   page?: { pageNo: number, rownumber: number }
   colsel_v2?: string
   [key: string]: unknown

@@ -7,11 +7,11 @@
  * - `0011` 会话过期**只上报不重试**；`429` 不重试轰炸；operate 数组体逐项校验。
  */
 
-import type { BxAction, BxEnvelope, BxSelectParams, BxWriteItem } from './types'
+import type { BxAction, BxEnvelope, BxMultiItem, BxSelectParams, BxWriteItem } from './types'
 
 import { notifyParent } from '@/utils/embed'
 import { SHARED_KEYS, storage } from '@/utils/storage'
-import { buildServiceUrl, ENV, resolveTicket } from './env'
+import { buildServiceUrl, ENV, resolveGateway, resolveTicket } from './env'
 import { BX_CODE, BxError } from './types'
 
 export interface BxRequestOptions {
@@ -77,7 +77,10 @@ function buildHeaders(): Record<string, string> {
 
 function request(options: BxRequestOptions): Promise<RawResult> {
   const app = options.app ?? ENV.app
-  const baseUrl = buildServiceUrl(app, options.action, options.service)
+  // multi/select 一次提交多个子请求：URL 里没有 service 段
+  const baseUrl = options.action === 'multi'
+    ? `${resolveGateway()}/${app}/multi/select`
+    : buildServiceUrl(app, options.action, options.service)
   const url = options.action === 'select' ? `${baseUrl}?${options.service}` : baseUrl
   const body = JSON.stringify(options.data ?? {})
 
@@ -169,6 +172,41 @@ export async function bxSelect<T = Record<string, unknown>>(
     throw error
   }
   return result.envelope as BxEnvelope<T>
+}
+
+/**
+ * multi/select：一次 HTTP 提交多个 select 子请求
+ *
+ * 官方契约：`POST /{app}/multi/select`，body 是 select 请求数组；
+ * 响应 `data` 与请求同序，每项 `{ data, page, state }`。
+ * **顶层 SUCCESS 不代表每个子请求成功**，这里逐项检查 `state === 'FAILURE'`。
+ */
+export async function bxMultiSelect<T = Record<string, unknown>>(
+  requests: BxSelectParams[],
+  options: Partial<Omit<BxRequestOptions, 'action' | 'service' | 'data'>> = {},
+): Promise<BxMultiItem<T>[]> {
+  const result = await request({
+    ...options,
+    action: 'multi',
+    service: 'multi',
+    data: requests,
+  })
+  const error = toBxError(result.envelope, result.status, 'multi/select')
+  if (error) {
+    throw error
+  }
+  const items = (result.envelope?.data ?? []) as unknown as BxMultiItem<T>[]
+  for (const [index, item] of items.entries()) {
+    if (item?.state === 'FAILURE') {
+      throw new BxError(
+        item.resultMessage || `multi/select 第 ${index + 1} 个子请求失败`,
+        item.resultCode || 'MULTI_FAILURE',
+        result.envelope,
+        result.status,
+      )
+    }
+  }
+  return items
 }
 
 /**

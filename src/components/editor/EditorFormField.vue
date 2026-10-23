@@ -51,31 +51,34 @@ const props = withDefaults(defineProps<Props>(), {
   margin-bottom: 6px;
 }
 
+/* 字段标签：12 / 500，次要墨色（V6 管理端密度） */
 .bx-efield__label {
-  font-size: 13px;
-  line-height: 20px;
   color: var(--bx-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
 /* 必填星号紧跟标签，红色 */
 .bx-efield__req {
   margin-left: 3px;
-  font-size: 13px;
-  line-height: 20px;
   color: var(--bx-danger);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .bx-efield__error {
   margin-top: 6px;
+  color: var(--bx-danger);
   font-size: 12px;
   line-height: 18px;
-  color: var(--bx-danger);
 }
 
+/* 提示：12px 是 --bx-text-3 可用的下限，不再往下压 */
 .bx-efield__hint {
   margin-top: 6px;
+  color: var(--bx-text-3);
   font-size: 12px;
   line-height: 18px;
-  color: var(--bx-text-3);
 }
 </style>

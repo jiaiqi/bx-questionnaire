@@ -301,7 +301,17 @@ function onClear(): void {
   <view class="bx-image">
     <view v-if="images.length" class="bx-image__list">
       <view v-for="(img, index) in images" :key="index" class="bx-image__cell">
-        <image class="bx-image__item" :src="img" mode="aspectFill" :alt="`第 ${index + 1} 张已上传的图片`" />
+        <!--
+          lazy-load：多图时只加载视口内的缩略图（小程序端只在滚动到附近时才请求）。
+          `lazy-load` 是 uni-app `<image>` 的跨端属性，H5 端由 uni 运行时映射为原生懒加载。
+        -->
+        <image
+          class="bx-image__item"
+          :src="img"
+          mode="aspectFill"
+          lazy-load
+          :alt="`第 ${index + 1} 张已上传的图片`"
+        />
         <view
           v-if="!disabled"
           class="bx-image__remove"
@@ -371,14 +381,18 @@ function onClear(): void {
   position: relative;
 }
 
+/* 缩略图：与输入类同一套几何（10 圆角、1px 描边），让图片题不脱离控件语言 */
 .bx-image__item {
   display: block;
-  width: 88px;
-  height: 88px;
-  border-radius: var(--bx-radius);
+  box-sizing: border-box;
+  width: 96px;
+  height: 96px;
   background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius);
 }
 
+/* 删除：深墨小圆底 + 反白叉号（明确是「移除这一张」，不是整题清空） */
 .bx-image__remove {
   position: absolute;
   top: -6px;
@@ -386,10 +400,12 @@ function onClear(): void {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   width: 24px;
   height: 24px;
   cursor: pointer;
   background-color: var(--bx-text);
+  border: 2px solid var(--bx-surface);
   border-radius: 50%;
 }
 
@@ -426,7 +442,9 @@ function onClear(): void {
   transform: rotate(-45deg);
 }
 
+/* 空态：虚线位（说的是「这里可以放图片」），与输入类的描边语言一致 */
 .bx-image__empty {
+  box-sizing: border-box;
   padding: var(--bx-space-md);
   background-color: var(--bx-surface-2);
   border: 1px dashed var(--bx-line-strong);
@@ -441,24 +459,33 @@ function onClear(): void {
 
 .bx-image__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   margin-top: 12px;
 }
 
-/* 上传：白底 + 描边的次级按钮（主操作位留给问卷的提交） */
+/* 上传 / 清空：白底 + 1px 描边的次级按钮，44 高（不跟主行动抢注意力） */
 .bx-image__upload {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: var(--bx-control-height-sm);
+  box-sizing: border-box;
+  min-height: var(--bx-control-height-md);
   padding: 0 16px;
   cursor: pointer;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius-sm);
+  border-radius: var(--bx-radius);
   transition:
     background-color var(--bx-duration-fast) var(--bx-ease-out),
     border-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-image__upload:hover {
+    background-color: var(--bx-surface-2);
+    border-color: var(--bx-primary-line);
+  }
 }
 
 .bx-image__upload:focus-visible {
@@ -466,13 +493,17 @@ function onClear(): void {
   outline-offset: 2px;
 }
 
+/* 上传中 / 已达上限：不响应，也不假装「可上传」 */
 .bx-image__upload--disabled {
   cursor: not-allowed;
+  background-color: var(--bx-surface-2);
   border-color: var(--bx-line);
 }
 
 .bx-image__upload-text {
   font-size: var(--bx-font-sub);
+  line-height: 1;
+  font-weight: 500;
   color: var(--bx-primary);
 }
 
@@ -484,7 +515,7 @@ function onClear(): void {
   display: block;
   margin-top: var(--bx-space-sm);
   font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
+  line-height: 1.6;
   color: var(--bx-warn);
 }
 
@@ -492,13 +523,24 @@ function onClear(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: var(--bx-control-height-sm);
-  margin-left: 10px;
+  box-sizing: border-box;
+  min-height: var(--bx-control-height-md);
+  margin-left: var(--bx-space-sm);
   padding: 0 16px;
   cursor: pointer;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius-sm);
+  border-radius: var(--bx-radius);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    border-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-image__clear:hover {
+    background-color: var(--bx-surface-2);
+    border-color: var(--bx-line-strong);
+  }
 }
 
 .bx-image__clear:focus-visible {
@@ -508,12 +550,13 @@ function onClear(): void {
 
 .bx-image__clear-text {
   font-size: var(--bx-font-sub);
+  line-height: 1;
   color: var(--bx-text-2);
 }
 
 /* 计数：等宽数字，不跳动 */
 .bx-image__count {
-  margin-left: 10px;
+  margin-left: var(--bx-space-sm);
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);

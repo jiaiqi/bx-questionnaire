@@ -18,13 +18,16 @@ const props = withDefaults(defineProps<Props>(), {
 /**
  * 题干
  *
- * 序号不再拼进文案，而是由左边的题号承载（后端 `item_title` 常自带
- * 「1. 」前缀，所以这里先剥掉，否则会出现「① 1. 您的姓名」）。
+ * 序号不再拼进文案，而是由题号承载（后端 `item_title` 常自带「1. 」前缀，
+ * 所以这里先剥掉，否则会出现「01 1. 您的姓名」）。
  */
 const title = computed(() => stripQuestionTitleIndex(props.field.label))
 
 /** 分节符不占题号；`index` 为 0 时也不显示题号 */
 const showNo = computed(() => props.field.widget !== 'section' && Number(props.field.index) > 0)
+
+/** 两位题号（01 / 02）：个位数补零，竖排扫读时左边缘对齐 */
+const noText = computed(() => String(props.field.index).padStart(2, '0'))
 
 const isSection = computed(() => props.field.widget === 'section')
 </script>
@@ -35,30 +38,29 @@ const isSection = computed(() => props.field.widget === 'section')
     class="bx-question"
     :class="{ 'bx-question--error': !!props.error, 'bx-question--section': isSection }"
   >
+    <!--
+      题号：11px 微标签 + 中性色 + 等宽数字（V6 §3.2 --fs-micro）
+
+      它是扫读时的位置锚点，不是标题的一部分，所以单独占一行 meta；
+      不参与题干换行，长题干也不会把它挤到行尾。
+    -->
+    <view v-if="showNo" class="bx-question__meta">
+      <text class="bx-question__no">{{ noText }}</text>
+    </view>
+
     <view class="bx-question__head">
       <!--
-        题号：中性色 + 等宽数字。
-
-        此前是一个蓝色药丸（主色底 + 白字），在「一屏最多两处主色」的前提下
-        太抢眼 —— 而且主色应该留给「一次落笔」（选中态）与主操作。
-        现在只留一个中性数字，作为扫读时的位置锚点。
+        必填星号必须紧跟题干：此前它是 flex 兄弟，被推到卡片最右端（PC 上跨度可达
+        700px），与题干失去关联；放进同一个 <text> 里，让它随文字自然换行。
       -->
-      <text v-if="showNo" class="bx-question__no">{{ props.field.index }}</text>
-      <view class="bx-question__main">
-        <!--
-          必填星号必须紧跟题干：此前它是 flex 兄弟，被 `.bx-question__title { flex: 1 }`
-          推到卡片最右端（PC 上跨度可达 700px），与题干失去关联；而编辑器里同一个星号
-          是紧跟 label 的 —— 同一件事两种表达。放进同一个 <text> 里，让它随文字自然换行。
-        -->
-        <text class="bx-question__title">{{ title }}<text v-if="props.field.required" class="bx-question__required">*</text></text>
+      <text class="bx-question__title">{{ title }}<text v-if="props.field.required" class="bx-question__required">*</text></text>
 
-        <!--
-          只有多选控件才提示「多选题」；图片题的 multi 表示可上传多张，不是多选题。
-          用括号而不是中点：规范 §3.2 禁止中点连接 meta（「A · B · C」读起来像日志）。
-        -->
-        <text v-if="props.field.widget === 'checkbox'" class="bx-question__hint">多选题（可选择多项）</text>
-        <text v-else-if="props.field.widget !== 'section' && !props.field.required" class="bx-question__hint bx-question__hint--optional">选填</text>
-      </view>
+      <!--
+        只有多选控件才提示「多选题」；图片题的 multi 表示可上传多张，不是多选题。
+        用括号而不是中点：V6 §3.2 禁止中点连接 meta（「A · B · C」读起来像日志）。
+      -->
+      <text v-if="props.field.widget === 'checkbox'" class="bx-question__hint">多选题（可选择多项）</text>
+      <text v-else-if="props.field.widget !== 'section' && !props.field.required" class="bx-question__hint bx-question__hint--optional">选填</text>
     </view>
 
     <view class="bx-question__body">
@@ -71,17 +73,19 @@ const isSection = computed(() => props.field.widget === 'section')
 
 <style lang="scss" scoped>
 /*
- * 题目
+ * 题目（V6 §4.1「题目卡内边距 20/16」）
  *
- * V2（规范 §6.2）：**题目自身不画卡片**。
- * 一份问卷是一张连续的纸（纸面容器由作答页负责），题与题之间由一条
- * `--bx-line-2` 细线分开 —— 层级从「多张卡」变成「一份卷」。
+ * **题目自身不画卡片**：整卷是一张连续的纸，纸面由作答页的 `.runner__paper`
+ * 承载（白底 + 1px 描边 + 圆角 14 + --bx-elev-1），题与题之间只有一条
+ * `--bx-line-2` 细线。层级因此从「十几张同权重的卡」变成「一份卷」，
+ * 长问卷才不会读成盒子山。
  *
- * 分隔线用 `border-top` + `:not(:first-child)`：与作答页容器里的同源规则
- * 完全一致（同一个元素、同一个属性），不会叠成 2px。
+ * 分隔线用 `border-top` + `:not(:first-child)`：同一个元素、同一个属性，
+ * 不会与相邻题叠成 2px；第一题顶部靠 padding 的 20px 留白。
  */
 .bx-question {
   position: relative;
+  box-sizing: border-box;
   padding: 20px 16px;
   background-color: transparent;
   border-radius: 0;
@@ -92,7 +96,12 @@ const isSection = computed(() => props.field.widget === 'section')
   border-top: 1px solid var(--bx-line-2);
 }
 
-/* 分节符：纸内的小节标题，不占题号、不画卡片 */
+/*
+ * 分节符：卷内的小节标题，不占题号、不画卡片、不参与分隔线节奏
+ *
+ * 类名被 QuestionnaireRunner 的 `:deep(.bx-question--section)::before` 依赖
+ * （那条 24px 短横线），改名会一起失效。
+ */
 .bx-question--section {
   padding: 16px 16px 4px;
 }
@@ -109,106 +118,122 @@ const isSection = computed(() => props.field.widget === 'section')
 }
 
 /*
- * 错误态：浅红底 + 左侧 3px 红条 + 行内红字（规范 §6.2）
+ * 错误态：不铺浅红底（浅红底会把「一题有错」放大成「整页报错」），
+ * 用三处同时表达 —— 题号转危险色、子控件描边转危险色、下方 12px 红字文案。
+ * 状态不只靠颜色（V6 §8.2）。
  *
- * 红条用伪元素而不是 box-shadow：规范 §5.2 第 5 条要求红条 `scaleY(0→1)`，
- * 而阴影画出来的色条无法参与变换。
+ * 这些子控件都没有 error prop（接口保持不变），错误描边由题卡统一下发。
  */
-.bx-question--error {
-  background-color: var(--bx-danger-soft);
+.bx-question--error .bx-question__no {
+  color: var(--bx-danger);
 }
 
-.bx-question--error::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background-color: var(--bx-danger);
-  transform-origin: top center;
-  animation: bx-question-error-bar var(--bx-duration-base) var(--bx-ease-out) both;
+.bx-question--error :deep(.bx-text__control),
+.bx-question--error :deep(.bx-picker),
+.bx-question--error :deep(.bx-address__control),
+.bx-question--error :deep(.bx-ref__control) {
+  border-color: var(--bx-danger);
 }
 
-@keyframes bx-question-error-bar {
-  from {
-    transform: scaleY(0);
-  }
-
-  to {
-    transform: scaleY(1);
-  }
+/* 选中的选项行保持主色描边；未选中的行转危险浅描边（与原型 .is-invalid 一致） */
+.bx-question--error :deep(.bx-option:not(.bx-option--on)) {
+  border-color: var(--bx-danger-line);
 }
 
-.bx-question__head {
-  display: flex;
-  align-items: flex-start;
+/* 悬停也不能盖掉错误描边：子组件的 hover 与错误态同权重，这里显式提高一档 */
+.bx-question--error :deep(.bx-text__control:hover),
+.bx-question--error :deep(.bx-picker:hover),
+.bx-question--error :deep(.bx-address__control:hover),
+.bx-question--error :deep(.bx-ref__control:hover) {
+  border-color: var(--bx-danger);
 }
 
 /*
- * 题号：中性色 + 等宽数字
+ * 「有错误 + 正在聚焦」时仍要能看出错误
+ *
+ * 子控件自己的聚焦态（.bx-text__control:focus-within）同样命中，
+ * 这里用更具体的选择器把错误优先：描边保持危险色，光环换成危险浅底，
+ * 聚焦依然可见，但可见的是「这里要改」。
+ */
+.bx-question--error :deep(.bx-text__control:focus-within),
+.bx-question--error :deep(.bx-text__control--focus) {
+  border-color: var(--bx-danger);
+  box-shadow: 0 0 0 3px var(--bx-danger-soft);
+}
+
+/* ── 题号 ─────────────────────────────────────────────────────────── */
+
+.bx-question__meta {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/*
+ * 题号：11px / 500 / 0.08em 字距（V6 §3.2 micro 档）
  *
  * 数字用 `tabular-nums`：等宽数字不跳动，题号列在扫读时是稳定的锚点。
- * 固定宽度 + 右对齐：一位与两位题号时，题干左沿仍然对齐。
  */
 .bx-question__no {
-  flex: none;
-  width: 26px;
-  margin-right: var(--bx-space-sm);
-  font-size: var(--bx-font-body);
-  font-weight: 600;
-  line-height: var(--bx-leading-h2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.08em;
   color: var(--bx-text-3);
   font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
-.bx-question__main {
-  flex: 1;
-  min-width: 0;
+/* ── 题干 ─────────────────────────────────────────────────────────── */
+
+.bx-question__head {
+  display: flex;
+  flex-direction: column;
 }
 
+/* 题干：17 / 600 / 1.5（V6 §3.2 h2 档），是卷里唯一的「标题」 */
 .bx-question__title {
+  display: block;
   font-size: var(--bx-font-h2);
   font-weight: 600;
-  line-height: var(--bx-leading-h2);
+  line-height: 1.5;
   color: var(--bx-text);
   /* 用 break-all 而不是 break-word：小程序对后者的支持不完全，长串（URL、编号）会溢出 */
   word-break: break-all;
 }
 
 .bx-question__required {
-  /* 不再是 flex 子项（已内联到题干里），所以只留一个贴字间距 */
-  margin-left: 1px;
+  /* 星号内联在题干里，只留一个贴字间距，保证它是「紧跟题干」而不是飘在行尾 */
+  margin-left: 2px;
   font-size: var(--bx-font-h2);
-  line-height: var(--bx-leading-h2);
+  font-weight: 600;
   color: var(--bx-danger);
 }
 
+/* 题型提示 / 「选填」：13px 元信息，不抢题干 */
 .bx-question__hint {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
+  line-height: 1.6;
   color: var(--bx-text-3);
 }
 
+/* 「选填」是信息，不能用占位符色 --bx-text-4（V6 §2.1 限定 text-4 只做占位与装饰） */
 .bx-question__hint--optional {
-  /* 「选填」是信息（告诉用户这题可以跳过），不能占位符色 `--bx-text-4`：
-     规范 §2.1 明确 text-4 仅用于占位符与装饰，不得承载信息。 */
   color: var(--bx-text-3);
 }
 
+/* 题干与作答区 16px（V6 §4.1） */
 .bx-question__body {
   margin-top: var(--bx-space-md);
 }
 
-/* 行内红字：淡入 200ms ease-out（规范 §5.2 第 5 条） */
+/* 行内红字：12px（V6 §5.2），淡入 180ms 只解释「刚刚发生了什么」 */
 .bx-question__error {
   display: block;
-  margin-top: 10px;
-  font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
+  margin-top: 8px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-danger);
   animation: bx-question-error-in var(--bx-duration-base) var(--bx-ease-out) both;
 }

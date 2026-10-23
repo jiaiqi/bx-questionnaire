@@ -1,0 +1,79 @@
+/**
+ * 深色主题（暗色）
+ *
+ * 为什么单独一个文件而不是写进 tokens.scss：
+ * `test/design-tokens.spec.ts` 会解析 tokens.scss 里的全部 `--bx-*` 并与 UnoCSS 比对，
+ * 同名的 dark 覆盖会让「最后一次赋值」赢，导致配色守卫误判。深色只覆盖语义令牌，
+ * 不新增命名，也不参与 Uno 的色板同步。
+ *
+ * 两种触发方式：
+ * 1. H5 手动切换：`:root[data-theme='dark']`（由 `useAppearance` 写入），
+ *    选「浅色」时写 `data-theme='light'`，可覆盖系统深色；
+ * 2. 跟随系统：`prefers-color-scheme: dark`，H5 与微信小程序都生效
+ *    （小程序端不提供手动切换，只跟随系统）。
+ *
+ * 对比度策略：正文 #e6e9ef / 深面 #161b22 ≈ 13:1；次要文字 #a8b0bd ≈ 7:1；
+ * 主色 #5b6bf0 上白字 ≈ 4.6:1；danger/success 均按深底重新取值，不直接反相。
+ */
+@mixin bx-dark-tokens {
+  --bx-blue: #5b6bf0;
+  --bx-blue-hover: #6d7cf7;
+  --bx-blue-active: #4a5ae0;
+  --bx-blue-soft: rgba(91, 107, 240, 0.18);
+  --bx-glow: rgba(91, 107, 240, 0.14);
+
+  --bx-bg: #0e1116;
+  --bx-surface: #161b22;
+  --bx-surface-2: #1c222b;
+  --bx-text: #e6e9ef;
+  --bx-text-2: #a8b0bd;
+  --bx-text-3: #808a99;
+  --bx-text-4: #5c6673;
+  --bx-line: #2a313b;
+  --bx-line-2: #212730;
+  --bx-line-strong: #3c4552;
+
+  --bx-danger: #f27a70;
+  --bx-danger-soft: rgba(194, 47, 36, 0.2);
+  --bx-danger-line: rgba(242, 122, 112, 0.5);
+  --bx-success: #45d6a8;
+  --bx-success-soft: rgba(15, 122, 90, 0.22);
+  --bx-success-line: rgba(69, 214, 168, 0.5);
+  --bx-warn: #e8a45c;
+  --bx-warn-soft: rgba(163, 74, 8, 0.22);
+  --bx-warn-line: rgba(232, 164, 92, 0.5);
+
+  --bx-health: #45d6a8;
+  --bx-health-soft: rgba(15, 122, 90, 0.22);
+  --bx-health-line: rgba(69, 214, 168, 0.5);
+
+  --bx-overlay: rgba(0, 0, 0, 0.58);
+  --bx-skeleton-sheen: rgba(255, 255, 255, 0.07);
+
+  --bx-elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px -8px rgba(0, 0, 0, 0.4);
+  --bx-elev-2: 0 4px 12px -2px rgba(0, 0, 0, 0.36), 0 12px 32px -12px rgba(0, 0, 0, 0.5);
+  --bx-elev-3: 0 8px 24px rgba(0, 0, 0, 0.42), 0 24px 56px -24px rgba(0, 0, 0, 0.6);
+  --bx-elev-primary: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px -8px rgba(91, 107, 240, 0.45);
+
+  --bx-primary: var(--bx-blue);
+  --bx-primary-hover: var(--bx-blue-hover);
+  --bx-primary-active: var(--bx-blue-active);
+  --bx-primary-soft: var(--bx-blue-soft);
+  --bx-primary-line: rgba(91, 107, 240, 0.5);
+  --bx-focus-ring: 2px solid var(--bx-blue);
+  --bx-focus-glow: 0 0 0 3px var(--bx-blue-soft);
+}
+
+/* 手动切换（H5）：显式深色 */
+:root[data-theme='dark'],
+page[data-theme='dark'] {
+  @include bx-dark-tokens;
+}
+
+/* 跟随系统：未显式选浅色时生效（小程序端只能走这一条） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']),
+  page:not([data-theme='light']) {
+    @include bx-dark-tokens;
+  }
+}

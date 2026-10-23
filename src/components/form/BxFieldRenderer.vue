@@ -112,8 +112,9 @@ const kind = computed(() => {
 </template>
 
 <style lang="scss" scoped>
+/* 未支持题型：虚线位 + 说明，不静默丢题（视觉与输入类的描边语言一致） */
 .bx-field-unsupported {
-  padding: 10px 12px;
+  padding: 12px 16px;
   background-color: var(--bx-surface-2);
   border: 1px dashed var(--bx-line-strong);
   border-radius: var(--bx-radius);
@@ -121,7 +122,7 @@ const kind = computed(() => {
 
 .bx-field-unsupported__text {
   font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
+  line-height: 1.6;
   color: var(--bx-text-3);
 }
 </style>

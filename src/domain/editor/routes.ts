@@ -14,6 +14,8 @@ export const EDITOR_ROUTES = {
   list: '/pages/editor/list/index',
   /** 可视化问卷设计器 */
   design: '/pages/editor/design/index',
+  /** 问卷统计 */
+  stats: '/pages/editor/stats/index',
 } as const
 
 /** 问卷列表地址 */
@@ -29,4 +31,9 @@ export function editorCreateUrl(): string {
 /** 编辑已有问卷（`activity_no` 必填） */
 export function editorDesignUrl(activityNo: string): string {
   return withQuery(EDITOR_ROUTES.design, { activity_no: activityNo })
+}
+
+/** 问卷统计页（`activity_no` 必填） */
+export function editorStatsUrl(activityNo: string): string {
+  return withQuery(EDITOR_ROUTES.stats, { activity_no: activityNo })
 }

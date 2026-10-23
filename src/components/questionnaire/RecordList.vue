@@ -5,17 +5,21 @@
  * `history/history` 与 `survey/history` 共用。
  * 分页与触底加载由页面调用 `loadMore`，避免组件内依赖页面级生命周期。
  *
- * 视觉（docs/UI-UX-V2-设计系统.md §7.4）：
- * 一行一条记录 —— 左侧时间 + 标题，右侧状态 chip + 分数；行间用细线，不做卡片墙。
+ * 视觉（docs/UI-UX-V6-设计系统.md §5/§6）：
+ * 一条记录 = 状态点 + 状态文字 + 时间（一行），标题 + 分数（一行），
+ * 批次号 + 行动入口（一行）；行间只有 1px 细线，不做卡片墙。
+ * 顶部是「全部 / 已提交 / 草稿」分段筛选，未登录时给明确登录入口。
  */
 
 import type { DaqRecordReplyRow } from '@/api/daq/types'
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
+import BxNetworkBar from '@/components/base/BxNetworkBar.vue'
+import { useChunkedList } from '@/composables/useChunkedList'
 import { formatDateTime } from '@/domain/questionnaire'
 import { filterMyRecords } from '@/domain/questionnaire/records'
 import { answerUrl } from '@/domain/questionnaire/routes'
@@ -45,6 +49,17 @@ const pageNo = ref(1)
 // 与老工程 history.vue 的 rownumber 一致，减少翻页请求次数
 const rownumber = 20
 
+/** 筛选分段：只过滤已加载到本地的行，不改接口参数 */
+type RecordFilter = 'all' | 'done' | 'draft'
+
+const filter = ref<RecordFilter>('all')
+
+const filterTabs: Array<{ key: RecordFilter, label: string }> = [
+  { key: 'all', label: '全部' },
+  { key: 'done', label: '已提交' },
+  { key: 'draft', label: '草稿' },
+]
+
 /**
  * 记录归属过滤
  *
@@ -59,6 +74,48 @@ const ownership = computed(() => ({
 
 /** 只属于当前用户的记录 */
 const visibleRows = computed(() => filterMyRecords(rows.value, ownership.value).mine)
+
+function isDraft(row: DaqRecordReplyRow): boolean {
+  return String(row.state ?? '') === '未完成'
+}
+
+/** 分段筛选后的行：草稿 = state 未完成，已提交 = 其余（含无状态的历史行） */
+const filteredRows = computed(() =>
+  visibleRows.value.filter((row) => {
+    if (filter.value === 'all') {
+      return true
+    }
+    return filter.value === 'draft' ? isDraft(row) : !isDraft(row)
+  }),
+)
+
+/**
+ * 分片渲染（首屏 20 条，每次追加 20 条）
+ *
+ * 分页本身按 20 条一页从服务端拉，但**累计**几页之后全部渲染，DOM 会随浏览深度线性增长
+ * （每行约 15 个节点，200 条就是 3000 个）。这里只渲染前 N 条：
+ * 先放本地已加载的分片，本地放完了再去请求下一页 —— 一次点击只放一屏，滚动到底也能自动追加
+ * （页面 `onReachBottom` → 暴露的 `loadMore`）。
+ *
+ * 不做虚拟滚动：记录列表挂在页面级滚动上（下拉刷新 / 触底加载都依赖它），
+ * 组件自己接管滚动会把这两件事一起弄坏。
+ */
+const {
+  renderedCount: recordRenderedCount,
+  hasMore: hasMoreLoaded,
+  remaining: hiddenLoadedCount,
+  loadMore: revealMoreRows,
+  reset: resetRenderWindow,
+} = useChunkedList({ total: () => filteredRows.value.length })
+
+/** 实际渲染的行：前缀切片，下标与原数组一致 */
+const renderedRows = computed(() => filteredRows.value.slice(0, recordRenderedCount.value))
+
+/** 切换筛选后回到首屏条数：不同筛选结果之间没有可复用的渲染窗口 */
+watch(filter, () => resetRenderWindow())
+
+/** 底部「加载更多」是否可用：本地还有未渲染的，或服务端还有下一页 */
+const canLoadMore = computed(() => hasMoreLoaded.value || !finished.value)
 
 /**
  * 顶部提示文案
@@ -127,11 +184,34 @@ async function fetchPage(reset = false): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
+  // 刷新后数据整体换掉：渲染窗口回到首屏条数
+  resetRenderWindow()
   await fetchPage(true)
 }
 
+/**
+ * 加载更多（「加载更多」按钮与页面触底共用）
+ *
+ * 两段式：
+ * 1. 本地还有已加载但没渲染的记录 → 先放出一屏（不再发请求）；
+ * 2. 本地放完了 → 拉下一页；新页到达后立刻再放一屏，
+ *    否则用户点一次只看到「正在加载…」然后还要再点一次。
+ */
 async function loadMore(): Promise<void> {
+  if (loading.value) {
+    return
+  }
+  if (revealMoreRows()) {
+    return
+  }
+  if (finished.value) {
+    return
+  }
+  const before = filteredRows.value.length
   await fetchPage(false)
+  if (filteredRows.value.length > before) {
+    revealMoreRows()
+  }
 }
 
 function openDetail(row: DaqRecordReplyRow): void {
@@ -172,6 +252,18 @@ function onMoreKeydown(event: KeyboardEvent): void {
   void loadMore()
 }
 
+function onFilterKeydown(event: KeyboardEvent, key: RecordFilter): void {
+  if (!isActivateKey(event)) {
+    return
+  }
+  event.preventDefault()
+  filter.value = key
+}
+
+function setFilter(key: RecordFilter): void {
+  filter.value = key
+}
+
 /**
  * 未登录时给一个可点的出口
  *
@@ -182,9 +274,21 @@ function goLogin(): void {
   uni.navigateTo({ url: '/pages/login/index' })
 }
 
-/** 空态的主操作：回到这份问卷去答（规范 §7.4） */
+function onLoginKeydown(event: KeyboardEvent): void {
+  if (!isActivateKey(event)) {
+    return
+  }
+  event.preventDefault()
+  goLogin()
+}
+
+/** 空态的主操作：回到这份问卷去答 */
 function goAnswer(): void {
   uni.navigateTo({ url: answerUrl(props.activityNo, { status: '进行中' }) })
+}
+
+function resetFilter(): void {
+  filter.value = 'all'
 }
 
 defineExpose({ refresh, loadMore })
@@ -194,6 +298,9 @@ void fetchPage(true)
 
 <template>
   <view class="records">
+    <!-- 网络状态条：记录列表依赖网关，断网 / 弱网时在内容区顶部常驻说明 -->
+    <BxNetworkBar />
+
     <!-- 加载：三条骨架保持布局稳定，比一行「正在加载记录…」更符合「内容马上来」 -->
     <view v-if="visibleRows.length === 0 && loading" class="records__skeleton" aria-busy="true">
       <view v-for="n in 3" :key="n" class="records__skeleton-row" />
@@ -229,18 +336,62 @@ void fetchPage(true)
     </view>
 
     <view v-else class="records__list">
+      <!-- 未登录提示 + 登录入口 -->
       <view v-if="loginHint" class="records__notice">
-        <text class="records__notice-text">
-          {{ loginHint }}
-        </text>
+        <text class="records__notice-text">{{ loginHint }}</text>
+        <view
+          class="records__notice-link"
+          role="button"
+          tabindex="0"
+          @click="goLogin"
+          @keydown="onLoginKeydown"
+        >
+          <text class="records__notice-link-text">去登录</text>
+        </view>
+      </view>
+
+      <!-- 筛选分段：全部 / 已提交 / 草稿 -->
+      <view v-if="visibleRows.length > 0" class="records__bar">
+        <view class="records__seg" role="group" aria-label="筛选作答记录">
+          <view
+            v-for="tab in filterTabs"
+            :key="tab.key"
+            class="records__seg-item"
+            :class="{ 'records__seg-item--active': filter === tab.key }"
+            role="button"
+            tabindex="0"
+            :aria-pressed="filter === tab.key ? 'true' : 'false'"
+            @click="setFilter(tab.key)"
+            @keydown="onFilterKeydown($event, tab.key)"
+          >
+            {{ tab.label }}
+          </view>
+        </view>
+        <text class="records__count">{{ renderedRows.length }} / {{ filteredRows.length }} 条</text>
+      </view>
+
+      <!-- 筛选后为空：给回「查看全部」的出口 -->
+      <view v-if="filteredRows.length === 0" class="records__filter-empty">
+        <text class="records__filter-empty-text">{{ filter === 'draft' ? '没有未提交的草稿' : '没有已提交的记录' }}</text>
+        <view
+          class="records__filter-empty-link"
+          role="button"
+          tabindex="0"
+          @click="resetFilter"
+          @keydown.enter.prevent="resetFilter"
+          @keydown.space.prevent="resetFilter"
+        >
+          查看全部
+        </view>
       </view>
 
       <!--
-        一行一条记录：左侧标题 + 时间，右侧状态 chip + 分数。
+        一行一条记录：状态点 + 状态 + 时间 / 标题 + 分数 / 批次 + 行动。
         记录是同质条目，每行都「浮」起来会变成盒子墙 —— 这里用一条细线分隔。
+        只渲染分片前缀（首屏 20 条），其余靠底部「加载更多」/ 触底追加。
       -->
       <view
-        v-for="row in visibleRows"
+        v-for="row in renderedRows"
         :key="String(row.fill_batch_no)"
         class="record"
         role="button"
@@ -251,34 +402,41 @@ void fetchPage(true)
         @click="openDetail(row)"
         @keydown="onCardKeydown($event, row)"
       >
+        <view class="record__meta">
+          <view
+            class="record__dot"
+            :class="isDraft(row) ? 'record__dot--draft' : 'record__dot--done'"
+            aria-hidden="true"
+          />
+          <text class="record__state" :class="isDraft(row) ? 'record__state--draft' : 'record__state--done'">
+            {{ isDraft(row) ? '草稿' : '已提交' }}
+          </text>
+          <text v-if="formatDateTime(row.start_time)" class="record__time">
+            {{ formatDateTime(row.start_time) }}
+          </text>
+        </view>
+
         <view class="record__main">
           <text class="record__title">{{ row.title || row.activity_no }}</text>
-          <view class="record__meta">
-            <text v-if="formatDateTime(row.start_time)" class="record__meta-text">
-              {{ formatDateTime(row.start_time) }}
-            </text>
-            <view v-if="formatDateTime(row.start_time) && row.fill_batch_no" class="record__meta-divider" />
-            <text v-if="row.fill_batch_no" class="record__meta-text">
-              批次 {{ row.fill_batch_no }}
-            </text>
+          <view v-if="row.score !== null && row.score !== undefined" class="record__score">
+            <text class="record__score-num">{{ row.score }}</text>
+            <text class="record__score-unit">分</text>
           </view>
         </view>
 
-        <view class="record__side">
-          <text
-            class="record__state"
-            :class="row.state === '未完成' ? 'record__state--pending' : 'record__state--done'"
-          >
-            {{ row.state || '已完成' }}
-          </text>
-          <text v-if="row.score !== null && row.score !== undefined" class="record__score">
-            {{ row.score }} 分
+        <view class="record__foot">
+          <text v-if="row.fill_batch_no" class="record__batch">批次 {{ row.fill_batch_no }}</text>
+          <text class="record__action">
+            {{ isDraft(row) ? '继续作答' : '查看结果' }}
           </text>
         </view>
       </view>
 
-      <view class="records__more">
+      <view v-if="filteredRows.length > 0" class="records__more">
         <text v-if="loading" class="records__more-text">正在加载…</text>
+        <text v-else-if="hasMoreLoaded" class="records__more-text" role="button" tabindex="0" @click="loadMore" @keydown="onMoreKeydown">
+          显示更多（还有 {{ hiddenLoadedCount }} 条）
+        </text>
         <text v-else-if="finished" class="records__more-text">没有更多了</text>
         <text
           v-else-if="failed"
@@ -291,7 +449,7 @@ void fetchPage(true)
           加载失败，点击重试
         </text>
         <text
-          v-else
+          v-else-if="canLoadMore"
           class="records__more-text"
           role="button"
           tabindex="0"
@@ -319,7 +477,7 @@ void fetchPage(true)
 }
 
 .records__skeleton-row {
-  height: 68px;
+  height: 76px;
   background-color: var(--bx-line-2);
   border-radius: var(--bx-radius-card);
 }
@@ -344,23 +502,144 @@ void fetchPage(true)
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
+/* ── 未登录提示 ─────────────────────────────────────────────────── */
 .records__notice {
-  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
   background-color: var(--bx-surface-2);
-  border-bottom: 1px solid var(--bx-line);
+  border-bottom: 1px solid var(--bx-line-2);
 }
 
 .records__notice-text {
+  flex: 1;
+  min-width: 0;
   font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
+  line-height: 1.6;
   color: var(--bx-text-3);
 }
 
-.record {
+.records__notice-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.records__notice-link:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+  border-radius: var(--bx-radius-xs);
+}
+
+.records__notice-link-text {
+  font-size: var(--bx-font-caption);
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--bx-primary);
+}
+
+/* ── 筛选分段 ───────────────────────────────────────────────────── */
+.records__bar {
   display: flex;
   align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bx-line-2);
+}
+
+.records__seg {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  padding: 3px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-pill);
+}
+
+.records__seg-item {
+  flex: 1;
+  padding: 0 8px;
+  height: 28px;
+  font-size: var(--bx-font-sub);
+  line-height: 28px;
+  color: var(--bx-text-3);
+  text-align: center;
+  border-radius: var(--bx-radius-pill);
+  cursor: pointer;
+  transition:
+    color var(--bx-duration-fast) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .records__seg-item:hover {
+    color: var(--bx-text);
+  }
+}
+
+.records__seg-item--active {
+  background-color: var(--bx-surface);
+  color: var(--bx-text);
+  font-weight: 500;
+  box-shadow: var(--bx-elev-1);
+}
+
+.records__seg-item:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
+.records__count {
+  flex: none;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 筛选后为空 */
+.records__filter-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+}
+
+.records__filter-empty-text {
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text-3);
+}
+
+.records__filter-empty-link {
+  min-height: 44px;
+  padding: 0 8px;
+  font-size: var(--bx-font-sub);
+  font-weight: 500;
+  line-height: 44px;
+  color: var(--bx-primary);
+  cursor: pointer;
+}
+
+.records__filter-empty-link:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+  border-radius: var(--bx-radius-sm);
+}
+
+/* ── 记录行 ─────────────────────────────────────────────────────── */
+.record {
   padding: 14px 16px;
   cursor: pointer;
 }
@@ -379,80 +658,124 @@ void fetchPage(true)
   background-color: var(--bx-surface-2);
 }
 
-.record__main {
-  flex: 1;
+/* 第一行：状态点 + 状态 + 时间 */
+.record__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
+.record__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.record__dot--done {
+  background-color: var(--bx-success);
+}
+
+.record__dot--draft {
+  background-color: var(--bx-warn);
+}
+
+.record__state {
+  flex: none;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+}
+
+.record__state--done {
+  color: var(--bx-success);
+}
+
+.record__state--draft {
+  color: var(--bx-warn);
+}
+
+.record__time {
+  min-width: 0;
+  margin-left: 4px;
+  overflow: hidden;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 第二行：标题 + 分数 */
+.record__main {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 4px;
+}
+
 .record__title {
-  display: block;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   font-size: var(--bx-font-body);
   font-weight: 500;
-  line-height: var(--bx-leading-body);
+  line-height: 1.5;
   color: var(--bx-text);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.record__meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 2px;
+/* 分数用等宽数字位：多条记录并排时数字宽度不会跳 */
+.record__score {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
 }
 
-.record__meta-text {
+.record__score-num {
+  font-size: var(--bx-font-h2);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--bx-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.record__score-unit {
+  font-size: var(--bx-font-caption);
+  line-height: 1;
+  color: var(--bx-text-3);
+}
+
+/* 第三行：批次 + 行动 */
+.record__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.record__batch {
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* 竖细线分隔，替代中点连接（规范 §3.2） */
-.record__meta-divider {
-  width: 1px;
-  height: 10px;
-  margin: 0 8px;
-  background-color: var(--bx-line);
-}
-
-.record__side {
-  display: flex;
+.record__action {
   flex: none;
-  align-items: center;
-  margin-left: 12px;
-}
-
-/* 状态做成胶囊徽章：纯彩色文字在长列表里几乎扫不出来 */
-.record__state {
-  flex-shrink: 0;
-  padding: 2px 9px;
-  font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
-  border-radius: var(--bx-radius-chip);
-}
-
-.record__state--done {
-  color: var(--bx-success);
-  background-color: var(--bx-success-soft);
-}
-
-.record__state--pending {
-  color: var(--bx-warn);
-  background-color: var(--bx-warn-soft);
-}
-
-/* 分数用等宽数字位：多条记录并排时数字宽度不会跳。
- * 用墨色而不是主色 —— 一屏十几行全是蓝字会吵（规范 §2.4）。 */
-.record__score {
-  flex-shrink: 0;
-  margin-left: 10px;
-  font-size: var(--bx-font-h2);
-  font-weight: 600;
-  line-height: var(--bx-leading-h2);
-  color: var(--bx-text);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--bx-font-sub);
+  font-weight: 500;
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-primary);
 }
 
 .records__more {
@@ -472,44 +795,5 @@ void fetchPage(true)
   outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
   border-radius: var(--bx-radius-sm);
-}
-
-/* ── 动效 ─────────────────────────────────────────────────────────
- * 列表行进场：淡入 + translateY(6px→0)，逐行 delay 30ms，最多前 12 项
- * （规范 §5.2 第 12 条）。
- *
- * 逐项动画只在 H5 端做（规范 §5.3）：小程序端长列表逐项动画会掉帧。
- */
-/* #ifdef H5 */
-@keyframes bx-survey-record-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.record {
-  animation-name: bx-survey-record-in;
-  animation-duration: 360ms;
-  animation-timing-function: var(--bx-ease-out);
-  animation-fill-mode: both;
-}
-/* #endif */
-
-/*
- * 逐行 delay（30ms 递增，最多前 12 项）
- *
- * 规则放在条件编译之外：没有 animation-name 时 animation-delay 不生效，
- * 小程序端自然退化为「无动画」。
- */
-@for $i from 1 through 12 {
-  .record:nth-child(#{$i}) {
-    animation-delay: #{($i - 1) * 30}ms;
-  }
 }
 </style>

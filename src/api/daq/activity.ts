@@ -62,7 +62,7 @@ export function initViewSelect(query: InitViewQuery) {
   return bxSelect<DaqActivityRow>({
     serviceName: 'srvdaq_init_view_select',
     colNames: ['*'],
-    order: [{ colName: 'item_seq', ruleType: 'asc' }],
+    order: [{ colName: 'item_seq', orderType: 'asc' }],
     condition,
   })
 }

@@ -4,7 +4,8 @@
  *
  * 入参：activity_no、fill_batch_no
  *
- * 视觉（规范 §7.3）：提交标记 + 建议引用块。
+ * 视觉（docs/UI-UX-V6-设计系统.md §5/§6）：
+ * 状态条（成功点 + 已提交）→ 评估建议卡。页面底 `--bx-bg`，内容走 `.bx-container`。
  */
 
 import { onLoad } from '@dcloudio/uni-app'
@@ -29,10 +30,10 @@ onLoad((query) => {
     <BxNavBar title="评估结果" :fallback-url="coverUrl(activityNo)" />
 
     <view class="ar-page__body bx-container">
-      <!-- 提交标记：一枚主色对勾（纯 CSS 绘制，不用 svg） -->
-      <view class="ar-head">
-        <view class="ar-head__check" aria-hidden="true" />
-        <text class="ar-head__text">已提交</text>
+      <!-- 状态条：成功点 + 文字，状态不只靠颜色 -->
+      <view class="ar-status">
+        <view class="ar-status__dot" aria-hidden="true" />
+        <text class="ar-status__text">已提交</text>
       </view>
 
       <SuggestionPanel :activity-no="activityNo" :fill-batch-no="fillBatchNo" />
@@ -47,43 +48,30 @@ onLoad((query) => {
 }
 
 .ar-page__body {
-  padding-top: 20px;
+  padding-top: 16px;
   padding-bottom: 32px;
 }
 
-.ar-head {
+.ar-status {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  gap: 8px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--bx-line-2);
 }
 
-.ar-head__check {
-  position: relative;
+.ar-status__dot {
   flex: none;
-  width: 22px;
-  height: 22px;
-  background-color: var(--bx-primary);
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+  background-color: var(--bx-success);
 }
 
-/* 对勾：两条边框转出来的，不用图标字体也不用 svg */
-.ar-head__check::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  left: 8px;
-  width: 5px;
-  height: 9px;
-  border-right: 2px solid #fff;
-  border-bottom: 2px solid #fff;
-  transform: rotate(45deg);
-}
-
-.ar-head__text {
-  margin-left: 8px;
+.ar-status__text {
   font-size: var(--bx-font-sub);
-  font-weight: 600;
+  font-weight: 500;
   line-height: var(--bx-leading-sub);
-  color: var(--bx-primary);
+  color: var(--bx-success);
 }
 </style>

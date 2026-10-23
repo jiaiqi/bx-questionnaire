@@ -1,5 +1,5 @@
 /**
- * 端到端交互冒烟：真实作答 → 校验状态 → 暂存草稿
+ * 端到端交互冒烟：真实作答 → 校验状态 → 自动保存草稿
  *
  * 此前的冒烟只验证「页面能渲染」，没有验证过任何一次真实交互。
  * 这里用 CDP 派发真实鼠标/键盘事件走一遍作答流程，验证：
@@ -262,6 +262,8 @@ async function main() {
   checks.push({ name: '答题页有「记录」入口', pass: String(navExtra.result.value).includes('记录') })
 
   console.log('\n开始作答：')
+  // 草稿是逐题自动保存的：从这里开始累计写请求，后面按题目合并校验
+  const draftStart = writeRequests.length
   // 单选：选第 1 项
   await clickSelector(`#${ITEMS.radio} .bx-option`, '单选题第 1 项')
   const afterRadio = await readState()
@@ -286,11 +288,12 @@ async function main() {
 
   console.log(`\n作答后：已答 ${afterNumber.answered}`)
 
-  // 暂存草稿
-  console.log('\n暂存草稿：')
+  // 自动保存草稿（V6 起没有手动「暂存草稿」按钮：每答一题就落一次库）
+  console.log('\n自动保存草稿：')
   const draftBefore = await readState()
   const reqBefore = writeRequests.length
-  await clickByText('暂存草稿', '暂存草稿按钮')
+  // 重新输入相同内容即可再触发一次 input 事件，验证「逐题自动保存」链路仍然生效
+  await typeInto(`#${ITEMS.text} input`, '端到端测试建议', '触发自动保存-填空题')
   await sleep(3500)
   const afterDraft = await readState()
   const newReqs = writeRequests.slice(reqBefore)
@@ -302,24 +305,38 @@ async function main() {
   }
 
   checks.push({
-    name: '点击暂存草稿后真的发出保存请求',
+    name: '作答后自动发出保存请求',
     pass: newReqs.some(r => r.url.includes('activity_result_save')),
   })
   checks.push({
-    name: '暂存后进度未丢失',
+    name: '自动保存后进度未丢失',
     pass: afterDraft.answered === draftBefore.answered,
   })
 
   // 草稿体结构断言（默认跑也会执行，无需 --submit）：
-  // 多选题必须带出两个 option_no。服务端最终只存第一个值（平台限制，见文档），
-  // 所以不能靠服务端数据反推，只能直接校验请求体。
-  // 同一逻辑请求会发两次，只有一个带 postData，要挑有请求体的那个。
-  const draftBody = newReqs.find(r => r.url.includes('activity_result_save') && r.postData)?.postData ?? ''
-  let draftParsed = null
-  try { draftParsed = JSON.parse(draftBody) }
-  catch { /* 解析失败按缺失处理 */ }
-  const draftItems = draftParsed?.[0]?.data?.[0]?.item_data ?? []
+  // V6 起草稿是**逐题自动保存**——每答一题发一次请求，itemData 只有 1 项，
+  // 所以要把本次作答期间的所有保存请求合并起来看，而不是只看最后一次。
+  const draftItems = (() => {
+    const merged = new Map()
+    for (const req of writeRequests.slice(draftStart)) {
+      if (!req.url.includes('activity_result_save') || !req.postData) {
+        continue
+      }
+      try {
+        const parsedReq = JSON.parse(req.postData)
+        for (const item of parsedReq?.[0]?.data?.[0]?.item_data ?? []) {
+          merged.set(item.item_no, item)
+        }
+      }
+      catch {
+        // 非 JSON 请求体（例如预检）忽略
+      }
+    }
+    return [...merged.values()]
+  })()
   const draftCheckbox = draftItems.find(i => i.item_no === ITEMS.checkbox.replace(/^q-/, ''))
+  const expectedItemNos = [ITEMS.radio, ITEMS.checkbox, ITEMS.text, ITEMS.number]
+    .map(key => key.replace(/^q-/, ''))
   checks.push({
     name: '草稿体包含多选题',
     pass: !!draftCheckbox,
@@ -329,8 +346,8 @@ async function main() {
     pass: Array.isArray(draftCheckbox?.option_data) && draftCheckbox.option_data.length === 2,
   })
   checks.push({
-    name: '草稿体四题齐全',
-    pass: draftItems.length === 4,
+    name: '逐题自动保存覆盖四道题',
+    pass: expectedItemNos.every(no => draftItems.some(item => item.item_no === no)),
   })
 
   // ── 场景一续：刷新后本地草稿应恢复 ──────────────────────────────
@@ -452,13 +469,13 @@ async function main() {
     })
 
     /**
-     * 再留一条草稿，让后面的记录页能同时验证「完成」与「未完成」两条路径
+     * 再留一条草稿，让后面的记录页能同时验证「已提交」与「草稿」两条路径
      *
-     * 提交会把本批次变成「完成」，本浏览器就再没有「未完成」记录了 ——
+     * 提交会把本批次变成「已提交」，本浏览器就再没有草稿记录了 ——
      * 而记录页现在按归属过滤（未登录只显示本机记录），拿不到别人的记录来凑。
-     * 所以提交后再暂存一次草稿，产生一条新的「未完成」记录。
+     * 所以提交后再答一题触发自动保存，产生一条新的草稿记录。
      */
-    console.log('\n补一条草稿（供记录页验证「未完成」续答路径）：')
+    console.log('\n补一条草稿（供记录页验证「草稿」续答路径）：')
     await send('Page.navigate', { url: 'about:blank' })
     await sleep(400)
     await send('Page.navigate', {
@@ -466,7 +483,7 @@ async function main() {
     })
     await sleep(9000)
     await clickSelector(`#${ITEMS.radio} .bx-option`, '补草稿-单选题第 1 项')
-    await clickByText('暂存草稿', '补草稿-暂存草稿')
+    // 逐题自动保存：选中即落库，不需要手动暂存
     await sleep(4000)
   }
   else {
@@ -499,12 +516,12 @@ async function main() {
   })
 
   // ── 场景六：作答记录页点进两条路径 ──────────────────────────────
-  // RecordList 用 state === '未完成' 决定点进去是续答（formType=form）
+  // RecordList 内部用 state === '未完成' 决定续答（formType=form），UI 文案显示「草稿」
   // 还是查看（formType=detail）。这是老工程的核心回流路径：用户填一半退出，
   // 从记录页点回来继续填。此前从未端到端验证过。
   //
   // 两个坑：
-  //  - '未完成' 里含 '完成' 子串，按文本 includes 找会找错记录；
+  //  - 旧文案「未完成」里含「完成」子串；现在 UI 分别显示「草稿」/「已提交」，按整行匹配
   //  - 记录可能在视口之外，坐标点击会落空，必须先 scrollIntoView。
   console.log('\n\n=== 场景六：作答记录页的两条跳转路径 ===')
   await send('Page.navigate', { url: 'about:blank' })
@@ -630,7 +647,7 @@ async function main() {
   /**
    * 找指定状态的记录卡片，找不到就先滚动加载更多
    *
-   * 记录按创建时间倒序，而**每次跑 e2e 的「暂存草稿」都会新增一条「未完成」记录** ——
+   * 记录按创建时间倒序，而**每次跑 e2e 都会新增一条草稿记录** ——
    * 「完成」记录会被逐渐挤到后面的分页里。原来这里找不到就静默跳过，
    * 表现为「e2e 全绿，但实际少验证了两件事」，越跑验证得越少。
    *
@@ -655,16 +672,16 @@ async function main() {
     return { idx: -1, scrolls: maxScrolls }
   }
 
-  const undoneFound = await findCardIndexWithLoadMore('未完成')
-  console.log(`  「未完成」卡片下标：${undoneFound.idx}（滚动 ${undoneFound.scrolls} 次后）`)
+  const undoneFound = await findCardIndexWithLoadMore('草稿')
+  console.log(`  「草稿」记录卡片下标：${undoneFound.idx}（滚动 ${undoneFound.scrolls} 次后）`)
   checks.push({
-    name: '记录页能找到「未完成」记录（续答检查的前提）',
+    name: '记录页能找到「草稿」记录（续答检查的前提）',
     pass: undoneFound.idx >= 0,
   })
   const undoneNav = undoneFound.idx >= 0 ? await clickCard(undoneFound.idx) : null
   if (undoneNav) {
     console.log(`    跳转：${undoneNav.hash.slice(0, 110)}`)
-    checks.push({ name: '点「未完成」记录走续答（formType=form）', pass: undoneNav.hash.includes('formType=form') })
+    checks.push({ name: '点「草稿」记录走续答（formType=form）', pass: undoneNav.hash.includes('formType=form') })
     checks.push({ name: '续答带上 fill_batch_no', pass: undoneNav.hash.includes('fill_batch_no') })
     checks.push({ name: '续答页可编辑（有提交按钮）', pass: undoneNav.text.includes('提交问卷') })
   }
@@ -692,7 +709,7 @@ async function main() {
     console.log('')
   }
   else {
-    const doneFound = await findCardIndexWithLoadMore('完成')
+    const doneFound = await findCardIndexWithLoadMore('已提交')
     console.log(`  「完成」卡片下标：${doneFound.idx}（滚动 ${doneFound.scrolls} 次后）`)
     checks.push({
       name: '记录页能找到「完成」记录（查看模式检查的前提）',
@@ -895,13 +912,13 @@ async function main() {
   console.log(`  作答一题后：已答 ${surveyAfter.answered}`)
   checks.push({ name: '调研页可作答（进度 +1）', pass: surveyAfter.answered === '1' })
 
-  // 暂存草稿，确认写请求走的是同一套
+  // 逐题自动保存：改一题就会落库，确认调研页与作答页共用同一套
   const surveyDraftBefore = writeRequests.length
-  await clickByText('暂存草稿', '调研页暂存草稿')
+  await typeInto(`#${ITEMS.text} input`, '调研端到端建议', '调研页填空题（触发自动保存）')
   await sleep(3500)
   const surveyDrafts = writeRequests.slice(surveyDraftBefore)
   checks.push({
-    name: '调研页暂存草稿发出保存请求',
+    name: '调研页作答后自动发出保存请求',
     pass: surveyDrafts.some(r => r.url.includes('activity_result_save')),
   })
 
@@ -1138,9 +1155,9 @@ async function main() {
   // （批次 9118ea27… 与 aba2358c…），聚合后只应保留较新的那条。
   const aggProbe = await send('Runtime.evaluate', {
     expression: `(() => {
-      const cards = [...document.querySelectorAll('.cp-card')]
-      const titles = cards.map(e => (e.innerText || '').split('\\n')[0].trim())
-      const target = titles.filter(t => t.includes('bxq 自动化测试问卷')).length
+      const cards = [...document.querySelectorAll('.cp-row')]
+      const target = cards.filter(e => (e.innerText || '').includes('bxq 自动化测试问卷')).length
+      const titles = cards.map(e => (e.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean)[0] || '')
       return { total: cards.length, target, titles: [...new Set(titles)] }
     })()`,
     returnByValue: true,

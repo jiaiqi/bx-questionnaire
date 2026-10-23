@@ -10,29 +10,33 @@
  * - 搜索在服务端做（`title like`，实测可用），不在前端过滤已加载的几行 ——
  *   后者看起来能搜，实际只搜当前页，用户会以为「明明存在的问卷搜不到」。
  * - 分页也在服务端做（实测 `page.total` 与实际总数一致、相邻页无重叠）。
+ * - 搜索是**显式触发**（回车 / 「搜索」按钮 / 清空后自动重查）：服务端查询
+ *   不做输入即搜，否则每敲一个字都要发一次请求，还会有响应乱序覆盖的问题。
  * - 移动端触底自动翻页，PC 端底部有翻页器；两者共用 `hasNext` 守卫，
  *   不会因为触底与点击同时发生而重复请求。
  * - 删除是**物理删除**且会连带题目与选项，所以必须二次确认，并把后果写清楚。
  *
- * ## 版式：表格，不是卡片墙
+ * ## 版式（V6「清简」§9.2）
  *
- * 按设计系统 §7.5：搜索区一行内联（输入 + 搜索 + 重置 + 状态分段控件），
- * 下面是一行一问卷的表格 —— 左：标题 + 摘要 + 元信息，中：状态 chip，右：操作。
+ * 页头（24/600 标题 + 13 灰说明 + 唯一主行动）→ 一行内联工具行
+ * （300px 搜索 + 状态分段 + 重置）→ 一张数据表（表头 12/500、行高 60、
+ * 行内操作悬停 / 聚焦显形、分页靠右）→ 空态用 BxEmpty。
+ * 整页限宽走 `.bx-container--wide`，与原型的管理端列宽一致。
  */
 
 import type { DaqActivityRow } from '@/api/daq/types'
 
 import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
+import BxAppearanceSheet from '@/components/base/BxAppearanceSheet.vue'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
-import BxNavBar from '@/components/base/BxNavBar.vue'
 import BxSkeleton from '@/components/base/BxSkeleton.vue'
 import EditorListRow from '@/components/editor/EditorListRow.vue'
 import EditorSegmented from '@/components/editor/EditorSegmented.vue'
-import { ACTIVITY_STATUS_OPTIONS, useEditorList } from '@/composables/useEditorList'
-import { editorCreateUrl, editorDesignUrl } from '@/domain/editor/routes'
+import { ACTIVITY_STATUS_OPTIONS, EDITOR_LIST_PAGE_SIZE, useEditorList } from '@/composables/useEditorList'
+import { editorCreateUrl, editorDesignUrl, editorStatsUrl } from '@/domain/editor/routes'
 import { answerUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
@@ -90,6 +94,16 @@ const {
 /** 正在删除的问卷编号，用于禁用重复点击 */
 const removing = ref('')
 
+/** 外观设置面板（仅 H5：小程序端主题跟随系统） */
+const appearanceOpen = ref(false)
+
+/** 是否有生效中的筛选（「重置」据此禁用，与原型一致） */
+const hasFilter = computed(() => keyword.value.trim() !== '' || status.value !== '')
+
+/** 分页文案里的序号区间：`显示 1–10 · 共 26 份` */
+const pageStart = computed(() => (total.value === 0 ? 0 : (pageNo.value - 1) * EDITOR_LIST_PAGE_SIZE + 1))
+const pageEnd = computed(() => (total.value === 0 ? 0 : pageStart.value + rows.value.length - 1))
+
 onLoad(() => {
   void load(1)
 })
@@ -139,7 +153,16 @@ function onSearch(): void {
   void search()
 }
 
+/** 清空关键字并立即重查（原型里搜索框右侧的 ✕） */
+function onClearKeyword(): void {
+  keyword.value = ''
+  void search()
+}
+
 function onReset(): void {
+  if (!hasFilter.value) {
+    return
+  }
   void reset()
 }
 
@@ -157,6 +180,10 @@ function onEdit(row: DaqActivityRow): void {
   uni.navigateTo({ url: editorDesignUrl(String(row.activity_no ?? '')) })
 }
 
+function onStats(row: DaqActivityRow): void {
+  uni.navigateTo({ url: editorStatsUrl(String(row.activity_no ?? '')) })
+}
+
 function onAnswer(row: DaqActivityRow): void {
   uni.navigateTo({
     url: answerUrl(String(row.activity_no ?? ''), { status: String(row.status ?? '') }),
@@ -166,6 +193,9 @@ function onAnswer(row: DaqActivityRow): void {
 async function onRemove(row: DaqActivityRow): Promise<void> {
   const activityNo = String(row.activity_no ?? '')
   const title = String(row.title ?? '') || '这份问卷'
+  if (removing.value) {
+    return
+  }
   const confirmed = await confirmDialog(
     `确定删除「${title}」吗？该问卷的题目与选项会一并删除，已提交的作答记录不会被清理，操作不可恢复。`,
   )
@@ -190,60 +220,132 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
 
 <template>
   <view class="editor-list">
-    <BxNavBar title="问卷列表">
-      <template #extra>
-        <BxButton
-          v-if="!session.isLogin"
-          type="secondary"
-          size="small"
-          aria-label="登录"
-          @click="onLogin"
-        >
-          登录
-        </BxButton>
-        <BxButton type="primary" size="small" aria-label="新建问卷" @click="onCreate">
-          <view class="editor-list__create-icon" aria-hidden="true" />
-          <text class="editor-list__create-text">新建</text>
-        </BxButton>
-      </template>
-    </BxNavBar>
+    <!--
+      管理端顶栏（对应原型的 `.adm-appbar`）：品牌 + 面包屑 + 右侧会话入口。
+      这一层是「外壳」，页面标题在下面的页头里；不重复显示同一句话。
+    -->
+    <view class="editor-list__appbar">
+      <view class="editor-list__brand">
+        <view class="editor-list__mark" aria-hidden="true">
+          问
+        </view>
+        <text class="editor-list__wordmark">园区问卷</text>
+      </view>
+      <view class="editor-list__appbar-div" aria-hidden="true" />
+      <text class="editor-list__crumb">问卷</text>
+      <view class="editor-list__appbar-spacer" />
+      <!-- #ifdef H5 -->
+      <BxButton
+        type="secondary"
+        size="small"
+        aria-label="外观设置"
+        @click="appearanceOpen = true"
+      >
+        外观
+      </BxButton>
+      <!-- #endif -->
+      <BxButton
+        v-if="!session.isLogin"
+        type="secondary"
+        size="small"
+        aria-label="登录"
+        @click="onLogin"
+      >
+        登录
+      </BxButton>
+    </view>
 
-    <view class="editor-list__body">
-      <!--
-        搜索区：**一行内联**，不堆叠成三块卡片
-        （输入 + 搜索 + 重置 + 状态分段控件）
-      -->
+    <view class="editor-list__main bx-container bx-container--wide">
+      <!-- 页头：标题 24/600 + 13 灰说明 + 唯一主行动 -->
+      <view class="editor-list__pagehead">
+        <view class="editor-list__headtext">
+          <text class="editor-list__title">问卷列表</text>
+          <view class="editor-list__sub">
+            <text class="editor-list__sub-item">
+              共 <text class="editor-list__num">{{ total }}</text> 份
+            </text>
+            <text v-if="status" class="editor-list__sub-item">状态：{{ status }}</text>
+            <text v-if="keyword.trim()" class="editor-list__sub-item">搜索「{{ keyword.trim() }}」</text>
+          </view>
+        </view>
+
+        <view class="editor-list__create">
+          <BxButton type="primary" aria-label="新建问卷" @click="onCreate">
+            <view class="editor-list__plus" aria-hidden="true" />
+            <text>新建问卷</text>
+          </BxButton>
+        </view>
+      </view>
+
+      <!-- 工具行：一行内联，不堆成三块卡片 -->
       <view class="editor-list__toolbar">
-        <input
-          class="editor-list__input"
-          type="text"
-          :value="keyword"
-          aria-label="搜索问卷标题"
-          placeholder="搜索问卷标题"
-          confirm-type="search"
-          @input="onKeywordInput"
-          @confirm="onSearch"
+        <view class="editor-list__search">
+          <view class="editor-list__search-icon" aria-hidden="true" />
+          <input
+            class="editor-list__input"
+            type="text"
+            :value="keyword"
+            aria-label="搜索问卷标题"
+            placeholder="搜索问卷标题"
+            confirm-type="search"
+            @input="onKeywordInput"
+            @confirm="onSearch"
+          >
+          <view
+            v-if="keyword"
+            class="editor-list__clear"
+            role="button"
+            tabindex="0"
+            aria-label="清除搜索"
+            @click="onClearKeyword"
+            @keydown.enter.prevent="onClearKeyword"
+          >
+            <view class="editor-list__clear-icon" aria-hidden="true" />
+          </view>
+        </view>
+
+        <view
+          class="editor-list__search-go"
+          role="button"
+          tabindex="0"
+          aria-label="搜索"
+          @click="onSearch"
+          @keydown.enter.prevent="onSearch"
         >
-        <BxButton type="secondary" aria-label="搜索" @click="onSearch">
-          搜索
-        </BxButton>
-        <BxButton type="secondary" aria-label="重置搜索条件" @click="onReset">
-          重置
-        </BxButton>
+          <text class="editor-list__search-go-text">搜索</text>
+        </view>
+
         <!--
           分组语义：分段控件本身给每一项「进行中 / 未开始 / 已结束」这样的名字，
           单独读出来不知道是筛选用。外面再包一层 group + 组名，读屏就完整了。
         -->
         <view class="editor-list__filter" role="group" aria-label="按状态筛选">
           <EditorSegmented
+            class="editor-list__seg"
             :model-value="status"
             :options="statusFilterOptions"
             @update:model-value="onStatusFilter"
           />
         </view>
+
+        <view class="editor-list__spacer" />
+
+        <view
+          class="editor-list__reset"
+          :class="{ 'editor-list__reset--off': !hasFilter }"
+          role="button"
+          :tabindex="hasFilter ? 0 : -1"
+          :aria-disabled="hasFilter ? 'false' : 'true'"
+          aria-label="重置搜索条件"
+          @click="onReset"
+          @keydown.enter.prevent="onReset"
+        >
+          <view class="editor-list__reset-icon" aria-hidden="true" />
+          <text class="editor-list__reset-text">重置</text>
+        </view>
       </view>
 
-      <view v-if="errorMessage" class="editor-list__error">
+      <view v-if="errorMessage" class="editor-list__error" role="alert">
         <text class="editor-list__error-text">{{ errorMessage }}</text>
         <view
           class="editor-list__retry"
@@ -257,71 +359,84 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
         </view>
       </view>
 
-      <template v-else>
-        <!-- 表头：宽屏才出现（窄屏一行放不下三列，表头反而碍事） -->
-        <view class="editor-list__head">
-          <text class="editor-list__head-cell editor-list__head-cell--main">问卷</text>
-          <text class="editor-list__head-cell editor-list__head-cell--status">状态</text>
-          <text class="editor-list__head-cell editor-list__head-cell--actions">操作</text>
+      <view v-else class="editor-list__card">
+        <!-- 表头：12/500，窄屏隐藏（一行放不下） -->
+        <view class="editor-list__thead">
+          <text class="editor-list__th editor-list__th--main">问卷</text>
+          <text class="editor-list__th editor-list__th--status">状态</text>
+          <text class="editor-list__th editor-list__th--num">题量</text>
+          <text class="editor-list__th editor-list__th--num">回收份数</text>
+          <text class="editor-list__th editor-list__th--time">截止</text>
+          <text class="editor-list__th editor-list__th--acts">操作</text>
         </view>
 
-        <view class="editor-list__table">
-          <view
+        <view v-if="loading && !loaded" class="editor-list__skeleton" aria-busy="true">
+          <BxSkeleton :lines="3" :height="44" :radius="8" />
+        </view>
+
+        <template v-else>
+          <EditorListRow
             v-for="(row, index) in rows"
             :key="String(row.activity_no)"
-            class="editor-list__row"
-          >
-            <EditorListRow
-              :row="row"
-              :last="index === rows.length - 1"
-              @edit="onEdit(row)"
-              @answer="onAnswer(row)"
-              @remove="onRemove(row)"
-            />
+            :row="row"
+            :last="index === rows.length - 1"
+            @edit="onEdit(row)"
+            @stats="onStats(row)"
+            @answer="onAnswer(row)"
+            @remove="onRemove(row)"
+          />
+
+          <BxEmpty
+            v-if="loaded && rows.length === 0"
+            text="没有找到问卷"
+            tip="换个关键字试试，或点右上角「新建问卷」创建一份"
+          />
+        </template>
+
+        <!-- 分页脚：左计数、右翻页，与原型一致 -->
+        <view v-if="rows.length > 0" class="editor-list__foot">
+          <text class="editor-list__foot-count">
+            显示 {{ pageStart }}–{{ pageEnd }} · 共 {{ total }} 份
+          </text>
+
+          <view class="editor-list__pager">
+            <view
+              class="editor-list__pagebtn"
+              :class="{ 'editor-list__pagebtn--off': !hasPrev }"
+              role="button"
+              :tabindex="hasPrev ? 0 : -1"
+              :aria-disabled="hasPrev ? 'false' : 'true'"
+              aria-label="上一页"
+              @click="goPrev"
+              @keydown.enter.prevent="goPrev"
+            >
+              <view class="editor-list__chevron editor-list__chevron--prev" aria-hidden="true" />
+            </view>
+
+            <text class="editor-list__pageinfo">
+              {{ pageNo }} / {{ pageCount }}
+            </text>
+
+            <view
+              class="editor-list__pagebtn"
+              :class="{ 'editor-list__pagebtn--off': !hasNext }"
+              role="button"
+              :tabindex="hasNext ? 0 : -1"
+              :aria-disabled="hasNext ? 'false' : 'true'"
+              aria-label="下一页"
+              @click="goNext"
+              @keydown.enter.prevent="goNext"
+            >
+              <view class="editor-list__chevron editor-list__chevron--next" aria-hidden="true" />
+            </view>
           </view>
         </view>
-
-        <BxEmpty
-          v-if="loaded && !loading && rows.length === 0"
-          text="没有找到问卷"
-          tip="换个关键字试试，或点右上角「新建」创建一份"
-        />
-
-        <view v-if="loading" class="editor-list__skeleton" aria-busy="true">
-          <BxSkeleton :lines="1" :height="72" :radius="20" />
-          <BxSkeleton :lines="1" :height="72" :radius="20" />
-          <BxSkeleton :lines="1" :height="72" :radius="20" />
-        </view>
-      </template>
-    </view>
-
-    <view v-if="rows.length > 0" class="editor-list__pager">
-      <view
-        class="editor-list__pager-btn"
-        :class="{ 'editor-list__pager-btn--off': !hasPrev }"
-        role="button"
-        tabindex="0"
-        aria-label="上一页"
-        @click="goPrev"
-        @keydown.enter.prevent="goPrev"
-      >
-        <text class="editor-list__pager-text">上一页</text>
-      </view>
-      <text class="editor-list__pager-info">
-        第 {{ pageNo }} / {{ pageCount }} 页 · 共 {{ total }} 份
-      </text>
-      <view
-        class="editor-list__pager-btn"
-        :class="{ 'editor-list__pager-btn--off': !hasNext }"
-        role="button"
-        tabindex="0"
-        aria-label="下一页"
-        @click="goNext"
-        @keydown.enter.prevent="goNext"
-      >
-        <text class="editor-list__pager-text">下一页</text>
       </view>
     </view>
+
+    <!-- #ifdef H5 -->
+    <BxAppearanceSheet v-if="appearanceOpen" @close="appearanceOpen = false" />
+    <!-- #endif -->
   </view>
 </template>
 
@@ -333,17 +448,139 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   background-color: var(--bx-bg);
 }
 
-/* 加号用两条线绘制（原为「＋ 新建」里的全角加号，字形随字体变化） */
-.editor-list__create-icon {
+/* ── 管理端顶栏：品牌 + 面包屑 + 会话入口（对应原型 `.adm-appbar`） ── */
+
+.editor-list__appbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--bx-z-sticky);
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  height: calc(52px + var(--status-bar-height, 0px));
+  padding: var(--status-bar-height, 0px) 24px 0;
+  background-color: var(--bx-surface);
+  border-bottom: 1px solid var(--bx-line);
+}
+
+.editor-list__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* 品牌标记：靛蓝小方块 + 白字「问」（全页唯一的名义主色块，与原型一致） */
+.editor-list__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--bx-surface);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  background-color: var(--bx-primary);
+  border-radius: var(--bx-radius-xs);
+}
+
+.editor-list__wordmark {
+  color: var(--bx-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.editor-list__appbar-div {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  background-color: var(--bx-line);
+}
+
+.editor-list__crumb {
+  color: var(--bx-text-3);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.editor-list__appbar-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+/* 页头：标题在桌面端承担主标题；窄屏交给顶部导航栏，避免同一句话出现两遍 */
+.editor-list__main {
+  padding-top: 28px;
+  padding-bottom: 40px;
+}
+
+.editor-list__pagehead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.editor-list__headtext {
+  min-width: 0;
+}
+
+/* 主行动不参与收缩：窄屏时宁可挤说明，也不让「新建问卷」折行 */
+.editor-list__create {
+  flex: none;
+}
+
+.editor-list__title {
+  display: block;
+  color: var(--bx-text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.01em;
+}
+
+/* 说明：13 / --bx-text-3；数字用等宽数字 */
+.editor-list__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 4px;
+  color: var(--bx-text-3);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.editor-list__sub-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.editor-list__num {
+  color: var(--bx-text-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 主按钮里的加号：两条线绘制（全角「＋」字形随字体变化） */
+.editor-list__plus {
   position: relative;
   flex: none;
   width: 10px;
   height: 10px;
-  margin-right: 6px;
+  margin-right: 7px;
 }
 
-.editor-list__create-icon::before,
-.editor-list__create-icon::after {
+.editor-list__plus::before,
+.editor-list__plus::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -351,49 +588,79 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   width: 10px;
   height: 1.5px;
   margin-top: -0.75px;
-  background-color: #fff;
+  background-color: currentcolor;
   border-radius: 1px;
 }
 
-.editor-list__create-icon::after {
+.editor-list__plus::after {
   transform: rotate(90deg);
 }
 
-.editor-list__body {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: var(--bx-content-width-wide);
-  margin: 0 auto;
-  padding: 16px;
-}
-
-/* ── 搜索区：一行内联 ── */
+/* ── 工具行：一行内联 ── */
 
 .editor-list__toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 16px;
+}
+
+.editor-list__search {
+  position: relative;
+  display: flex;
+  flex: 0 1 300px;
+  align-items: center;
+  min-width: 200px;
+}
+
+/* 放大镜：圆环 + 一条斜柄（纯 CSS，不用 svg / 文字符号） */
+.editor-list__search-icon {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  margin-top: -8px;
+  border: 1.5px solid var(--bx-text-3);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.editor-list__search-icon::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  width: 6px;
+  height: 1.5px;
+  background-color: var(--bx-text-3);
+  border-radius: 1px;
+  transform: rotate(45deg);
 }
 
 .editor-list__input {
   box-sizing: border-box;
-  flex: 1 1 220px;
-  min-width: 0;
-  height: 44px;
-  padding: 0 12px;
-  font-size: 15px;
+  width: 100%;
+  height: 40px;
+  padding: 0 36px;
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
+  font-size: 13px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-/* 聚焦：描边变主色 + 光晕（不用 outline，保证小程序一致） */
+.editor-list__input::placeholder {
+  color: var(--bx-text-4);
+}
+
+/* 聚焦：描边变主色 + 3px 柔光环（不用 outline，保证小程序一致） */
 .editor-list__input:focus-within {
   border-color: var(--bx-primary);
   box-shadow: var(--bx-focus-glow);
@@ -410,109 +677,296 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
  * （与 BxTextField 里那条规则同一原因）
  */
 :deep(.editor-list__input .uni-input-input:focus-visible) {
-  outline: 2px solid var(--bx-blue);
+  outline: 2px solid var(--bx-primary);
   outline-offset: 1px;
 }
 
-/* 状态分段控件：窄屏时整块换行，宽屏跟在按钮后面 */
+/* 清除：搜索框右侧的 ✕ */
+.editor-list__clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--bx-radius-xs);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .editor-list__clear:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.editor-list__clear-icon {
+  position: relative;
+  width: 10px;
+  height: 10px;
+}
+
+.editor-list__clear-icon::before,
+.editor-list__clear-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 1.5px;
+  margin-top: -0.75px;
+  background-color: var(--bx-text-3);
+  border-radius: 1px;
+}
+
+.editor-list__clear-icon::before {
+  transform: rotate(45deg);
+}
+
+.editor-list__clear-icon::after {
+  transform: rotate(-45deg);
+}
+
+/* 「搜索」：静默文字按钮（显式触发，服务端查询不做输入即搜） */
+.editor-list__search-go {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--bx-radius-xs);
+  cursor: pointer;
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .editor-list__search-go:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.editor-list__search-go:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 1px;
+}
+
+.editor-list__search-go-text {
+  color: var(--bx-text-2);
+  font-size: 13px;
+}
+
 .editor-list__filter {
   flex: 0 1 auto;
-  margin-left: auto;
 }
 
-/* ── 表格 ── */
-
-/*
- * 表头与行的列宽必须一致（96 / 180），否则「状态」「操作」两列会错位。
- * 这两个数字与 EditorListRow 里的 grid-template-columns 是同一套定义。
- */
-.editor-list__head {
-  display: none;
-  grid-template-columns: minmax(0, 1fr) 96px 180px;
-  gap: 12px 16px;
-  padding: 0 16px 8px;
+/* 状态分段：与原型一致，每项至少 58px 宽，四段读起来才均匀 */
+.editor-list__seg :deep(.bx-seg__item) {
+  min-width: 58px;
 }
 
-.editor-list__head-cell {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-text-3);
+.editor-list__spacer {
+  flex: 1;
+  min-width: 0;
 }
 
-/* 状态列是居中的（chip 也在列内居中），表头与内容才对得上 */
-.editor-list__head-cell--status {
-  text-align: center;
+/* 重置：静默文字按钮，没有筛选条件时禁用 */
+.editor-list__reset {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--bx-radius-xs);
+  cursor: pointer;
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    opacity var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-.editor-list__table {
+@media (hover: hover) {
+  .editor-list__reset:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.editor-list__reset:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 1px;
+}
+
+.editor-list__reset--off {
+  opacity: 0.38;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* 重置图标：一个 3/4 圆弧 + 箭头（纯 CSS，不用 ⟳ 文字符号） */
+.editor-list__reset-icon {
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--bx-text-3);
+  border-top-color: transparent;
+  border-radius: 50%;
+  transform: rotate(-35deg);
+}
+
+.editor-list__reset-text {
+  color: var(--bx-text-2);
+  font-size: 13px;
+}
+
+/* ── 数据表 ── */
+
+.editor-list__card {
   overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-lg);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
-
-/* 行之间只有一条细线（表格的读法）；末行的下边线由行组件自己去掉 */
 
 /*
- * 进场编排：逐行淡入 + translateY(6px→0)，delay 30ms，最多前 12 项
- * （设计系统 §5.2 第 12 条）。
- *
- * 只在 H5 端做：小程序端长列表逐项动画会掉帧（规范 §5.3）。
+ * 表头与行的列宽必须一致，否则「状态」「操作」两列会错位。
+ * 这组数字与 EditorListRow 里的 grid-template-columns 是同一套定义。
  */
-@media (min-width: 640px) {
-  .editor-list__head {
-    display: grid;
+.editor-list__thead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 64px 88px 108px 190px;
+  align-items: center;
+  height: 40px;
+  background-color: var(--bx-surface-2);
+  border-bottom: 1px solid var(--bx-line);
+}
+
+.editor-list__th {
+  color: var(--bx-text-3);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  padding: 0 16px;
+}
+
+.editor-list__th--main {
+  padding-left: 20px;
+}
+
+.editor-list__th--num {
+  text-align: right;
+}
+
+.editor-list__th--acts {
+  padding-right: 20px;
+  text-align: right;
+}
+
+.editor-list__skeleton {
+  padding: 20px;
+}
+
+/* ── 分页脚 ── */
+
+.editor-list__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 0 20px;
+  border-top: 1px solid var(--bx-line);
+}
+
+.editor-list__foot-count {
+  color: var(--bx-text-3);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-list__pager {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.editor-list__pagebtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--bx-radius-xs);
+  cursor: pointer;
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .editor-list__pagebtn:hover:not(.editor-list__pagebtn--off) {
+    background-color: var(--bx-surface-2);
   }
 }
 
-/* #ifdef H5 */
-.editor-list__row {
-  animation: editor-list-row-in var(--bx-duration-slow) var(--bx-ease-out) both;
+.editor-list__pagebtn:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: -2px;
 }
 
-.editor-list__row:nth-child(1) { animation-delay: 0ms; }
-.editor-list__row:nth-child(2) { animation-delay: 30ms; }
-.editor-list__row:nth-child(3) { animation-delay: 60ms; }
-.editor-list__row:nth-child(4) { animation-delay: 90ms; }
-.editor-list__row:nth-child(5) { animation-delay: 120ms; }
-.editor-list__row:nth-child(6) { animation-delay: 150ms; }
-.editor-list__row:nth-child(7) { animation-delay: 180ms; }
-.editor-list__row:nth-child(8) { animation-delay: 210ms; }
-.editor-list__row:nth-child(9) { animation-delay: 240ms; }
-.editor-list__row:nth-child(10) { animation-delay: 270ms; }
-.editor-list__row:nth-child(11) { animation-delay: 300ms; }
-.editor-list__row:nth-child(12) { animation-delay: 330ms; }
-
-/* 超出 12 行就不再参与编排：后面的行一次性出现，不排第二波队 */
-.editor-list__row:nth-child(n+13) {
-  animation: none;
+.editor-list__pagebtn--off {
+  opacity: 0.38;
+  cursor: default;
+  pointer-events: none;
 }
 
-@keyframes editor-list-row-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* 翻页箭头：两条边框旋转 45°（不用 ‹ › 文字符号） */
+.editor-list__chevron {
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid var(--bx-text-2);
+  border-right: 1.5px solid var(--bx-text-2);
 }
-/* #endif */
 
-/* ── 错误 / 空态 / 骨架 ── */
+.editor-list__chevron--prev {
+  transform: rotate(-135deg);
+}
+
+.editor-list__chevron--next {
+  transform: rotate(45deg);
+}
+
+/* 当前页：浅靛底 + 主色文字，与分段控件的选中语言一致 */
+.editor-list__pageinfo {
+  min-width: 44px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--bx-radius-xs);
+  background-color: var(--bx-primary-soft);
+  color: var(--bx-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 28px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ── 错误 / 重试 ── */
 
 .editor-list__error {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 16px;
+  padding: 40px 24px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-card);
 }
 
 .editor-list__error-text {
-  font-size: 14px;
   color: var(--bx-danger);
+  font-size: 13px;
+  line-height: 20px;
   text-align: center;
 }
 
@@ -522,61 +976,51 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   justify-content: center;
   height: 32px;
   margin-top: 12px;
-  padding: 0 16px;
-  border: 1px solid var(--bx-primary);
-  border-radius: var(--bx-radius);
+  padding: 0 14px;
+  border: 1px solid var(--bx-primary-line);
+  border-radius: var(--bx-radius-sm);
+  cursor: pointer;
+}
+
+.editor-list__retry:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
 .editor-list__retry-text {
-  font-size: 13px;
   color: var(--bx-primary);
-}
-
-/* 加载：三条骨架保持布局稳定（原来是居中一行「加载中…」） */
-.editor-list__skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-/* ── 翻页器 ── */
-
-.editor-list__pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: var(--bx-content-width-wide);
-  margin: 0 auto;
-  padding: 16px 16px 24px;
-}
-
-.editor-list__pager-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0 14px;
-  background-color: var(--bx-surface);
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-sm);
-}
-
-.editor-list__pager-btn--off {
-  opacity: var(--bx-disabled-opacity);
-}
-
-.editor-list__pager-text {
   font-size: 13px;
-  color: var(--bx-text-2);
 }
 
-.editor-list__pager-info {
-  margin: 0 12px;
-  font-size: 13px;
-  color: var(--bx-text-3);
-  font-variant-numeric: tabular-nums;
+/* ── 响应式 ── */
+
+/* 窄屏：页头说明与主行动换成紧凑排布，标题仍然保留（它就是页面的 h1） */
+@media (max-width: 759px) {
+  .editor-list__appbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .editor-list__main {
+    padding-top: 16px;
+  }
+
+  .editor-list__pagehead {
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  /* 第一行「搜索框 + 搜索」、第二行「分段 + 重置」 */
+  .editor-list__search {
+    flex: 1 1 160px;
+    min-width: 140px;
+  }
+}
+
+/* 表头/数字列在窄屏收起：与 EditorListRow 的降级断点一致 */
+@media (max-width: 859px) {
+  .editor-list__thead {
+    display: none;
+  }
 }
 </style>

@@ -27,7 +27,23 @@ import { useDraft } from '@/composables/useDraft'
 import { useEmbedResize } from '@/composables/useEmbedResize'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useSubmit } from '@/composables/useSubmit'
-import { fromLocalDraft, stripQuestionTitleIndex, toArray, toLocalDraft, validateRequired } from '@/domain/questionnaire'
+import {
+  clampStepIndex,
+  firstIssueStepIndex,
+  fromLocalDraft,
+  isLastStep,
+  nextStepIndex,
+  prevStepIndex,
+  resolveDisplayMode,
+  stepIndexForKey,
+  stepIssue,
+  stepProgress,
+  stripQuestionTitleIndex,
+  toArray,
+  toLocalDraft,
+  toSteps,
+  validateRequired,
+} from '@/domain/questionnaire'
 import { matchEntryPrefill } from '@/domain/questionnaire/prefill'
 import { coverUrl, historyUrl, withQuery } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
@@ -88,6 +104,62 @@ const readOnlyTip = computed(() =>
 )
 
 /**
+ * 展示方式：逐个（一次一题）/ 全部（整卷一屏）
+ *
+ * 只认活动配置 `item_disp_way === '逐个'`；缺失、空值、「全部」以及任何未知取值
+ * 都保持既有整卷行为（归一化见 `domain/questionnaire/steps`）。
+ */
+const displayMode = computed(() => resolveDisplayMode(activity.value?.item_disp_way))
+const stepMode = computed(() => displayMode.value === 'step')
+
+/** 逐个模式的步骤：分节符不占步骤，只作为小节标题贴到其后的题目上 */
+const steps = computed(() => toSteps(fields.value))
+/** 当前步骤下标（0 起）；任何读取前都经 clamp 收进合法范围 */
+const currentStep = ref(0)
+const currentStepItem = computed(() => steps.value[currentStep.value] ?? null)
+/** 当前步骤对应题目的 key：逐个模式下用它决定卷面里显示哪一道 */
+const currentStepKey = computed(() => currentStepItem.value?.field.key ?? '')
+
+const stepTotal = computed(() => steps.value.length)
+const lastStep = computed(() => isLastStep(currentStep.value, stepTotal.value))
+const stepProgressView = computed(() => stepProgress(currentStep.value, stepTotal.value))
+/** 进度条：逐个模式表达「位置」，全部模式仍是「已答占比」 */
+const barPercent = computed(() =>
+  stepMode.value ? stepProgressView.value.percent : progress.value.percent,
+)
+
+const submitLabel = computed(() => activity.value?.submit_label || '提交问卷')
+
+/**
+ * 底部操作区是否出现
+ *
+ * 整卷模式保持原逻辑（只读时不显示提交栏）；逐个模式必须保留「上一题 / 下一题」，
+ * 否则只读查看时除当前题之外的题目根本翻不到。
+ */
+const showFooter = computed(() => {
+  if (loading.value || errorMessage.value) {
+    return false
+  }
+  return stepMode.value ? steps.value.length > 0 : !readOnly.value
+})
+
+/**
+ * 题目数量变化时修正当前步骤
+ *
+ * 不重置为 0：草稿续答时用户可能已经答到第 8 题，这里没有「答案位置」信息，
+ * 重置会打断续答；只在越界（切换活动 / 重新加载后题数变少）时夹回范围内。
+ */
+watch(
+  () => steps.value.length,
+  (total) => {
+    const next = clampStepIndex(currentStep.value, total)
+    if (next !== currentStep.value) {
+      currentStep.value = next
+    }
+  },
+)
+
+/**
  * 题目是否已有作答
  *
  * 不能只看 `answers[key]` 是否存在：文本框聚焦过就会写入空串，多选取消后是空数组，
@@ -129,7 +201,90 @@ const issues = computed(() =>
     })),
 )
 
-function jumpToIssue(key: string): void {
+/**
+ * 把键盘焦点移进某道题（H5）
+ *
+ * 「必答未填」时光滚动到题目还不够：键盘 / 读屏用户需要焦点落到能操作的位置，
+ * 否则焦点仍停在「下一题」上，再按一次又一次被拦下。小程序没有 DOM 焦点概念，
+ * 保持只滚动即可（条件编译在小程序构建时整段剥离）。
+ */
+function focusQuestion(key: string): void {
+  // #ifdef H5
+  try {
+    const root = document.querySelector(`#q-${key}`)
+    // 优先原生输入控件，其次选项行（tabindex=0）；都找不到时只保留滚动定位
+    const target = root?.querySelector<HTMLElement>('input, textarea, [tabindex="0"]')
+    target?.focus({ preventScroll: true })
+  }
+  catch {
+    // 焦点失败不影响作答：用户已经看到滚动定位与错误文案
+  }
+  // #endif
+}
+
+/** 切到指定步骤并滚到那道题（逐个模式专用） */
+async function goToStep(index: number): Promise<void> {
+  const next = clampStepIndex(index, stepTotal.value)
+  if (next === currentStep.value) {
+    return
+  }
+
+  currentStep.value = next
+  const key = steps.value[next]?.field.key
+  if (!key) {
+    return
+  }
+
+  // 换题是渲染后的事：等一次 tick 再滚动，否则目标还不在页面上
+  await nextTick()
+  scrollToSelector(`#q-${key}`)
+}
+
+/** 上一题：不做校验（回看是用户的自由，不该被未答的题拦住） */
+async function onPrevStep(): Promise<void> {
+  await goToStep(prevStepIndex(currentStep.value, stepTotal.value))
+}
+
+/** 下一题：当前题必答未填则停在原地、显示错误并聚焦；末题走提交 */
+async function onNextStep(): Promise<void> {
+  const item = currentStepItem.value
+  if (!item) {
+    return
+  }
+
+  const issue = stepIssue(item.field, answers)
+  if (issue) {
+    // 与提交校验共用同一份错误表：上方错误摘要会同步列出这一条
+    errors.value[issue.key] = issue.message
+    await nextTick()
+    scrollToSelector(`#q-${issue.key}`)
+    focusQuestion(issue.key)
+    toast(issue.message)
+    return
+  }
+
+  if (lastStep.value) {
+    await onSubmit()
+    return
+  }
+
+  await goToStep(nextStepIndex(currentStep.value, stepTotal.value))
+}
+
+/**
+ * 跳到某道错题
+ *
+ * 逐个模式下目标题可能还没渲染（不在当前步骤），所以先切步骤、等渲染，再滚动；
+ * 整卷模式保持原有行为（直接滚到锚点）。
+ */
+async function jumpToIssue(key: string): Promise<void> {
+  if (stepMode.value) {
+    const index = stepIndexForKey(steps.value, key)
+    if (index >= 0) {
+      currentStep.value = index
+      await nextTick()
+    }
+  }
   scrollToSelector(`#q-${key}`)
 }
 
@@ -138,11 +293,14 @@ function onIssueKeydown(event: KeyboardEvent, key: string): void {
     return
   }
   event.preventDefault()
-  jumpToIssue(key)
+  void jumpToIssue(key)
 }
 
 async function init(): Promise<void> {
   errors.value = {}
+  // 切换活动 / 重新加载时回到第一题；续答内容由 backfill / 草稿恢复，
+  // 逐个模式的当前步骤不影响作答数据本身
+  currentStep.value = 0
 
   if (!props.activityNo) {
     errorMessage.value = '缺少活动编号，无法加载问卷'
@@ -326,6 +484,25 @@ async function onSubmit(): Promise<void> {
       next[issue.key] = issue.message
     }
     errors.value = next
+    toast(`还有 ${issues.length} 道必填题未作答`)
+
+    /*
+     * 逐个模式：用户眼前只有一道题，错误可能在别的题上 —— 先切到第一道错题
+     * 并聚焦，否则「还有 3 道必填」与眼前的题对不上，用户不知道该改哪里。
+     * 摘要仍留在上方，供用户逐条点回去（点击时同样会切步骤）。
+     */
+    if (stepMode.value) {
+      const target = firstIssueStepIndex(steps.value, issues)
+      const key = target >= 0 ? (steps.value[target]?.field.key ?? '') : ''
+      if (key) {
+        currentStep.value = target
+        await nextTick()
+        scrollToSelector(`#q-${key}`)
+        focusQuestion(key)
+        return
+      }
+    }
+
     /*
      * 滚动到**摘要**而不是第一道错题。
      *
@@ -336,7 +513,6 @@ async function onSubmit(): Promise<void> {
      */
     await nextTick()
     scrollToSelector('.runner__summary')
-    toast(`还有 ${issues.length} 道必填题未作答`)
     return
   }
 
@@ -457,14 +633,24 @@ function onHistoryKeydown(event: KeyboardEvent): void {
     -->
     <view class="runner__progress">
       <view class="runner__progress-inner bx-container">
-        <BxProgressBar :percent="progress.percent" />
+        <BxProgressBar :percent="barPercent" />
         <view v-if="!loading && !errorMessage" class="runner__progress-meta">
           <!--
             「共 N 题」与「已答 M」是两个独立条目，用竖细线分隔：
             规范 §3.2 禁止中点连接 meta（`A · B · C`）。
+
+            逐个模式把第一条换成「3 / 11」（当前第几题 / 共几题）：一次一题时
+            用户关心的是位置，不是总数；已答多少仍单独列出，两者口径不混。
           -->
           <view class="runner__progress-count">
-            <text class="runner__progress-count-item">共 {{ progress.total }} 题</text>
+            <template v-if="stepMode">
+              <text class="runner__progress-count-item runner__progress-count-item--step">
+                {{ stepProgressView.current }} / {{ stepProgressView.total }}
+              </text>
+            </template>
+            <template v-else>
+              <text class="runner__progress-count-item">共 {{ progress.total }} 题</text>
+            </template>
             <view class="runner__progress-divider" />
             <text class="runner__progress-count-item">已答 {{ progress.answered }}</text>
           </view>
@@ -518,13 +704,27 @@ function onHistoryKeydown(event: KeyboardEvent): void {
         </view>
 
         <!--
+          逐个模式的只读提示
+          卷首（含只读说明）只在第一步显示，后面的步骤用这一行单独说明「正在查看」，
+          避免每翻一题都重复整块卷首。
+        -->
+        <view v-if="stepMode && readOnly && currentStep !== 0" class="runner__step-tip">
+          <text class="runner__step-tip-text">{{ readOnlyTip }}</text>
+        </view>
+
+        <!--
           一张纸
           整卷是一个容器：白底 + 1px 描边 + 圆角 20 + 极轻阴影，
           题与题之间只有一条细线 —— 层级从「11 个盒子」变成「一份卷」。
         -->
         <view class="runner__paper">
-          <!-- 卷首：标题 + 说明 + 细线 + 元信息 -->
-          <view class="runner__intro">
+          <!--
+            卷首：标题 + 说明 + 细线 + 元信息
+
+            逐个模式只在第一题显示卷首：后续步骤每次重放标题块会把题目挤到屏幕下方，
+            而导航栏已经常驻问卷标题。
+          -->
+          <view v-if="!stepMode || currentStep === 0" class="runner__intro">
             <text class="runner__intro-title">{{ title }}</text>
             <text v-if="intro" class="runner__intro-desc">{{ intro }}</text>
             <view class="runner__intro-rule" />
@@ -535,9 +735,24 @@ function onHistoryKeydown(event: KeyboardEvent): void {
             <text v-if="readOnly" class="runner__intro-readonly">{{ readOnlyTip }}</text>
           </view>
 
+          <!--
+            逐个模式的小节上下文
+            分节符不作为步骤，但它给出的「这是问卷的哪一部分」不能丢，贴在当前题上方。
+          -->
+          <view v-if="stepMode && currentStepItem?.sectionLabel" class="runner__step-section">
+            <text class="runner__step-section-text">{{ currentStepItem.sectionLabel }}</text>
+          </view>
+
+          <!--
+            逐个模式仍渲染全部题目，但只显示当前那一题（v-show 而不是 v-if）：
+            图片题的上传、地址 / 引用选择器的弹层状态都在组件内部，卸载会把这些
+            「正在进行中」的操作连带丢掉（上传回来时组件已不在，emit 无人接收）。
+            隐藏的题目 display:none，不占位、不进 Tab 序列、不进无障碍树。
+          -->
           <view class="runner__list">
             <BxFieldRenderer
               v-for="field in fields"
+              v-show="!stepMode || field.key === currentStepKey"
               :key="field.key"
               :field="field"
               :model-value="answers[field.key]"
@@ -550,11 +765,32 @@ function onHistoryKeydown(event: KeyboardEvent): void {
       </template>
     </view>
 
-    <view v-if="!loading && !errorMessage && !readOnly" class="runner__footer">
+    <view v-if="showFooter" class="runner__footer">
       <text v-if="savedTip" class="runner__footer-tip">{{ savedTip }}</text>
-      <view class="runner__footer-actions">
-        <BxButton :loading="submitting" block @click="onSubmit">
-          {{ activity?.submit_label || '提交问卷' }}
+      <view class="runner__footer-actions" :class="{ 'runner__footer-actions--steps': stepMode }">
+        <template v-if="stepMode">
+          <view class="runner__footer-prev">
+            <BxButton
+              type="secondary"
+              :disabled="currentStep === 0 || submitting"
+              block
+              @click="onPrevStep"
+            >
+              上一题
+            </BxButton>
+          </view>
+          <view class="runner__footer-next">
+            <!-- 最后一题主按钮变「提交」；只读查看时没有提交，末题禁用「下一题」 -->
+            <BxButton v-if="!readOnly && lastStep" :loading="submitting" block @click="onSubmit">
+              {{ submitLabel }}
+            </BxButton>
+            <BxButton v-else block :disabled="lastStep" @click="onNextStep">
+              下一题
+            </BxButton>
+          </view>
+        </template>
+        <BxButton v-else :loading="submitting" block @click="onSubmit">
+          {{ submitLabel }}
         </BxButton>
       </view>
     </view>
@@ -653,6 +889,17 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   background-color: var(--bx-line);
 }
 
+/*
+ * 逐个模式的「3 / 11」
+ *
+ * 比两侧的计数深一档、字重 500：它是当前唯一的位置信息，但不上主色
+ * （主色一屏只留给主行动与进度条，规范 §2.4）。
+ */
+.runner__progress-count-item--step {
+  font-weight: 500;
+  color: var(--bx-text-2);
+}
+
 .runner__progress-left {
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
@@ -666,7 +913,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
 
 .runner__body {
   flex: 1;
-  padding-top: 12px;
+  padding-top: 16px;
   /*
    * 给吸底操作栏留位。
    *
@@ -716,8 +963,45 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-lg);
+  border-radius: var(--bx-radius-card);
   box-shadow: var(--bx-elev-1);
+}
+
+/* ── 逐个模式：只读说明（卷首只在第一题出现，后面用这一行） ───────── */
+.runner__step-tip {
+  margin-bottom: 12px;
+}
+
+.runner__step-tip-text {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-warn);
+}
+
+/* ── 逐个模式：分节上下文 ──────────────────────────────────────────
+ * 分节符不占步骤，但它给出的「这是问卷的哪一部分」不能丢，贴在当前题上方。
+ * 短横线 + 13/600 字重与整卷模式下 BxQuestionItem 的分节样式同源。
+ */
+.runner__step-section {
+  padding: 20px 16px 0;
+}
+
+.runner__step-section::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  margin-bottom: 8px;
+  background-color: var(--bx-line-strong);
+  border-radius: 1px;
+}
+
+.runner__step-section-text {
+  display: block;
+  font-size: var(--bx-font-sub);
+  font-weight: 600;
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text-2);
 }
 
 /* ── 卷首 ───────────────────────────────────────────────────────── */
@@ -795,7 +1079,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   font-size: var(--bx-font-sub);
   font-weight: 600;
   line-height: var(--bx-leading-sub);
-  color: var(--bx-text);
+  color: var(--bx-danger);
 }
 
 .runner__summary-item {
@@ -927,46 +1211,33 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   margin: 0 auto;
 }
 
-/* ── 动效 ─────────────────────────────────────────────────────────
- * 首屏编排（规范 §5.2 第 1 条）：题块淡入 + translateY(8px→0)，
- * 逐块 delay 24ms，480ms ease-out，只播一次。
- *
- * 逐项动画只在 H5 端做：小程序端长列表逐项动画会掉帧（规范 §5.3）。
- */
-/* #ifdef H5 */
-@keyframes bx-survey-question-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.runner__list :deep(.bx-question) {
-  animation-name: bx-survey-question-enter;
-  animation-duration: var(--bx-duration-slower);
-  animation-timing-function: var(--bx-ease-out);
-  animation-fill-mode: both;
-}
-/* #endif */
-
 /*
- * 逐块 delay（24ms 递增）
+ * 逐个模式：上一题 + 下一题 / 提交
  *
- * 规则本身放在条件编译之外：没有 animation-name 时 animation-delay 不生效，
- * 小程序端自然退化为「无动画」。
+ * 「上一题」用 secondary（次级行动）并固定 96px，「下一题 / 提交」占满剩余宽度。
+ * 两个按钮都在 44px 高的一行里，操作栏总高不变，内容区留位也就不用改。
+ * 8px 间距是 V6 的最小相邻目标间距（规范 §8.2）。
  */
-@for $i from 1 through 12 {
-  .runner__list :deep(.bx-question:nth-child(#{$i})) {
-    animation-delay: #{($i - 1) * 24}ms;
-  }
+.runner__footer-actions--steps {
+  gap: 8px;
 }
 
-/* 错误摘要淡入（规范 §5.2 第 5 条） */
+.runner__footer-prev {
+  flex: 0 0 96px;
+  min-width: 0;
+}
+
+.runner__footer-next {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── 动效 ─────────────────────────────────────────────────────────
+ * V6：取消逐题入场编排（规范 §6.1 禁止入场表演）。只保留两处
+ * 「状态出现」的轻反馈：错误摘要淡入、吸底栏首次出现。
+ */
+
+/* 错误摘要淡入 */
 @keyframes bx-survey-summary-in {
   from {
     opacity: 0;

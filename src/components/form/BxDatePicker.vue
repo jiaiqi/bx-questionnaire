@@ -8,8 +8,8 @@
  *
  * 同时限制可选年份：uni 的日期 picker 默认从 1876 年开始，选生日要滚很久。
  *
- * V2（规范 §6.2）：与其它输入类同款 —— `--bx-surface-2` 底 + 1px
- * `--bx-line-strong` 描边 + 12px 圆角 + 44px 高。
+ * V6（设计系统 §5.2）：与其它输入类同款 —— 白底 + 1px `--bx-line` 描边 +
+ * 10px 圆角 + 44px 高；悬停描边强一档，禁用回落到浅面。
  */
 
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
@@ -136,36 +136,52 @@ function emitValue(next: string, part: 'date' | 'time'): void {
   flex: 1;
 }
 
-/* 与 BxTextField 同一套：内嵌底 + 描边 + 44px 高（规范 §6.2） */
+/* 与 BxTextField 同一套输入规范：白底 + 1px 描边 + 10px 圆角 + 44px 高（V6 §5.2） */
 .bx-picker {
   display: flex;
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
   height: var(--bx-control-height-md);
-  padding: 0 14px;
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
+  padding: 0 12px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
+/* 悬停只加强描边，不给浅灰底：与「禁用」的浅面对比开，避免误读 */
+@media (hover: hover) {
+  .bx-picker:hover {
+    border-color: var(--bx-line-strong);
+  }
+}
+
+/* 禁用：内嵌浅面 + 保留描边，边界仍可见 */
 .bx-picker--disabled {
   cursor: not-allowed;
-  color: var(--bx-text-2);
   background-color: var(--bx-surface-2);
-  border-color: transparent;
+  border-color: var(--bx-line);
 }
 
 .bx-picker__value {
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
   color: var(--bx-text);
 }
 
 .bx-picker__placeholder {
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
+  /* 占位符色只做提示，不承载信息（V6 §2.1） */
   color: var(--bx-text-4);
+}
+
+.bx-picker--disabled .bx-picker__value,
+.bx-picker--disabled .bx-picker__placeholder {
+  color: var(--bx-text-3);
 }
 
 /*

@@ -255,39 +255,53 @@ const hasOptions = computed(() => (columns.value[0]?.length ?? 0) > 0)
   width: 100%;
 }
 
-/* 与其它输入类同款：内嵌底 + 描边 + 44px 高（规范 §6.2） */
+/* 与 BxTextField 同一套输入规范：白底 + 1px 描边 + 10px 圆角 + 44px 高（V6 §5.2） */
 .bx-address__control {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
   height: var(--bx-control-height-md);
-  padding: 0 14px;
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
+  padding: 0 12px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
+/* 悬停只加强描边，不给浅灰底：与「禁用」的浅面区分开 */
+@media (hover: hover) {
+  .bx-address__control:hover {
+    border-color: var(--bx-line-strong);
+  }
+}
+
+/* 禁用（含加载中 / 无数据）：内嵌浅面 + 保留描边 */
 .bx-address__control--disabled {
   cursor: not-allowed;
-  color: var(--bx-text-2);
   background-color: var(--bx-surface-2);
-  border-color: transparent;
+  border-color: var(--bx-line);
 }
 
 .bx-address__text {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
   color: var(--bx-text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .bx-address__placeholder {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
+  /* 占位符色只做提示，不承载信息（V6 §2.1） */
   color: var(--bx-text-4);
 }
 

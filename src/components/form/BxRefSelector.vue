@@ -12,8 +12,9 @@
  * 配置优先取 `item_type_attr`（老工程写法），行上的独立列（servicename / refed_col /
  * key_disp_col / srv_app）作为兜底 —— 真实表里这两种来源都存在。
  *
- * V2（规范 §6.2）：选择入口与其它输入类同款（内嵌底 + 描边 + 44px 高）；
- * 底部弹层用 `--bx-elev-3`，展开 200ms ease-out。
+ * V6（设计系统 §5.2 / §5.6）：选择入口与其它输入类同款（白底 + 1px 描边 +
+ * 10px 圆角 + 44px 高）；底部弹层用 --bx-overlay 遮罩 + 白面 + 顶部圆角 20 +
+ * 36×4 拖拽条 + --bx-elev-3，展开 260ms ease-out。
  */
 
 import type { AnswerValue, QuestionField } from '@/domain/questionnaire'
@@ -177,6 +178,9 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 
     <view v-if="visible" class="bx-ref__mask" @click="visible = false">
       <view class="bx-ref__panel" @click.stop>
+        <!-- 拖拽条：纯装饰，告诉用户「这是一张可以收起的底部面板」（V6 §5.6） -->
+        <view class="bx-ref__grab" aria-hidden="true" />
+
         <view class="bx-ref__head">
           <text class="bx-ref__title">{{ props.field.label }}</text>
           <text
@@ -247,21 +251,28 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   width: 100%;
 }
 
-/* 选择入口：与其它输入类同款（规范 §6.2） */
+/* 选择入口：与其它输入类同款（V6 §5.2） */
 .bx-ref__control {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
-  height: var(--bx-control-height-md);
-  padding: 0 14px;
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
+  min-height: var(--bx-control-height-md);
+  padding: 0 12px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
   cursor: pointer;
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
-    box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+/* 悬停只加强描边，不给浅灰底：与「禁用」的浅面区分开 */
+@media (hover: hover) {
+  .bx-ref__control:hover {
+    border-color: var(--bx-line-strong);
+  }
 }
 
 .bx-ref__control:focus-visible {
@@ -269,27 +280,36 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   outline-offset: 2px;
 }
 
+/* 禁用：内嵌浅面 + 保留描边 */
 .bx-ref__control--disabled {
   cursor: not-allowed;
-  color: var(--bx-text-2);
   background-color: var(--bx-surface-2);
-  border-color: transparent;
+  border-color: var(--bx-line);
 }
 
 .bx-ref__text {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
   color: var(--bx-text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .bx-ref__placeholder {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.4;
+  /* 占位符色只做提示，不承载信息（V6 §2.1） */
   color: var(--bx-text-4);
+}
+
+.bx-ref__control--disabled .bx-ref__text,
+.bx-ref__control--disabled .bx-ref__placeholder {
+  color: var(--bx-text-3);
 }
 
 /* 右向箭头用两条边框旋转绘制（文字符号字形随系统字体变化，小程序又不支持 <svg>） */
@@ -303,6 +323,12 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   transform: rotate(45deg);
 }
 
+/*
+ * 底部弹层（V6 §5.6 / §5.3 原型）
+ *
+ * 遮罩 `--bx-overlay`；面板白面、只圆上面两角（20）；顶部一根 36×4 拖拽条，
+ * 告诉用户「这是一张可以收起的面板」，而不是一整页。
+ */
 .bx-ref__mask {
   position: fixed;
   top: 0;
@@ -321,13 +347,23 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   box-sizing: border-box;
   width: 100%;
   max-width: var(--bx-content-width);
-  max-height: 70vh;
+  max-height: 78vh;
   padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
   background-color: var(--bx-surface);
   border-radius: var(--bx-radius-lg) var(--bx-radius-lg) 0 0;
   box-shadow: var(--bx-elev-3);
-  /* 展开：位移 + 淡入，200ms ease-out（规范 §5.1「展开」档） */
-  animation: bx-ref-panel-in var(--bx-duration-base) var(--bx-ease-out) both;
+  /* 展开：位移 + 淡入，260ms ease-out（V6 §6.1「展开收起」档） */
+  animation: bx-ref-panel-in var(--bx-duration-slow) var(--bx-ease-out) both;
+}
+
+/* 拖拽条：36×4 强描边色，纯装饰 */
+.bx-ref__grab {
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 0;
+  background-color: var(--bx-line-strong);
+  border-radius: var(--bx-radius-pill);
 }
 
 @keyframes bx-ref-mask-in {
@@ -343,7 +379,7 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 @keyframes bx-ref-panel-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(16px);
   }
 
   to {
@@ -356,22 +392,47 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid var(--bx-line-2);
+  gap: 12px;
+  padding: 4px 12px 4px 20px;
 }
 
+/* 弹层标题：17/600（V6 §3.2 h2 档） */
 .bx-ref__title {
+  flex: 1;
+  min-width: 0;
   font-size: var(--bx-font-h2);
   font-weight: 600;
   line-height: var(--bx-leading-h2);
   color: var(--bx-text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
+/* 关闭：44×44 触摸目标 + 8px 圆角，文字 13px（不抢标题） */
 .bx-ref__close {
-  padding: 4px;
-  font-size: var(--bx-font-body);
-  color: var(--bx-primary);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  font-size: var(--bx-font-sub);
+  line-height: 1;
+  color: var(--bx-text-2);
   cursor: pointer;
+  border-radius: var(--bx-radius-sm);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-ref__close:hover {
+    color: var(--bx-text);
+    background-color: var(--bx-surface-2);
+  }
 }
 
 .bx-ref__close:focus-visible {
@@ -381,6 +442,7 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 
 .bx-ref__list {
   max-height: 46vh;
+  padding: 4px 12px 12px;
 }
 
 .bx-ref__state {
@@ -390,25 +452,46 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 
 .bx-ref__state-text {
   font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-3);
 }
 
+/* 重试：行内次级操作，撑到 44 高的触摸目标 */
 .bx-ref__retry {
-  display: block;
-  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 12px;
   font-size: var(--bx-font-sub);
   color: var(--bx-primary);
   cursor: pointer;
+  border-radius: var(--bx-radius-sm);
 }
 
+.bx-ref__retry:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
+/* 选项行：48 高、8px 圆角、悬停浅一档面（V6 §5.3 弹层版） */
 .bx-ref__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-sizing: border-box;
   min-height: var(--bx-control-height);
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--bx-line-2);
+  padding: 8px 12px;
   cursor: pointer;
+  border-radius: var(--bx-radius-sm);
+  transition:
+    background-color var(--bx-duration-fast) var(--bx-ease-out),
+    color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-ref__item + .bx-ref__item {
+  margin-top: 4px;
 }
 
 .bx-ref__item:focus-visible {
@@ -416,7 +499,13 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   outline-offset: -2px;
 }
 
-/* 选中：主色浅底（与选项行同一套「落笔」语言） */
+@media (hover: hover) {
+  .bx-ref__item:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+/* 选中：浅靛底（与选项行同一套「落笔」语言，V6 §2.2） */
 .bx-ref__item--active {
   background-color: var(--bx-primary-soft);
 }
@@ -425,8 +514,14 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.5;
   color: var(--bx-text);
+  word-break: break-all;
+}
+
+.bx-ref__item--active .bx-ref__item-label {
+  font-weight: 500;
+  color: var(--bx-primary);
 }
 
 /* 对勾：两条边框旋转绘制；旋转后的视觉中心偏下，上移 3px 才落在行中央 */
@@ -455,16 +550,24 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
   color: var(--bx-text-3);
 }
 
-/* 确定：与 BxButton 的 primary 同款（墨蓝实心 + 白字） */
+/* 确定：与 BxButton primary 同款（主色实心 + 白字，44 高，10 圆角） */
 .bx-ref__confirm {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 96px;
   height: var(--bx-control-height-md);
   padding: 0 24px;
   background-color: var(--bx-primary);
   border-radius: var(--bx-radius);
   cursor: pointer;
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-ref__confirm:hover {
+    background-color: var(--bx-primary-hover);
+  }
 }
 
 .bx-ref__confirm:focus-visible {
@@ -475,6 +578,7 @@ function keyboardActivate(event: KeyboardEvent, action: () => void): void {
 .bx-ref__confirm-text {
   font-size: var(--bx-font-body);
   font-weight: 500;
+  line-height: 1;
   color: #fff;
 }
 </style>

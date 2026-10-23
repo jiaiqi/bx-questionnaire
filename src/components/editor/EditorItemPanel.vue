@@ -10,10 +10,11 @@
  * 而 enums 里的值又与 `mapper.resolveWidget` 逐个对齐过 ——
  * 写进 `item_type_attr` 的值必须能被作答侧认出来，否则表现为「属性选了没反应」。
  *
- * ## 分组
+ * ## V6「清简」分组
  *
- * 一屏十几个字段平铺会让人找不到北。面板按「题目 / 计分 / 题型属性 / 选项 / 说明」
- * 分组，分组标题 12/600，字段之间 16px（规范 §7.6）。
+ * 按原型的右栏顺序：题型（下拉样式的按钮）→ 题目（多行）→ 说明 →
+ * 必答开关 → 计分 → 题型属性 → 选项 → 删除题目。
+ * 分组标题 12/500 元信息色，分组之间一条 1px 细线；字段间距 16。
  */
 
 import type { EditorIssue, EditorItem } from '@/domain/editor'
@@ -23,7 +24,6 @@ import { computed, ref } from 'vue'
 import {
   DATE_TYPE_CHOICES,
   itemTypeSpec,
-  MODIFY_AFTER_SUBMIT_OPTIONS,
   RADIO_TYPE_CHOICES,
   SCORE_STRATEGY_OPTIONS,
   toChoices,
@@ -37,7 +37,6 @@ import EditorTypePicker from './EditorTypePicker.vue'
 
 interface Props {
   item: EditorItem
-  index: number
   issues: EditorIssue[]
 }
 
@@ -47,6 +46,7 @@ const emit = defineEmits<{
   patch: [patch: Partial<EditorItem>]
   attrPatch: [patch: Record<string, unknown>]
   changeType: [type: string]
+  remove: []
   optionAdd: []
   optionRemove: [index: number]
   optionMoveUp: [index: number]
@@ -62,7 +62,11 @@ const typePickerOpen = ref(false)
 const spec = computed(() => itemTypeSpec(props.item.type))
 const hasOptions = computed(() => typeHasOptions(props.item.type))
 const scoreChoices = toChoices(SCORE_STRATEGY_OPTIONS)
-const yesNoChoices = toChoices(MODIFY_AFTER_SUBMIT_OPTIONS)
+
+/** 当前题型是否有「题型属性」可配（不只看 type，避免空分组占位） */
+const hasTypeAttr = computed(() =>
+  ['文本', '时间日期', '图片', '选项', '引用', '地址'].includes(props.item.type),
+)
 
 /** 「选项」题型靠属性决定单选还是多选；「多选」题型恒为多选 */
 const multiChoice = computed(() => {
@@ -135,59 +139,75 @@ function onTypeSelected(type: string): void {
   typePickerOpen.value = false
   emit('changeType', type)
 }
+
+/** 必答开关：点整行开关都切换（键盘 Enter / Space 同效） */
+function toggleRequired(): void {
+  emit('patch', { required: !props.item.required })
+}
 </script>
 
 <template>
   <view class="bx-eip">
-    <view class="bx-eip__head">
-      <text class="bx-eip__type">{{ props.item.type }}</text>
-      <text v-if="props.item.required" class="bx-eip__req">必填</text>
-    </view>
-
     <!-- ── 题目 ── -->
     <view class="bx-eip__group">
-      <text class="bx-eip__group-title">题目</text>
-
-      <EditorFormField label="题目标题" required :error="errorFor('title')">
-        <input
-          class="bx-eip__input"
-          type="text"
-          :value="props.item.title"
-          aria-label="题目标题"
-          placeholder="请输入题目标题"
-          @input="onTitleInput"
-        >
-      </EditorFormField>
-
-      <EditorFormField
-        label="题型"
-        required
-        :hint="spec ? spec.hint : ''"
-        :error="errorFor('type')"
-      >
+      <EditorFormField label="题型" required :hint="spec ? spec.hint : ''" :error="errorFor('type')">
         <view
-          class="bx-eip__type-button"
+          class="bx-eip__select"
           role="button"
           tabindex="0"
           aria-label="选择题型"
+          :aria-expanded="typePickerOpen ? 'true' : 'false'"
           @click="typePickerOpen = !typePickerOpen"
           @keydown.enter.prevent="typePickerOpen = !typePickerOpen"
         >
-          <text class="bx-eip__type-button-text">{{ spec?.label ?? props.item.type }}</text>
-          <view class="bx-eip__type-button-arrow" aria-hidden="true" />
+          <text class="bx-eip__select-text">{{ spec?.label ?? props.item.type }}</text>
+          <view class="bx-eip__chevron" aria-hidden="true" />
         </view>
         <view v-if="typePickerOpen" class="bx-eip__picker">
           <EditorTypePicker @select="onTypeSelected" @close="typePickerOpen = false" />
         </view>
       </EditorFormField>
 
-      <EditorFormField label="是否必填">
-        <EditorSegmented
-          :model-value="props.item.required ? '是' : '否'"
-          :options="yesNoChoices"
-          @update:model-value="value => emit('patch', { required: value === '是' })"
+      <EditorFormField label="题目" required :error="errorFor('title')">
+        <textarea
+          class="bx-eip__textarea bx-eip__textarea--title"
+          :value="props.item.title"
+          aria-label="题目标题"
+          placeholder="请输入题目标题"
+          @input="onTitleInput"
         />
       </EditorFormField>
+
+      <EditorFormField label="说明" hint="选填；提交后在结果页作为答案解析展示">
+        <textarea
+          class="bx-eip__textarea"
+          :value="props.item.answerAnalysis"
+          aria-label="题目说明"
+          placeholder="补充说明（选填）"
+          @input="onAnalysisInput"
+        />
+      </EditorFormField>
+    </view>
+
+    <!-- ── 必答：开关行 ── -->
+    <view class="bx-eip__switchrow">
+      <view class="bx-eip__switchrow-text">
+        <text class="bx-eip__switchrow-label">必答</text>
+        <text class="bx-eip__switchrow-hint">不答无法提交</text>
+      </view>
+      <view
+        class="bx-eip__switch"
+        :class="{ 'bx-eip__switch--on': props.item.required }"
+        role="switch"
+        tabindex="0"
+        :aria-checked="props.item.required ? 'true' : 'false'"
+        aria-label="是否必答"
+        @click="toggleRequired"
+        @keydown.enter.prevent="toggleRequired"
+        @keydown.space.prevent="toggleRequired"
+      >
+        <view class="bx-eip__switch-knob" aria-hidden="true" />
+      </view>
     </view>
 
     <!-- ── 计分 ── -->
@@ -232,7 +252,7 @@ function onTypeSelected(type: string): void {
     </view>
 
     <!-- ── 题型属性 ── -->
-    <view class="bx-eip__group">
+    <view v-if="hasTypeAttr" class="bx-eip__group">
       <text class="bx-eip__group-title">题型属性</text>
 
       <EditorFormField v-if="props.item.type === '文本'" label="输入形态">
@@ -318,10 +338,6 @@ function onTypeSelected(type: string): void {
     <view v-if="hasOptions" class="bx-eip__group">
       <text class="bx-eip__group-title">选项</text>
 
-      <!--
-        选项编辑器自带标题与计数（4 / 26），外面不再套一层「选项列表」标签：
-        同一个东西标两遍，读者会以为它们是两件事。
-      -->
       <EditorOptionEditor
         :options="props.item.options"
         :multi="multiChoice"
@@ -337,19 +353,19 @@ function onTypeSelected(type: string): void {
       <text v-if="optionIssue" class="bx-eip__option-error">{{ optionIssue.message }}</text>
     </view>
 
-    <!-- ── 说明 ── -->
-    <view class="bx-eip__group">
-      <text class="bx-eip__group-title">说明</text>
-
-      <EditorFormField label="答案分析" hint="选填；提交后在结果页展示">
-        <textarea
-          class="bx-eip__textarea"
-          :value="props.item.answerAnalysis"
-          aria-label="答案分析"
-          placeholder="选填"
-          @input="onAnalysisInput"
-        />
-      </EditorFormField>
+    <!-- ── 删除题目 ── -->
+    <view class="bx-eip__danger">
+      <view
+        class="bx-eip__danger-btn"
+        role="button"
+        tabindex="0"
+        aria-label="删除题目"
+        @click="emit('remove')"
+        @keydown.enter.prevent="emit('remove')"
+      >
+        <view class="bx-eip__trash" aria-hidden="true" />
+        <text class="bx-eip__danger-text">删除题目</text>
+      </view>
     </view>
   </view>
 </template>
@@ -358,83 +374,58 @@ function onTypeSelected(type: string): void {
 .bx-eip {
   display: flex;
   flex-direction: column;
-  padding: 16px;
-}
-
-.bx-eip__head {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.bx-eip__type {
-  padding: 2px 8px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-text-2);
-  background-color: var(--bx-surface-2);
-  border-radius: var(--bx-radius-xs);
-}
-
-.bx-eip__req {
-  padding: 2px 8px;
-  margin-left: 6px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-danger);
-  background-color: var(--bx-danger-soft);
-  border-radius: var(--bx-radius-xs);
-}
-
-/* 选项区报错（选项行高固定，放不下逐行红字，统一在列表下方说明） */
-.bx-eip__option-error {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--bx-danger);
+  padding: 16px 20px 32px;
 }
 
 /* ── 分组 ── */
 
 .bx-eip__group {
-  padding-bottom: 8px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--bx-line-2);
+  display: flex;
+  flex-direction: column;
 }
 
-.bx-eip__group:last-child {
-  padding-bottom: 0;
+.bx-eip__group + .bx-eip__group {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bx-line-2);
+}
+
+/* 分组最后一个字段不再留 16px 下边距：分组之间的间距由上面那条规则统一给出 */
+.bx-eip__group :deep(.bx-efield:last-child) {
   margin-bottom: 0;
-  border-bottom: none;
 }
 
-/* 分组标题：12/600（规范 §7.6） */
+/* 分组标题：12 / 500 元信息色，加一点字距把「分组」和「字段」区分开 */
 .bx-eip__group-title {
   display: block;
   margin-bottom: 12px;
+  color: var(--bx-text-3);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 18px;
-  color: var(--bx-text-2);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
 }
 
 /* ── 控件 ── */
 
+/* 输入类：白底 + 细描边，聚焦时描边变主色并加一圈柔光环 */
 .bx-eip__input {
   box-sizing: border-box;
   width: 100%;
-  height: 44px;
-  padding: 0 12px;
-  font-size: 15px;
+  height: 34px;
+  padding: 0 10px;
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  font-size: 13px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-eip__input::placeholder {
+  color: var(--bx-text-4);
 }
 
 .bx-eip__input:focus-within {
@@ -445,17 +436,22 @@ function onTypeSelected(type: string): void {
 .bx-eip__textarea {
   box-sizing: border-box;
   width: 100%;
-  height: 88px;
-  padding: 10px 12px;
-  font-size: 15px;
-  line-height: 24px;
+  height: 72px;
+  padding: 8px 10px;
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  font-size: 13px;
+  line-height: 20px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
+  resize: vertical;
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-eip__textarea::placeholder {
+  color: var(--bx-text-4);
 }
 
 .bx-eip__textarea:focus-within {
@@ -463,36 +459,199 @@ function onTypeSelected(type: string): void {
   box-shadow: var(--bx-focus-glow);
 }
 
-.bx-eip__type-button {
+/* 题干是多行字段：给两行的高度，长题干不用挤在一个单行输入里 */
+.bx-eip__textarea--title {
+  height: 72px;
+}
+
+/* 题型：长得像原生 select 的按钮（点击展开题型网格） */
+.bx-eip__select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
-  padding: 0 12px;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 10px;
   cursor: pointer;
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
+  transition:
+    border-color var(--bx-duration-fast) var(--bx-ease-out),
+    background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-.bx-eip__type-button-text {
-  font-size: 15px;
+@media (hover: hover) {
+  .bx-eip__select:hover {
+    border-color: var(--bx-line-strong);
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.bx-eip__select:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 1px;
+}
+
+.bx-eip__select-text {
   color: var(--bx-text);
+  font-size: 13px;
 }
 
-/* 下拉箭头：两条边框旋转 45°（不用 ▲ ▼ 文字符号，字形随字体变化） */
-.bx-eip__type-button-arrow {
-  width: 8px;
-  height: 8px;
+/* 下拉箭头：两条边框旋转 45°（不用 ▲ ▼ 文字符号） */
+.bx-eip__chevron {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
   border-top: 1.5px solid var(--bx-text-3);
   border-right: 1.5px solid var(--bx-text-3);
-  transform: rotate(45deg);
+  transform: rotate(135deg);
 }
 
 .bx-eip__picker {
   margin-top: 8px;
+  padding: 12px;
+  background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
-  overflow: hidden;
+  border-radius: var(--bx-radius-sm);
+  box-shadow: var(--bx-elev-1);
+}
+
+/* ── 必答开关行 ── */
+
+.bx-eip__switchrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--bx-line-2);
+}
+
+.bx-eip__switchrow-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.bx-eip__switchrow-label {
+  color: var(--bx-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.bx-eip__switchrow-hint {
+  color: var(--bx-text-3);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* 开关：轨道 36×21，滑块 17，开 = 主色（与设计系统 §5.5 同尺寸） */
+.bx-eip__switch {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 36px;
+  height: 21px;
+  border-radius: var(--bx-radius-pill);
+  background-color: var(--bx-line-strong);
+  cursor: pointer;
+  transition: background-color var(--bx-duration-base) var(--bx-ease-out);
+}
+
+.bx-eip__switch--on {
+  background-color: var(--bx-primary);
+}
+
+.bx-eip__switch:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
+.bx-eip__switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background-color: var(--bx-surface);
+  box-shadow: var(--bx-elev-1);
+  transition: transform var(--bx-duration-base) var(--bx-ease-out);
+}
+
+.bx-eip__switch--on .bx-eip__switch-knob {
+  transform: translateX(15px);
+}
+
+/* ── 选项区报错 ── */
+
+.bx-eip__option-error {
+  display: block;
+  margin-top: 6px;
+  color: var(--bx-danger);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* ── 删除题目 ── */
+
+.bx-eip__danger {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bx-line-2);
+}
+
+.bx-eip__danger-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: var(--bx-radius-xs);
+  cursor: pointer;
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-eip__danger-btn:hover {
+    background-color: var(--bx-danger-soft);
+  }
+}
+
+.bx-eip__danger-btn:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 1px;
+}
+
+/* 垃圾桶：桶身（两条竖线 + 一条底线）+ 桶盖 */
+.bx-eip__trash {
+  position: relative;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--bx-danger);
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+}
+
+.bx-eip__trash::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -2px;
+  width: 12px;
+  height: 1.5px;
+  background-color: var(--bx-danger);
+  border-radius: 1px;
+}
+
+.bx-eip__danger-text {
+  color: var(--bx-danger);
+  font-size: 12px;
+  line-height: 18px;
 }
 </style>

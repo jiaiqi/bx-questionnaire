@@ -92,42 +92,36 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
 </template>
 
 <style lang="scss" scoped>
+/*
+ * 选项组（V6「清简」§5.3）
+ *
+ * 作答端的核心控件，三件事必须一眼看懂：哪些能点、哪些选了、哪些不能点。
+ * 所以每一行都是一整块可点的白面（48 高），行与行 8px；状态用「底色 + 描边 +
+ * 标记」三处同时表达，不靠整行文字上色。
+ */
 .bx-options {
   display: flex;
   flex-direction: column;
 }
 
-/*
- * 整行可点的选项（规范 §6.2）
- *
- * 每条 48px 高、整行可点；行与行之间 6px。
- * 选中态由「底色 + 描边 + 标记」三处同时表达（不只靠颜色，色觉障碍用户也能分辨），
- * **不给整行文字上色，也不加左侧色条** —— 左侧色条是错误态的专属语言。
- */
 .bx-option {
   display: flex;
   align-items: center;
   box-sizing: border-box;
   min-height: var(--bx-control-height);
-  padding: 12px 14px;
+  padding: 8px 16px;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
-  /* 可点击元素要有手型光标 */
   cursor: pointer;
   transition:
     background-color var(--bx-duration-fast) var(--bx-ease-out),
     border-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-/* 相邻兄弟间距 6px（规范 §6.2） */
+/* 行距 8px（V6 §4.1「选项之间」）；用相邻兄弟而不是 gap，小程序端更稳 */
 .bx-option + .bx-option {
-  margin-top: 6px;
-}
-
-.bx-option--disabled {
-  cursor: not-allowed;
-  opacity: var(--bx-disabled-opacity);
+  margin-top: 8px;
 }
 
 /*
@@ -139,13 +133,13 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
   outline-offset: 2px;
 }
 
-/* 悬停：底色转内嵌档，描边转主色浅调（规范 §5.2 第 4 条） */
+/* 悬停：浅一档的面 + 强一档的描边（不是主色，主色只留给选中） */
 .bx-option--hover {
   background-color: var(--bx-surface-2);
-  border-color: var(--bx-primary-line);
+  border-color: var(--bx-line-strong);
 }
 
-/* 选中：主色浅底 + 主色描边（规范 §6.2） */
+/* 选中：浅靛底 + 主色描边（V6 §5.3），与实心标记共同表达状态 */
 .bx-option--on {
   background-color: var(--bx-primary-soft);
   border-color: var(--bx-primary);
@@ -157,19 +151,23 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
   border-color: var(--bx-primary);
 }
 
+/* 禁用：45% 不透明度，且点击已在脚本里短路（V6 §5.1） */
+.bx-option--disabled {
+  cursor: not-allowed;
+  opacity: var(--bx-disabled-opacity);
+}
+
 /*
  * 悬停反馈（只给指针设备）
  *
- * 规范 §5.3：hover 反馈只给指针设备。uni-app 的 `hover-class` 在 H5 上是
- * **按下**态（实测 uni-h5 的 useHover 只绑 onMousedown / onTouchstart），
- * 桌面端把鼠标移上去并不会加类 —— 所以悬停反馈要自己写。
- *
- * `@media (hover: hover)`：触屏设备不命中，避免「手指离开后还停在悬停色」。
+ * uni-app 的 `hover-class` 在 H5 上是**按下**态（实测 uni-h5 的 useHover 只绑
+ * onMousedown / onTouchstart），桌面端把鼠标移上去并不会加类 —— 所以悬停反馈要
+ * 自己写。`@media (hover: hover)`：触屏设备不命中，避免「手指离开后还停在悬停色」。
  */
 @media (hover: hover) {
   .bx-option:hover {
     background-color: var(--bx-surface-2);
-    border-color: var(--bx-primary-line);
+    border-color: var(--bx-line-strong);
   }
 
   .bx-option--on:hover {
@@ -178,7 +176,7 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
   }
 }
 
-/* 18px 标记：单选圆环 / 多选圆角方框 */
+/* 18px 标记：单选圆环 / 多选圆角方框，1.5px 描边 */
 .bx-option__mark {
   position: relative;
   display: flex;
@@ -201,13 +199,13 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
 }
 
 .bx-option__mark--box {
-  border-radius: var(--bx-radius-xs);
+  border-radius: var(--bx-radius-mark);
 }
 
 /*
  * 选中：标记实心
  *
- * 单选与多选的「实心」不是一回事（规范 §6.2）：
+ * 单选与多选的「实心」不是一回事（V6 §5.3）：
  * - 单选 = 圆环 + **环内的实心点**：环仍然是环，只是描边转主色、中心多一个点
  * - 多选 = 圆角方框整体填实 + 白色对勾
  */
@@ -243,24 +241,25 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
   left: 3px;
   width: 5px;
   height: 9px;
+  /* 白勾：主色底上的反白（小程序不支持 <svg>，也不引第三方图标字体） */
   border-right: 2px solid #fff;
   border-bottom: 2px solid #fff;
   transform: rotate(45deg);
 }
 
 /*
- * 选中：标记 `scale(.7→1)`，200ms spring（规范 §5.2 第 2 条）
+ * 选中：标记 scale(.8→1)，120ms ease-out（V6 §6.1「选中标记」档）
  *
  * 标记元素在选中时才挂载，动画因此每次选中都播一次；取消时元素直接移除，
- * 行的底色与描边用 120ms 过渡回退（反向、无位移，规范 §5.2 第 3 条）。
+ * 行的底色与描边用 120ms 过渡回退（反向、无位移）。
  */
 .bx-option__inner {
-  animation: bx-option-mark-in var(--bx-duration-base) var(--bx-ease-spring) both;
+  animation: bx-option-mark-in var(--bx-duration-fast) var(--bx-ease-out) both;
 }
 
 @keyframes bx-option-mark-in {
   from {
-    transform: scale(0.7);
+    transform: scale(0.8);
   }
 
   to {
@@ -268,20 +267,21 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
   }
 }
 
+/* 选项文字：15 / 1.5，正文色；不随 hover 变色 */
 .bx-option__label {
   flex: 1;
   min-width: 0;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
-  color: var(--bx-text-2);
+  line-height: 1.5;
+  color: var(--bx-text);
   transition: color var(--bx-duration-fast) var(--bx-ease-out);
   word-break: break-all;
 }
 
-/* 选中只提字重与深度，不用彩色文字：长选项整行变蓝会显得吵 */
+/* 选中：文字转强调色 + 500 字重，与浅靛底同属「落笔」语言（V6 §2.2） */
 .bx-option--on .bx-option__label {
   font-weight: 500;
-  color: var(--bx-text);
+  color: var(--bx-primary);
 }
 
 .bx-options__empty {
@@ -290,6 +290,7 @@ function onKeydown(event: KeyboardEvent, optionNo: string): void {
 
 .bx-options__empty-text {
   font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
   color: var(--bx-text-3);
 }
 </style>

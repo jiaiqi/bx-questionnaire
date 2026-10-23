@@ -7,9 +7,10 @@
  *
  * 入参：activity_no
  *
- * 视觉（docs/UI-UX-V2-设计系统.md §6.2 输入类）：
- * 输入框 = surface-2 底 + 1px line-strong 描边 + 12px 圆角 + 44px 高；
- * 聚焦 = 描边变主色 + 3px 主色光晕（用 box-shadow，H5 与小程序表现一致）。
+ * 视觉（docs/UI-UX-V6-设计系统.md §5/§6）：
+ * 小标签 → 页面标题 → 说明 → 字段分组卡（白底 + 1px 描边 + 圆角 14）→
+ * 隐私说明卡（surface-2 浅灰底 + 1px 描边 + 圆角 12）→ 通栏主按钮。
+ * 输入框高 44、圆角 10，聚焦为描边主色 + 3px 柔光环。
  */
 
 import { onLoad } from '@dcloudio/uni-app'
@@ -49,7 +50,7 @@ useAriaLabel(userNameRef, () => '姓名')
 useAriaLabel(userPhoneRef, () => '联系电话')
 
 const title = computed(() => activity.value?.title || '填写信息')
-const intro = computed(() => activity.value?.start_remark || '')
+const intro = computed(() => String(activity.value?.start_remark ?? '').trim())
 
 onLoad((query) => {
   activityNo.value = readQuery(query, 'activity_no')
@@ -99,16 +100,20 @@ function onNext(): void {
     <BxNavBar :title="title" :fallback-url="coverUrl(activityNo)" />
 
     <view class="si-page__body bx-container">
+      <!-- 卷首：小标签 → 标题 → 说明 -->
       <view class="si-head">
+        <text class="si-head__kicker">最后一步</text>
         <text class="si-head__title">{{ title }}</text>
         <text v-if="intro" class="si-head__desc">{{ intro }}</text>
+        <text class="si-head__desc">下面三项只用于结果关联与必要回访，不会出现在公开报表里。</text>
       </view>
 
+      <!-- 字段分组卡：白底 + 1px 描边 + 圆角 14，组内用细线分隔 -->
       <view class="si-form">
         <view class="si-field" :class="{ 'si-field--focus': focused === 'company' }">
           <view class="si-field__head">
             <text class="si-field__label">所属单位</text>
-            <text class="si-field__required">*</text>
+            <text class="si-field__required">必填</text>
           </view>
           <input
             ref="companyRef"
@@ -143,13 +148,14 @@ function onNext(): void {
         <view class="si-field" :class="{ 'si-field--focus': focused === 'phone' }">
           <view class="si-field__head">
             <text class="si-field__label">联系电话</text>
+            <text class="si-field__optional">选填</text>
           </view>
           <input
             ref="userPhoneRef"
             v-model="userPhone"
             aria-label="联系电话"
             class="si-field__input"
-            placeholder="请输入手机号码"
+            placeholder="11 位手机号，用于必要时回访"
             placeholder-class="si-field__placeholder"
             :maxlength="11"
             @focus="onFocus('phone')"
@@ -158,8 +164,23 @@ function onNext(): void {
         </view>
       </view>
 
+      <!-- 隐私说明卡：浅灰底 + 1px 描边 + 圆角 12 -->
+      <view class="si-privacy">
+        <view class="si-privacy__icon" aria-hidden="true">
+          <view class="si-privacy__shackle" />
+          <view class="si-privacy__body" />
+        </view>
+        <view class="si-privacy__main">
+          <text class="si-privacy__title">信息如何使用</text>
+          <text class="si-privacy__text">
+            姓名与单位用于核对同一岗位的作答分布；手机号仅在确有必要回访时使用，
+            不用于营销，也不进入绩效评估。
+          </text>
+        </view>
+      </view>
+
       <view class="si-actions">
-        <BxButton block @click="onNext">
+        <BxButton size="large" block @click="onNext">
           下一步，开始作答
         </BxButton>
         <text class="si-actions__tip">填写的信息会用于问卷中对应题目的预填</text>
@@ -175,37 +196,45 @@ function onNext(): void {
 }
 
 .si-page__body {
-  padding-top: 24px;
+  padding-top: 16px;
   padding-bottom: 32px;
 }
 
 /* ── 卷首 ───────────────────────────────────────────────────────── */
+.si-head__kicker {
+  display: block;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  letter-spacing: 0.08em;
+  color: var(--bx-text-3);
+}
+
 .si-head__title {
   display: block;
+  margin-top: 8px;
   font-size: var(--bx-font-title);
   font-weight: 600;
   line-height: var(--bx-leading-title);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   color: var(--bx-text);
 }
 
 .si-head__desc {
   display: block;
   margin-top: 8px;
-  font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  font-size: var(--bx-font-sub);
+  line-height: 1.75;
   color: var(--bx-text-2);
 }
 
-/* ── 表单 ─────────────────────────────────────────────────────────
- * 白底 + 1px 描边 + 圆角 16：字段之间用细线分隔，不做三张卡。
- */
+/* ── 字段分组卡 ─────────────────────────────────────────────────── */
 .si-form {
-  margin-top: 20px;
+  margin-top: 16px;
   overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .si-field {
@@ -219,23 +248,33 @@ function onNext(): void {
 .si-field__head {
   display: flex;
   align-items: center;
+  gap: 6px;
 }
 
 /* 标签用 sub 档：它是辅助信息，不该和用户填的内容抢注意力 */
 .si-field__label {
   font-size: var(--bx-font-sub);
+  font-weight: 500;
   line-height: var(--bx-leading-sub);
   color: var(--bx-text-2);
 }
 
 .si-field__required {
-  margin-left: 3px;
-  font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
+  padding: 1px 6px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
   color: var(--bx-danger);
+  background-color: var(--bx-danger-soft);
+  border-radius: var(--bx-radius-xs);
 }
 
-/* 输入框：surface-2 底 + 1px line-strong 描边 + 12px 圆角 + 44px 高 */
+.si-field__optional {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+}
+
+/* 输入框：白底 + 1px line 描边 + 圆角 10 + 44px 高 */
 .si-field__input {
   box-sizing: border-box;
   width: 100%;
@@ -244,8 +283,8 @@ function onNext(): void {
   padding: 0 12px;
   font-size: var(--bx-font-body);
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
@@ -260,7 +299,7 @@ function onNext(): void {
  * 聚焦态：描边变主色 + 3px 主色光晕
  *
  * 用 box-shadow 而不是 outline —— outline 在小程序端的表现与 H5 不一致，
- * 而 box-shadow 两端一致（规范 §6.2）。
+ * 而 box-shadow 两端一致（规范 §5.2）。
  */
 .si-field--focus .si-field__input {
   border-color: var(--bx-primary);
@@ -285,15 +324,80 @@ function onNext(): void {
   outline-offset: 1px;
 }
 
+/* ── 隐私说明卡 ─────────────────────────────────────────────────── */
+.si-privacy {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-md);
+}
+
+/* 锁：锁梁 + 锁身，两块纯 CSS 图形，不用 svg（小程序不支持） */
+.si-privacy__icon {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--bx-text-3);
+}
+
+.si-privacy__shackle {
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 10px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+}
+
+.si-privacy__body {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 16px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+
+.si-privacy__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.si-privacy__title {
+  display: block;
+  font-size: var(--bx-font-sub);
+  font-weight: 500;
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text);
+}
+
+.si-privacy__text {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--bx-font-caption);
+  line-height: 1.7;
+  color: var(--bx-text-2);
+}
+
+/* ── 动作 ───────────────────────────────────────────────────────── */
 .si-actions {
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .si-actions__tip {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
+  text-align: center;
 }
 </style>

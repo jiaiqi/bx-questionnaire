@@ -21,7 +21,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   lines: 3,
   height: 16,
-  radius: 6,
+  radius: 8,
 })
 </script>
 
@@ -55,8 +55,8 @@ const props = withDefaults(defineProps<Props>(), {
 .bx-skeleton__line {
   position: relative;
   overflow: hidden;
-  background-color: var(--bx-surface-2);
-  border-radius: var(--bx-radius-xs);
+  background-color: var(--bx-line-2);
+  border-radius: var(--bx-radius-sm);
 }
 
 /* 扫光层：只在 transform 上动，渐变本身不重绘 */

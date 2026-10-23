@@ -11,6 +11,8 @@ export default uniHelper({
     'src/components.d.ts',
     // 开发辅助脚本（Node 直跑，输出到终端，不参与应用构建）
     'scripts/**',
+    // 设计原型与规范文档产物：独立的 HTML/JS 资产，不参与应用构建与发包
+    'design/**',
     'dist/**',
   ],
 })

@@ -7,8 +7,9 @@
  *
  * 入参：无（依赖登录态中的 user_no）
  *
- * 视觉（docs/UI-UX-V2-设计系统.md §7.4）：
- * 行式列表 —— 左侧时间 + 标题，右侧状态 chip + 分数；空态用 BxEmpty + 主操作。
+ * 视觉（docs/UI-UX-V6-设计系统.md §5/§6）：
+ * 个人信息一行 → 小节标题（已完成 / 份数）→ 列表行（状态点 + 标题 + 分数 + 时间）
+ * → 空态用 BxEmpty，未登录给登录入口。
  */
 
 import type { DaqRecordReplyRow } from '@/api/daq/types'
@@ -42,6 +43,16 @@ const errorMessage = ref('')
 const userNo = computed(() => session.userInfo?.user_no ?? '')
 /** 未登录与「加载失败」必须分开：前者点「重新加载」永远不会成功 */
 const notLoggedIn = computed(() => !userNo.value)
+
+/** 个人信息：有昵称用昵称，至少不显示一串内部编号当标题 */
+const profileName = computed(() =>
+  session.userInfo?.nick_name || session.userInfo?.user_name || '当前账号',
+)
+
+/** 头像只放一个字：中文取首字，英文取首字母 */
+const avatarText = computed(() => profileName.value.slice(0, 1).toUpperCase())
+
+const profileMeta = computed(() => (userNo.value ? `账号 ${userNo.value}` : '未登录'))
 
 async function load(): Promise<void> {
   loading.value = true
@@ -109,7 +120,7 @@ function openRecord(item: AssessmentItem): void {
 }
 
 /**
- * 空态的主操作：回到问卷列表去挑一份（规范 §7.4）
+ * 空态的主操作：回到问卷列表去挑一份
  *
  * 列表页是应用首页（vite.config.ts 的 UniPages.homePage），用 reLaunch 而不是
  * navigateTo：用户从空态跳走后再回来，看到的仍该是这一页。
@@ -121,11 +132,15 @@ function goAnswer(): void {
 /**
  * 键盘激活
  *
- * 「查看结果」「查看作答」是可点击的 <text>，天然不可聚焦 —— 键盘用户打不开。
- * 与 BxButton / BxOptionList / 记录卡片同一类问题，扫描时一并修掉。
+ * 记录行与「查看结果 / 查看作答」是可点击的 <view>，天然不可聚焦 —— 键盘用户打不开。
+ * 与 BxButton / BxOptionList / RecordList 同一类问题。
  */
+function isActivateKey(event: KeyboardEvent): boolean {
+  return event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar'
+}
+
 function onActionKeydown(event: KeyboardEvent, kind: 'result' | 'record', item: AssessmentItem): void {
-  if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+  if (!isActivateKey(event)) {
     return
   }
   event.preventDefault()
@@ -145,6 +160,17 @@ void load()
     <BxNavBar title="我的测评" />
 
     <view class="cp-page__body bx-container">
+      <!-- 个人信息：一行，头像 + 名字 + 账号 -->
+      <view class="cp-me">
+        <view class="cp-me__avatar" aria-hidden="true">
+          {{ avatarText }}
+        </view>
+        <view class="cp-me__main">
+          <text class="cp-me__name">{{ profileName }}</text>
+          <text class="cp-me__meta">{{ profileMeta }}</text>
+        </view>
+      </view>
+
       <!-- 加载：三条骨架保持布局稳定，比一行「正在加载测评记录…」更符合预期 -->
       <view v-if="loading" class="cp-skeleton" aria-busy="true">
         <view v-for="n in 3" :key="n" class="cp-skeleton__row" />
@@ -177,41 +203,68 @@ void load()
         </view>
       </view>
 
-      <!-- 行式列表：一条细线分隔，不做卡片墙 -->
-      <view v-else class="cp-list">
-        <view v-for="item in items" :key="item.activityNo" class="cp-row">
-          <view class="cp-row__main">
-            <text class="cp-row__title">{{ item.title }}</text>
-            <text v-if="item.finishedAt" class="cp-row__meta">完成于 {{ item.finishedAt }}</text>
-          </view>
+      <template v-else>
+        <!-- 小节标题：已完成 + 份数 -->
+        <view class="cp-sec">
+          <text class="cp-sec__label">已完成</text>
+          <text class="cp-sec__count">{{ items.length }} 份</text>
+        </view>
 
-          <view class="cp-row__side">
-            <text class="cp-row__state">已完成</text>
-            <text v-if="item.score !== null" class="cp-row__score">{{ item.score }} 分</text>
-          </view>
+        <view class="cp-list">
+          <!--
+            整行可点（指针设备快速打开结果），但可聚焦入口是两个文字动作：
+            键盘用户通过它们分别打开结果或查看作答，避免按钮里再套按钮。
+          -->
+          <view
+            v-for="item in items"
+            :key="item.activityNo"
+            class="cp-row"
+            @click="openResult(item)"
+          >
+            <view class="cp-row__meta">
+              <view class="cp-row__dot" aria-hidden="true" />
+              <text class="cp-row__state">已提交</text>
+              <text v-if="item.finishedAt" class="cp-row__time">{{ item.finishedAt }}</text>
+            </view>
 
-          <view class="cp-row__actions">
-            <text
-              class="cp-row__action"
-              role="button"
-              tabindex="0"
-              @click="openResult(item)"
-              @keydown="onActionKeydown($event, 'result', item)"
-            >
-              查看结果
-            </text>
-            <text
-              class="cp-row__action cp-row__action--ghost"
-              role="button"
-              tabindex="0"
-              @click="openRecord(item)"
-              @keydown="onActionKeydown($event, 'record', item)"
-            >
-              查看作答
-            </text>
+            <view class="cp-row__main">
+              <text class="cp-row__title">{{ item.title }}</text>
+              <view v-if="item.score !== null" class="cp-row__score">
+                <text class="cp-row__score-num">{{ item.score }}</text>
+                <text class="cp-row__score-unit">分</text>
+              </view>
+            </view>
+
+            <view class="cp-row__foot">
+              <text v-if="item.batchNo" class="cp-row__batch">批次 {{ item.batchNo }}</text>
+              <view class="cp-row__actions">
+                <view
+                  class="cp-row__action"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`查看 ${item.title} 的结果`"
+                  @click.stop="openResult(item)"
+                  @keydown.stop="onActionKeydown($event, 'result', item)"
+                >
+                  查看结果
+                </view>
+                <view
+                  class="cp-row__action cp-row__action--ghost"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`查看 ${item.title} 的作答`"
+                  @click.stop="openRecord(item)"
+                  @keydown.stop="onActionKeydown($event, 'record', item)"
+                >
+                  查看作答
+                </view>
+              </view>
+            </view>
           </view>
         </view>
-      </view>
+
+        <text class="cp-page__foot">测评结果仅本人可见</text>
+      </template>
     </view>
   </view>
 </template>
@@ -227,7 +280,77 @@ void load()
   padding-bottom: 32px;
 }
 
-/* 失败 / 未登录态：BxEmpty 自带内边距，这里只留按钮上方的空间 */
+/* ── 个人信息 ────────────────────────────────────────────────────── */
+.cp-me {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 16px;
+}
+
+.cp-me__avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--bx-primary-soft);
+  color: var(--bx-primary);
+  font-size: var(--bx-font-h2);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.cp-me__main {
+  min-width: 0;
+}
+
+.cp-me__name {
+  display: block;
+  overflow: hidden;
+  font-size: var(--bx-font-h2);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--bx-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp-me__meta {
+  display: block;
+  margin-top: 1px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 小节标题 ────────────────────────────────────────────────────── */
+.cp-sec {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0 8px;
+  border-top: 1px solid var(--bx-line);
+}
+
+.cp-sec__label {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  letter-spacing: 0.08em;
+  color: var(--bx-text-3);
+}
+
+.cp-sec__count {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 失败 / 空态 ─────────────────────────────────────────────────── */
 .cp-page__state {
   padding: 0 0 24px;
 }
@@ -247,12 +370,12 @@ void load()
 }
 
 .cp-skeleton__row {
-  height: 84px;
+  height: 92px;
   background-color: var(--bx-line-2);
   border-radius: var(--bx-radius-card);
 }
 
-/* 列表容器化：同质条目用分割线，不用逐卡阴影 */
+/* ── 列表 ────────────────────────────────────────────────────────── */
 .cp-list {
   display: flex;
   flex-direction: column;
@@ -260,20 +383,63 @@ void load()
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .cp-row {
   padding: 14px 16px;
+  cursor: pointer;
 }
 
 .cp-row + .cp-row {
   border-top: 1px solid var(--bx-line-2);
 }
 
+@media (hover: hover) {
+  .cp-row:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.cp-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cp-row__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--bx-success);
+}
+
+.cp-row__state {
+  flex: none;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-success);
+}
+
+.cp-row__time {
+  min-width: 0;
+  margin-left: 4px;
+  overflow: hidden;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .cp-row__main {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
 }
 
 .cp-row__title {
@@ -282,64 +448,72 @@ void load()
   overflow: hidden;
   font-size: var(--bx-font-body);
   font-weight: 500;
-  line-height: var(--bx-leading-body);
+  line-height: 1.5;
   color: var(--bx-text);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.cp-row__meta {
-  flex-shrink: 0;
-  margin-left: 12px;
-  font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
-  color: var(--bx-text-3);
-  font-variant-numeric: tabular-nums;
-}
-
-.cp-row__side {
-  display: flex;
-  align-items: center;
-  margin-top: 6px;
-}
-
-/* 状态做成胶囊徽章 */
-.cp-row__state {
-  padding: 2px 9px;
-  font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
-  color: var(--bx-success);
-  background-color: var(--bx-success-soft);
-  border-radius: var(--bx-radius-chip);
-}
-
-/* 分数用等宽数字位：多条记录并排时数字宽度不会跳。
- * 用墨色而不是主色 —— 一屏十几行全是蓝字会吵（规范 §2.4）。 */
+/* 分数：等宽数字位 + 墨色（一屏十几行全是彩色数字会吵） */
 .cp-row__score {
-  margin-left: 10px;
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.cp-row__score-num {
   font-size: var(--bx-font-h2);
   font-weight: 600;
-  line-height: var(--bx-leading-h2);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   color: var(--bx-text);
   font-variant-numeric: tabular-nums;
 }
 
-.cp-row__actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
+.cp-row__score-unit {
+  font-size: var(--bx-font-caption);
+  line-height: 1;
+  color: var(--bx-text-3);
 }
 
-/* 两个动作是文字链接：主行动用主色，次行动用中性色 */
+.cp-row__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.cp-row__batch {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 两个动作是文字链接：主行动用主色，次行动用中性色；触摸目标 44 */
 .cp-row__action {
-  padding: 2px 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: var(--bx-font-sub);
+  font-weight: 500;
   line-height: var(--bx-leading-sub);
   color: var(--bx-primary);
   cursor: pointer;
 }
 
-/* 焦点可见性：uni-app 内置样式把 outline 设成 none */
 .cp-row__action:focus-visible {
   outline: 2px solid var(--bx-primary);
   outline-offset: 2px;
@@ -347,7 +521,16 @@ void load()
 }
 
 .cp-row__action--ghost {
-  margin-left: 16px;
   color: var(--bx-text-2);
+}
+
+.cp-page__foot {
+  display: block;
+  margin-top: 24px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  letter-spacing: 0.04em;
+  color: var(--bx-text-3);
+  text-align: center;
 }
 </style>

@@ -186,10 +186,10 @@ try {
    * 拿到的是还没 load() 落地的空表单。V2 改造后壳的结构恰好把这两个词摆在了
    * 前面，这个等待条件就从「偶尔提前命中」变成了「必然提前命中」。
    *
-   * 判据改成导航标题：已载入是「问卷设计」，新建态是「新建问卷」。
+   * 判据改成保存状态：V6 顶栏已载入且无改动时显示「已保存」，新建态没有这个文案。
    */
-  let text = await cdp.waitText(t => t.includes('问卷设计'))
-  check('设计器加载出已有问卷', text.includes('问卷设计'), text.slice(0, 40).replace(/\n/g, ' / '))
+  let text = await cdp.waitText(t => t.includes('已保存'))
+  check('设计器加载出已有问卷', text.includes('已保存'), text.slice(0, 40).replace(/\n/g, ' / '))
   check('页面上没有「放弃」按钮（刚载入不算有改动）', !text.includes('放弃'))
 
   // 第 1 个输入框就是问卷标题（实测 ancestorAria=问卷标题）
@@ -205,7 +205,22 @@ try {
   }
   check('等到已载入（标题输入框有值）', original.length > 0, JSON.stringify(original))
   text = await cdp.eval('((document.querySelector("uni-app")||document.body).innerText||"")')
-  check('载入后标题为「问卷设计」而非「新建问卷」', text.includes('问卷设计'), text.slice(0, 30).replace(/\n/g, ' / '))
+  check('载入后不是新建态（没有「新建问卷」文案）', !text.includes('新建问卷') && original.length > 0, text.slice(0, 30).replace(/\n/g, ' / '))
+
+  // 内嵌手机预览：打开 → 焦点进入 → Esc 关闭 → 焦点归还
+  const previewClicked = await cdp.click('#design-preview-btn')
+  await sleep(700)
+  const previewText = String(await cdp.eval(`((document.getElementById('designer-preview')||{}).innerText||'')`))
+  const focusIn = await cdp.eval(`document.activeElement && document.activeElement.id`)
+  check('设计器可打开内嵌手机预览', previewClicked && previewText.includes('手机预览'), previewText.slice(0, 40).replace(/\n/g, ' / '))
+  check('预览里带上当前问卷标题', previewText.includes(original), JSON.stringify(previewText.slice(0, 60)))
+  check('预览打开后焦点在弹层内', focusIn === 'designer-preview', String(focusIn))
+  await cdp.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await sleep(500)
+  const previewClosed = await cdp.eval(`!document.getElementById('designer-preview')`)
+  const focusBack = await cdp.eval(`document.activeElement && document.activeElement.id`)
+  check('Esc 可关闭预览', previewClosed === true)
+  check('关闭后焦点回到「预览」按钮', focusBack === 'design-preview-btn', String(focusBack))
 
   const NEW_TITLE = `${original}·UI联调`
   const written = await cdp.type(inputSel, NEW_TITLE)

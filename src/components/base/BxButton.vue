@@ -146,10 +146,11 @@ function onKeydown(event: KeyboardEvent): void {
 
 /* ── 变体 ────────────────────────────────────────────────────────── */
 
-/* primary：墨蓝实心，白字 7.5:1 */
+/* primary：靛蓝实心，白字 6.4:1；浅靛投影只给主行动 */
 .bx-button--primary {
   color: #fff;
   background-color: var(--bx-primary);
+  box-shadow: var(--bx-elev-primary);
 }
 
 /* secondary：白底 + 描边（次级操作：暂存草稿 / 返回 / 重答） */
@@ -193,6 +194,7 @@ function onKeydown(event: KeyboardEvent): void {
 @media (hover: hover) {
   .bx-button--primary:hover {
     background-color: var(--bx-primary-hover);
+    box-shadow: var(--bx-elev-2);
   }
 
   .bx-button--secondary:hover {

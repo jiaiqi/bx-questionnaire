@@ -491,44 +491,58 @@ function errorFor(field: string): string {
 .bx-eaf {
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 16px 20px 32px;
 }
 
 /* ── 分组 ── */
 
 .bx-eaf__group {
-  padding-bottom: 8px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--bx-line-2);
+  display: flex;
+  flex-direction: column;
 }
 
-/* 分组标题：12/600（规范 §7.6） */
+.bx-eaf__group + .bx-eaf__group {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bx-line-2);
+}
+
+/* 分组最后一个字段不再留 16px 下边距：分组之间的间距由上面那条规则统一给出 */
+.bx-eaf__group :deep(.bx-efield:last-child) {
+  margin-bottom: 0;
+}
+
+/* 分组标题：12 / 500 元信息色（与题目属性面板同一套分组语言） */
 .bx-eaf__group-title {
   display: block;
   margin-bottom: 12px;
+  color: var(--bx-text-3);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 18px;
-  color: var(--bx-text-2);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
 }
 
 /* ── 控件 ── */
 
-/* 输入类：浅底 + 强描边，聚焦时描边变主色并加一圈光晕（规范 §6.2） */
+/* 输入类：白底 + 细描边，聚焦时描边变主色并加一圈柔光环 */
 .bx-eaf__input {
   box-sizing: border-box;
   width: 100%;
-  height: 44px;
-  padding: 0 12px;
-  font-size: 15px;
+  height: 34px;
+  padding: 0 10px;
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  font-size: 13px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-eaf__input::placeholder {
+  color: var(--bx-text-4);
 }
 
 .bx-eaf__input:focus-within {
@@ -539,17 +553,22 @@ function errorFor(field: string): string {
 .bx-eaf__textarea {
   box-sizing: border-box;
   width: 100%;
-  height: 88px;
-  padding: 10px 12px;
-  font-size: 15px;
-  line-height: 24px;
+  height: 72px;
+  padding: 8px 10px;
   color: var(--bx-text);
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  font-size: 13px;
+  line-height: 20px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
+  resize: vertical;
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-eaf__textarea::placeholder {
+  color: var(--bx-text-4);
 }
 
 .bx-eaf__textarea:focus-within {
@@ -562,11 +581,18 @@ function errorFor(field: string): string {
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  height: 44px;
-  padding: 0 12px;
-  background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  height: 34px;
+  padding: 0 10px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
+  transition: border-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-eaf__picker:hover {
+    border-color: var(--bx-line-strong);
+  }
 }
 
 .bx-eaf__picker--flex {
@@ -580,8 +606,8 @@ function errorFor(field: string): string {
 
 .bx-eaf__picker-text {
   overflow: hidden;
-  font-size: 15px;
   color: var(--bx-text);
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -589,12 +615,12 @@ function errorFor(field: string): string {
 /* 下拉箭头：两条边框旋转 45°（不用 ▼ 文字符号，字形随字体变化） */
 .bx-eaf__picker-arrow {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   margin-left: 8px;
   border-top: 1.5px solid var(--bx-text-3);
   border-right: 1.5px solid var(--bx-text-3);
-  transform: rotate(45deg);
+  transform: rotate(135deg);
 }
 
 .bx-eaf__times {
@@ -611,7 +637,7 @@ function errorFor(field: string): string {
   overflow: hidden;
   background-color: var(--bx-surface-2);
   border: 1px dashed var(--bx-line-strong);
-  border-radius: var(--bx-radius);
+  border-radius: var(--bx-radius-sm);
   cursor: pointer;
 }
 
@@ -662,22 +688,34 @@ function errorFor(field: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 34px;
   margin-bottom: 16px;
   cursor: pointer;
   border-top: 1px solid var(--bx-line-2);
   border-bottom: 1px solid var(--bx-line-2);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+@media (hover: hover) {
+  .bx-eaf__more:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+.bx-eaf__more:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: -2px;
 }
 
 .bx-eaf__more-text {
-  font-size: 13px;
   color: var(--bx-text-2);
+  font-size: 12px;
 }
 
 /* 箭头：两条边框旋转 45°，展开时翻转 */
 .bx-eaf__more-arrow {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   margin-left: 6px;
   border-right: 1.5px solid var(--bx-text-3);
   border-bottom: 1.5px solid var(--bx-text-3);

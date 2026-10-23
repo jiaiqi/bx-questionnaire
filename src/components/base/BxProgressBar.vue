@@ -4,8 +4,8 @@ import { computed } from 'vue'
 /**
  * 进度条
  *
- * V2（规范 §6.1）：3px 高、圆角，底色 `--bx-line-2`，填充主色，
- * 宽度过渡 320ms（`--bx-duration-slow`）—— 推进是**可感知的反馈**，
+ * V6：2px 高、圆角，底色 `--bx-line-2`，填充主色，
+ * 宽度过渡 260ms（`--bx-duration-slow`）—— 推进是**可感知的反馈**，
  * 不是装饰。
  */
 interface Props {
@@ -14,8 +14,9 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  // 3px（规范 §6.1）：2px 太细，在低亮度屏幕上几乎看不出「有进度」
-  height: 3,
+  // 2px（V6 规范 §5.5）：细而确定；配合「第 N 题 / 共 M 题」的可见文字，
+  // 不承担全部信息，因此不需要更粗。
+  height: 2,
 })
 
 const safePercent = computed(() => Math.min(100, Math.max(0, props.percent)))

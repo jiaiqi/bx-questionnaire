@@ -378,7 +378,16 @@ const firstRef = String(await evaluate(`(document.querySelectorAll('.bx-ref__ite
 console.log(`  第 1 项：${JSON.stringify(firstRef)}`)
 check('点到了第 1 项', await clickSel('.bx-ref__item', 0))
 await sleep(700)
-check('选中项出现 ✓ 标记', await evaluate(`String((document.querySelectorAll('.bx-ref__item')[0]||{}).innerText || '').includes('✓')`) === true)
+check(
+  '选中项有可见的选中标记（aria-pressed + CSS 对勾）',
+  await evaluate(`(() => {
+    const el = document.querySelectorAll('.bx-ref__item')[0]
+    if (!el) return false
+    return el.getAttribute('aria-pressed') === 'true'
+      && el.classList.contains('bx-ref__item--active')
+      && !!el.querySelector('.bx-ref__item-check')
+  })()`) === true,
+)
 check('点到了确定', await clickSel('.bx-ref__confirm'))
 await sleep(2500)
 
@@ -611,7 +620,7 @@ check('提交后跳到结果页或详情页', finalHash.includes('result') || fi
 console.log('\n=== 结果页图片回显 ===')
 await sleep(4000)
 const resultImg = await evaluate(`(() => {
-  const imgs = [...document.querySelectorAll('uni-image.r-item__image')]
+  const imgs = [...document.querySelectorAll('uni-image.r-rq__image')]
   return {
     count: imgs.length,
     first: imgs.length ? (imgs[0].querySelector('img') || {}).getAttribute?.('src') || '' : '',
@@ -623,7 +632,7 @@ check('结果页渲染出图片缩略图', (resultImg?.count || 0) > 0)
 check('缩略图走服务端下载地址', String(resultImg?.first || '').includes('/file/download'))
 // 图片题那一行的「我的作答」不能是批次号
 const imgRowText = String(await evaluate(`(() => {
-  const row = [...document.querySelectorAll('uni-view.r-item')].find(el => (el.innerText||'').includes('图片题'))
+  const row = [...document.querySelectorAll('uni-view.r-rq')].find(el => (el.innerText||'').includes('图片题'))
   return row ? row.innerText : ''
 })()`))
 console.log(`  图片题行文本：${JSON.stringify(imgRowText.slice(0, 120))}`)
@@ -636,7 +645,7 @@ check(
 
 // 引用题的作答值同样是被引用记录的编号（活动编号），必须换成展示列
 const refRowText = String(await evaluate(`(() => {
-  const row = [...document.querySelectorAll('uni-view.r-item')].find(el => (el.innerText||'').includes('引用题'))
+  const row = [...document.querySelectorAll('uni-view.r-rq')].find(el => (el.innerText||'').includes('引用题'))
   return row ? row.innerText : ''
 })()`))
 console.log(`  引用题行文本：${JSON.stringify(refRowText.slice(0, 140))}`)
@@ -652,7 +661,7 @@ check(
 
 // 地址题的作答值是地区编号（bxq99），必须换成名称
 const addrRowText = String(await evaluate(`(() => {
-  const row = [...document.querySelectorAll('uni-view.r-item')].find(el => (el.innerText||'').includes('地址题'))
+  const row = [...document.querySelectorAll('uni-view.r-rq')].find(el => (el.innerText||'').includes('地址题'))
   return row ? row.innerText : ''
 })()`))
 console.log(`  地址题行文本：${JSON.stringify(addrRowText.slice(0, 140))}`)

@@ -12,7 +12,8 @@
  * 字段名是 `sug_desc`（老工程两处渲染都用它），不是 sug_content；
  * 老工程也没有使用 min_score / max_score。
  *
- * 视觉（规范 §7.3）：建议是**引用块** —— 左侧 2px 主色条，不整块上色。
+ * 视觉（docs/UI-UX-V6-设计系统.md §5）：建议是**一张张白底卡** ——
+ * 1px `--bx-line` 描边、圆角 14、`--bx-elev-1`，块间留 12；不整块上色。
  */
 
 import type { DaqActivitySugRow } from '@/api/daq/types'
@@ -104,14 +105,10 @@ void load()
 
     <view v-else class="sug__list">
       <view class="sug__head">
-        <view class="sug__rule" />
         <text class="sug__title">评估建议</text>
+        <text class="sug__meta">{{ visible.length }} 条</text>
       </view>
 
-      <!--
-        引用块：左侧 2px 主色条表达「这是一条建议」，
-        比整块浅底更克制 —— 整块上色会让建议看起来像正文的一部分。
-      -->
       <view
         v-for="(item, index) in visible"
         :key="index"
@@ -128,59 +125,56 @@ void load()
 .sug__skeleton {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .sug__skeleton-card {
-  height: 76px;
-  padding-left: 14px;
+  height: 88px;
   background-color: var(--bx-line-2);
-  border-left: 2px solid var(--bx-line);
-  border-radius: 0 var(--bx-radius-sm) var(--bx-radius-sm) 0;
+  border-radius: var(--bx-radius-card);
 }
 
 .sug__list {
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
-/* 小节标题：一条短横线 + 文字 */
+/* 小节标题：与结果页的区块标题同构 */
 .sug__head {
   display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-left: 2px;
-}
-
-.sug__rule {
-  width: 24px;
-  height: 2px;
-  margin-right: 10px;
-  background-color: var(--bx-line-strong);
-  border-radius: 1px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .sug__title {
-  font-size: var(--bx-font-sub);
+  font-size: var(--bx-font-h2);
   font-weight: 600;
-  line-height: var(--bx-leading-sub);
-  color: var(--bx-text-2);
+  line-height: 1.5;
+  color: var(--bx-text);
+}
+
+.sug__meta {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
+  font-variant-numeric: tabular-nums;
 }
 
 .sug-card {
-  padding: 2px 0 2px 14px;
-  border-left: 2px solid var(--bx-primary);
-}
-
-.sug-card + .sug-card {
-  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-card);
+  box-shadow: var(--bx-elev-1);
 }
 
 .sug-card__content {
   display: block;
   font-size: var(--bx-font-body);
-  line-height: var(--bx-leading-body);
+  line-height: 1.75;
   color: var(--bx-text-2);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 </style>

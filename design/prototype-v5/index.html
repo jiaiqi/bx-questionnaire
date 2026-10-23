@@ -1,0 +1,835 @@
+<!doctype html>
+<!--
+  园区问卷 / 健康测评 · 视觉提案 V5「暖纸墨字」
+
+  设计立场：纸质问卷的数字化。
+  不是 glassmorphism，不是 brutalism，不是 Cal 式灰阶 —— 是一份设计精美的
+  纸质问卷该有的样子：暖白纸张、墨色文字、陶土红的落笔、大方的留白。
+
+  色彩只出现在 :root；无 emoji；图标为内联 SVG；尊重 prefers-reduced-motion。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>园区问卷 · 暖纸墨字 视觉提案</title>
+  <style>
+    :root {
+      /* 纸张与墨 */
+      --paper:      #faf9f6;   /* 页面底：暖白，像打印纸 */
+      --sheet:      #ffffff;   /* 纸面：卡片 */
+      --ink:        #1c1917;   /* 主文字：近黑，暖调 */
+      --ink-2:      #57534e;   /* 次要文字 */
+      --ink-3:      #a8a29e;   /* 辅助 / 占位 */
+      --line:       #e7e5e4;   /* 细线 */
+      --line-soft:  #f5f4f2;   /* 更淡的分隔 */
+
+      /* 科技蓝：唯一强调色。现代化、清爽，在暖白底上有分量但不刺眼 */
+      --accent:       #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-soft:  #eff6ff;
+      --accent-line:  #bfdbfe;
+
+      /* 语义色（低饱和，不抢戏） */
+      --ok:     #166534;
+      --ok-bg:  #f0fdf4;
+      --warn:   #b45309;
+      --warn-bg:#fffbeb;
+      --danger: #b91c1c;
+
+      /* 阴影：柔和多层，像纸叠在桌上 */
+      --shadow-1: 0 1px 2px rgba(28,25,23,0.04), 0 4px 12px -4px rgba(28,25,23,0.06);
+      --shadow-2: 0 2px 4px rgba(28,25,23,0.05), 0 12px 28px -10px rgba(28,25,23,0.12);
+      --shadow-3: 0 4px 8px rgba(28,25,23,0.06), 0 24px 48px -16px rgba(28,25,23,0.18);
+
+      /* 字体 */
+      --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+      --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+      /* 尺度 */
+      --radius-sm: 8px;
+      --radius:    12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+
+      --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+      --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--paper); color: var(--ink);
+      font-family: var(--font); font-size: 15px; line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+    img, svg { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+    p { text-wrap: pretty; }
+    h1, h2, h3, h4 { margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
+    .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .muted { color: var(--ink-2); }
+
+    .container { max-width: 1240px; margin-inline: auto; padding-inline: 28px; }
+    .section { padding-block: 72px; }
+    .section + .section { border-top: 1px solid var(--line); }
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px; margin: 0 0 10px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);
+    }
+    .eyebrow::before { content: ''; width: 20px; height: 2px; background: var(--accent); border-radius: 1px; }
+    .h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.12; font-weight: 700; letter-spacing: -0.03em; }
+    .h2 { font-size: clamp(22px, 2.4vw, 30px); line-height: 1.2; font-weight: 700; }
+    .h3 { font-size: 17px; font-weight: 600; }
+    .lead { font-size: 16.5px; line-height: 1.85; color: var(--ink-2); max-width: 56ch; margin: 0; }
+    .note { font-size: 14px; line-height: 1.75; color: var(--ink-2); margin: 0; }
+
+    /* ── 按钮 ──────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 46px; padding: 0 24px; border-radius: var(--radius);
+      font-size: 15px; font-weight: 600; white-space: nowrap;
+      transition: transform 0.12s var(--ease-out), box-shadow 0.2s var(--ease-out), background 0.2s var(--ease-out);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-accent { background: var(--accent); color: #fff; box-shadow: 0 4px 14px -6px rgba(37,99,235,0.5); }
+    .btn-accent:hover { background: var(--accent-hover); box-shadow: 0 6px 20px -8px rgba(37,99,235,0.6); transform: translateY(-1px); }
+    .btn-ink { background: var(--ink); color: #fff; }
+    .btn-ink:hover { background: #292524; transform: translateY(-1px); }
+    .btn-outline { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    .btn-outline:hover { border-color: var(--ink-3); background: var(--sheet); }
+    .btn-sm { height: 36px; padding: 0 16px; font-size: 13.5px; }
+
+    /* ── 顶部导航 ──────────────────────────────────────────────────── */
+    .topnav {
+      position: sticky; top: 0; z-index: 30;
+      background: rgba(250, 249, 246, 0.88);
+      -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .topnav-inner { display: flex; align-items: center; gap: 26px; height: 62px; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+    .logo__mark {
+      width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff;
+      display: grid; place-items: center;
+    }
+    .logo__mark svg { width: 15px; height: 15px; }
+    .topnav nav { display: flex; gap: 22px; margin-left: 8px; }
+    .topnav nav a { font-size: 14px; color: var(--ink-2); transition: color 0.18s var(--ease-out); }
+    .topnav nav a:hover { color: var(--ink); }
+    .topnav .spacer { flex: 1; }
+
+    /* ── 画框 ──────────────────────────────────────────────────────── */
+    .stage { display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-start; }
+    .stage figure { margin: 0; }
+    .cap-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+    .cap-note { font-size: 13px; color: var(--ink-2); line-height: 1.65; margin-top: 3px; max-width: 34ch; }
+
+    .phone {
+      width: 393px; padding: 11px; border-radius: 44px;
+      background: linear-gradient(160deg, #44403c, #1c1917);
+      box-shadow: var(--shadow-3);
+    }
+    .phone__screen { position: relative; height: 780px; border-radius: 34px; overflow: hidden; background: var(--paper); }
+
+    .browser { border-radius: var(--radius-lg); overflow: hidden; background: var(--sheet); box-shadow: var(--shadow-2); }
+    .browser__bar { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--paper); border-bottom: 1px solid var(--line); }
+    .browser__dots { display: flex; gap: 6px; }
+    .browser__dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+    .browser__url { flex: 1; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); background: var(--line-soft); border-radius: var(--radius-pill); padding: 4px 12px; }
+    .browser__view { height: 620px; overflow: hidden; position: relative; background: var(--paper); }
+
+    /* ── 应用：移动端 ──────────────────────────────────────────────── */
+    .app { display: flex; flex-direction: column; height: 100%; }
+    .app-bar {
+      position: sticky; top: 0; z-index: 6; display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px;
+      background: rgba(250,249,246,0.92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .icon-btn { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--ink); transition: background 0.18s var(--ease-out); }
+    .icon-btn:hover { background: var(--line-soft); }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .app-bar__title { flex: 1; text-align: center; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .app-bar__link { font-size: 13.5px; color: var(--accent); font-weight: 600; }
+
+    .progress { position: sticky; top: 54px; z-index: 5; padding: 10px 16px 12px; background: rgba(250,249,246,0.92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+    .progress__track { height: 3px; border-radius: var(--radius-pill); background: var(--line); overflow: hidden; }
+    .progress__fill { height: 100%; width: 9%; border-radius: var(--radius-pill); background: var(--accent); transition: width 380ms var(--ease-out); }
+    .progress__meta { display: flex; justify-content: space-between; margin-top: 7px; font-size: 12px; color: var(--ink-2); }
+    .progress__meta em { font-style: normal; color: var(--warn); font-weight: 600; }
+
+    .sheet { flex: 1; overflow: hidden; padding: 16px 14px 92px; }
+    .paper { background: var(--sheet); border-radius: var(--radius-xl); box-shadow: var(--shadow-1); overflow: hidden; }
+    .paper__head { padding: 22px 20px 18px; border-bottom: 1px solid var(--line-soft); }
+    .paper__title { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+    .paper__desc { margin: 6px 0 0; font-size: 13.5px; color: var(--ink-2); }
+    .paper__chips { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+    .chip--plain { background: var(--line-soft); color: var(--ink-2); }
+
+    .q { padding: 20px; border-top: 1px solid var(--line-soft); }
+    .q:first-child { border-top: 0; }
+    .q__head { display: flex; gap: 12px; align-items: flex-start; }
+    .q__no { flex: none; font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); min-width: 18px; padding-top: 3px; }
+    .q__title { font-size: 15.5px; font-weight: 600; line-height: 1.55; letter-spacing: -0.005em; }
+    .q__req { color: var(--danger); margin-left: 3px; }
+    .q__hint { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-3); font-weight: 500; }
+    .q__body { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+
+    .opt {
+      display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 11px 14px;
+      border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--line);
+      font-size: 14px; cursor: pointer;
+      transition: transform 0.18s var(--ease-spring), background 0.18s var(--ease-out), border-color 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
+    }
+    .opt:hover { border-color: var(--ink-3); transform: translateY(-1px); box-shadow: var(--shadow-1); }
+    .opt__mark { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; border: 1.6px solid var(--ink-3); background: var(--sheet); transition: border-color 0.18s var(--ease-out), background 0.18s var(--ease-out); }
+    .opt--box .opt__mark { border-radius: 6px; }
+    .opt__mark::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #fff; transform: scale(0); transition: transform 0.24s var(--ease-spring); }
+    .opt--box .opt__mark::after { width: 11px; height: 11px; border-radius: 3px; }
+    .opt__label { color: var(--ink-2); transition: color 0.18s var(--ease-out); }
+    .opt.is-on { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 2px 8px -4px rgba(37,99,235,0.25); }
+    .opt.is-on .opt__mark { border-color: var(--accent); background: var(--accent); }
+    .opt.is-on .opt__mark::after { transform: scale(1); }
+    .opt.is-on .opt__label { color: var(--ink); font-weight: 600; }
+
+    .input {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 46px; padding: 0 14px;
+      border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line);
+      font-size: 14px; color: var(--ink-3);
+      transition: box-shadow 0.18s var(--ease-out), border-color 0.18s var(--ease-out), background 0.18s var(--ease-out);
+    }
+    .input--focus { background: var(--sheet); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--ink); }
+    .input__arrow { width: 8px; height: 8px; border-right: 1.6px solid var(--ink-3); border-top: 1.6px solid var(--ink-3); transform: rotate(45deg); }
+
+    /* 封面 */
+    .cover { display: flex; flex-direction: column; height: 100%; padding: 32px 26px 28px; }
+    .cover__kicker { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: 0.06em; }
+    .cover__kicker::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    .cover__title { margin-top: 16px; font-size: 30px; line-height: 1.22; font-weight: 700; letter-spacing: -0.03em; }
+    .cover__desc { margin: 12px 0 0; font-size: 14.5px; line-height: 1.8; color: var(--ink-2); }
+    .cover__rule { height: 1px; background: var(--line); margin: 24px 0 0; }
+    .cover__meta { display: flex; gap: 18px; margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+    .cover__meta b { color: var(--ink); font-weight: 600; }
+    .cover__cta { margin-top: 26px; align-self: flex-start; }
+    .cover__tip { margin: 14px 0 0; font-size: 12.5px; color: var(--ink-3); display: flex; align-items: center; gap: 7px; }
+    .cover__tip svg { width: 14px; height: 14px; }
+    .cover__card { margin-top: auto; padding: 18px 20px; border-radius: var(--radius-lg); background: var(--sheet); box-shadow: var(--shadow-1); }
+    .cover__row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 8px 0; border-top: 1px solid var(--line-soft); color: var(--ink-2); }
+    .cover__row:first-of-type { border-top: 0; }
+    .cover__row b { color: var(--ink); font-weight: 600; }
+
+    .dock {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; padding: 12px 16px 24px;
+      background: rgba(250,249,246,0.94); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      border-top: 1px solid var(--line);
+    }
+    .dock .btn { width: 100%; }
+
+    /* 结果 */
+    .score-card { padding: 26px 22px 22px; text-align: center; }
+    .score__done { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ok); }
+    .score__done::before { content: ''; width: 18px; height: 18px; border-radius: 50%; background: var(--ok); display: inline-block; }
+    .score__num { font-size: 52px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; margin-top: 10px; }
+    .score__num small { font-size: 15px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; margin-left: 5px; }
+    .score__bar { height: 6px; border-radius: var(--radius-pill); background: var(--line); margin: 18px 6px 0; overflow: hidden; }
+    .score__fill { height: 100%; width: 0; border-radius: var(--radius-pill); background: var(--accent); transition: width 900ms var(--ease-out); }
+    .result-stats { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
+    .stat-pill { padding: 7px 14px; border-radius: var(--radius); background: var(--paper); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
+    .stat-pill b { font-size: 15px; color: var(--ink); font-weight: 700; margin-right: 4px; }
+
+    .block-title { display: flex; align-items: center; gap: 8px; margin: 24px 2px 10px; font-size: 14px; font-weight: 700; }
+    .block-title svg { width: 16px; height: 16px; color: var(--accent); }
+    .bullet { margin-bottom: 8px; padding: 14px 16px; border-radius: var(--radius); background: var(--sheet); box-shadow: var(--shadow-1); }
+    .bullet__head { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; font-weight: 600; }
+    .bullet__head span:last-child { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+    .bullet__track { position: relative; height: 6px; border-radius: var(--radius-pill); background: var(--line); margin-top: 10px; }
+    .bullet__fill { height: 100%; width: 0; border-radius: var(--radius-pill); background: var(--accent); transition: width 800ms var(--ease-out); }
+    .bullet__target { position: absolute; top: -4px; width: 2px; height: 14px; border-radius: 2px; background: var(--ink-3); }
+
+    .advice { display: flex; gap: 12px; padding: 16px; border-radius: var(--radius); background: var(--sheet); box-shadow: var(--shadow-1); border-left: 3px solid var(--accent); }
+    .advice p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+    /* ── 应用：桌面端 ──────────────────────────────────────────────── */
+    .desk { display: flex; flex-direction: column; height: 100%; }
+    .desk-bar { display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 22px; background: rgba(250,249,246,0.92); border-bottom: 1px solid var(--line); }
+    .desk-bar__title { font-size: 15.5px; font-weight: 700; letter-spacing: -0.01em; }
+    .desk-bar .spacer { flex: 1; }
+    .toolbar { display: flex; align-items: center; gap: 10px; padding: 16px 22px; }
+    .search { flex: 1; max-width: 320px; display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 14px; border-radius: var(--radius); background: var(--sheet); border: 1px solid var(--line); font-size: 13.5px; color: var(--ink-3); }
+    .search svg { width: 15px; height: 15px; }
+    .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--radius); background: var(--line-soft); }
+    .seg span { padding: 6px 14px; border-radius: 9px; font-size: 12.5px; color: var(--ink-2); font-weight: 600; }
+    .seg span.is-on { background: var(--sheet); color: var(--ink); box-shadow: var(--shadow-1); }
+
+    .list { flex: 1; overflow: hidden; padding: 0 22px 22px; display: flex; flex-direction: column; gap: 10px; }
+    .row {
+      display: grid; grid-template-columns: 1fr 110px 190px; align-items: center; gap: 16px;
+      padding: 16px 20px; border-radius: var(--radius-lg); background: var(--sheet); box-shadow: var(--shadow-1);
+      transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+    }
+    .row:hover { transform: translateY(-1px); box-shadow: var(--shadow-2); }
+    .row__title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .row__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+    .row__meta { font-size: 12px; color: var(--ink-3); margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .row__meta i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+    .state { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; }
+    .state::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .state--live { background: var(--accent-soft); color: var(--accent); }
+    .state--done { background: var(--line-soft); color: var(--ink-2); }
+    .state--ready { background: var(--ok-bg); color: var(--ok); }
+    .row__acts { display: flex; gap: 4px; justify-content: flex-end; }
+    .text-act { padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--ink-2); transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out); }
+    .text-act:hover { background: var(--line-soft); color: var(--ink); }
+    .text-act--danger { color: var(--danger); }
+    .text-act--danger:hover { background: #fef2f2; }
+
+    .studio { flex: 1; display: grid; grid-template-columns: 300px 1fr 310px; gap: 14px; padding: 14px; overflow: hidden; }
+    .pane { border-radius: var(--radius-lg); background: var(--sheet); box-shadow: var(--shadow-1); overflow: hidden; }
+    .pane__head { display: flex; justify-content: space-between; padding: 13px 16px; font-size: 12px; font-weight: 700; color: var(--ink-2); border-bottom: 1px solid var(--line-soft); }
+    .pane__body { padding: 12px; }
+    .outline { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius); transition: background 0.18s var(--ease-out); }
+    .outline:hover { background: var(--line-soft); }
+    .outline.is-on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+    .outline__no { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+    .outline__t { font-size: 13px; font-weight: 600; line-height: 1.45; }
+    .outline__tag { margin-top: 3px; font-size: 11px; color: var(--ink-3); }
+    .canvas { background: var(--paper); border-radius: var(--radius-lg); padding: 18px; overflow: hidden; }
+    .canvas__paper { background: var(--sheet); border-radius: var(--radius-xl); box-shadow: var(--shadow-1); overflow: hidden; }
+    .canvas__q { display: flex; align-items: center; gap: 12px; padding: 15px 18px; border-top: 1px solid var(--line-soft); }
+    .canvas__q:first-child { border-top: 0; }
+    .canvas__q.is-on { background: var(--accent-soft); }
+    .canvas__no { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+    .canvas__t { flex: 1; font-size: 14px; font-weight: 600; }
+    .canvas__type { font-size: 11px; font-weight: 600; color: var(--ink-2); padding: 3px 10px; border-radius: var(--radius-pill); background: var(--line-soft); }
+    .prop { margin-bottom: 13px; }
+    .prop__label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-bottom: 5px; }
+    .prop__input { min-height: 36px; display: flex; align-items: center; padding: 0 12px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); font-size: 12.5px; }
+    .prop-group { font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin: 16px 0 9px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+    .prop-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+
+    /* ── 设计系统说明 ──────────────────────────────────────────────── */
+    .spec-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 30px; }
+    .spec-card { padding: 24px; background: var(--sheet); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); }
+    .spec-list { list-style: none; margin: 14px 0 0; padding: 0; }
+    .spec-list li { display: flex; gap: 10px; font-size: 13.5px; color: var(--ink-2); padding: 8px 0; border-top: 1px solid var(--line-soft); }
+    .spec-list li:first-child { border-top: 0; }
+    .spec-list b { color: var(--ink); font-weight: 700; min-width: 76px; }
+    .swatches { display: flex; gap: 8px; margin-top: 14px; }
+    .swatches i { flex: 1; height: 42px; border-radius: 10px; box-shadow: var(--shadow-1); }
+
+    .foot { padding: 44px 0 60px; text-align: center; font-size: 13px; color: var(--ink-3); }
+
+    @media (max-width: 920px) {
+      .topnav nav { display: none; }
+      .section { padding-block: 48px; }
+      .spec-grid { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+      .row__acts { justify-content: flex-start; }
+      .studio { grid-template-columns: 1fr; }
+      .desk, .studio { min-width: 880px; }
+      .stage > figure { max-width: 100%; min-width: 0; }
+      .phone { width: 100%; max-width: 393px; }
+      .browser { max-width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topnav" data-od-id="topnav">
+    <div class="container topnav-inner">
+      <span class="logo">
+        <span class="logo__mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </span>
+        园区问卷
+      </span>
+      <nav>
+        <a href="#mobile">作答侧</a>
+        <a href="#desktop">管理侧</a>
+        <a href="#system">设计系统</a>
+      </nav>
+      <span class="spacer"></span>
+      <a class="btn btn-accent btn-sm" href="#mobile">看原型</a>
+    </div>
+  </header>
+
+  <main id="content">
+    <!-- 总述 -->
+    <section class="section" data-od-id="intro" style="padding-top:60px">
+      <div class="container">
+        <div class="row-between" style="align-items:flex-end;flex-wrap:wrap;gap:28px">
+          <div style="max-width:620px">
+            <p class="eyebrow">暖纸墨字 · 2026-10-22</p>
+            <h1 class="h1">一份认真排版的<br>纸质问卷，搬到屏幕上</h1>
+            <p class="lead" style="margin-top:18px">
+              不是玻璃拟态，不是灰阶极简。这一版回到产品本身：园区员工填的是一份问卷，
+              它应该像一份设计精美的纸质问卷 —— 暖白的纸、墨色的字、科技蓝的落笔、
+              大方的留白。没有多余的装饰，只有排版、字重和呼吸感。
+            </p>
+            <div class="row" style="margin-top:26px;gap:12px;flex-wrap:wrap">
+              <button class="btn btn-accent">看移动端</button>
+              <button class="btn btn-outline">看管理端</button>
+            </div>
+          </div>
+          <div class="spec-card" style="width:300px">
+            <p class="h3" style="margin-bottom:12px">这一版改了什么</p>
+            <ul class="spec-list" style="margin-top:0">
+              <li><b>底色</b><span>暖白 #FAF9F6，像打印纸，不刺眼</span></li>
+              <li><b>强调</b><span>科技蓝 #2563EB，现代、清爽、有分量</span></li>
+              <li><b>质感</b><span>柔和多层阴影，纸叠在桌上的感觉</span></li>
+              <li><b>排版</b><span>字重对比拉开层级，留白大方</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 移动端 -->
+    <section class="section" data-od-id="mobile" style="padding-top:24px">
+      <div class="container">
+        <p class="eyebrow">作答侧 · 移动端</p>
+        <h2 class="h2">三屏读完一次作答</h2>
+        <p class="note" style="margin-top:10px;max-width:60ch">内容取自 parkDev 的「员工满意度调查（演示问卷）」：11 题 / 自测 / 进行中 / 截止 2027-12-31。</p>
+
+        <div class="stage" style="margin-top:32px">
+          <!-- 封面 -->
+          <figure>
+            <div class="phone">
+              <div class="phone__screen">
+                <div class="app">
+                  <div class="cover">
+                    <span class="cover__kicker">园区员工满意度</span>
+                    <h3 class="cover__title">员工满意度调查<br>（演示问卷）</h3>
+                    <p class="cover__desc">这是一份演示问卷，用于查看各题型的实际效果，作答不会用于统计。</p>
+                    <div class="cover__rule"></div>
+                    <div class="cover__meta">
+                      <span><b class="num">11</b> 题</span>
+                      <span><b class="num">4</b> 道必答</span>
+                      <span>截止 <b class="num">2027-12-31</b></span>
+                    </div>
+                    <button class="btn btn-accent cover__cta">开始作答</button>
+                    <p class="cover__tip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l2.5 2.5"/><circle cx="12" cy="12" r="9"/></svg>
+                      作答过程自动保存草稿，可随时返回继续
+                    </p>
+                    <div class="cover__card">
+                      <div class="cover__row"><span>问卷说明</span><b>覆盖全部题型的演示问卷</b></div>
+                      <div class="cover__row"><span>作答次数</span><b class="num">1</b> 次</div>
+                      <div class="cover__row"><span>访问方式</span><b>匿名访问</b></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption style="margin-top:14px">
+              <div class="cap-title">01 · 封面</div>
+              <div class="cap-note">暖白纸面、科技蓝点缀、细线分隔；没有渐变，没有光斑。</div>
+            </figcaption>
+          </figure>
+
+          <!-- 作答 -->
+          <figure>
+            <div class="phone">
+              <div class="phone__screen">
+                <div class="app">
+                  <div class="app-bar">
+                    <span class="icon-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </span>
+                    <span class="app-bar__title">员工满意度调查（演示问卷）</span>
+                    <span class="app-bar__link">记录</span>
+                  </div>
+                  <div class="progress">
+                    <div class="progress__track"><div class="progress__fill" id="pfill"></div></div>
+                    <div class="progress__meta">
+                      <span>已答 <span class="num" id="panswered">1</span> / 11 题</span>
+                      <em id="pleft">还差 3 题必答</em>
+                    </div>
+                  </div>
+                  <div class="sheet">
+                    <div class="paper">
+                      <div class="paper__head">
+                        <div class="paper__title">员工满意度调查（演示问卷）</div>
+                        <p class="paper__desc">这是一份演示问卷，用于查看各题型的实际效果，作答不会用于统计。</p>
+                        <div class="paper__chips">
+                          <span class="chip">自测</span>
+                          <span class="chip chip--plain">作答次数 1 次</span>
+                        </div>
+                      </div>
+                      <div class="q">
+                        <div class="q__head">
+                          <span class="q__no num">1</span>
+                          <div><div class="q__title">您的姓名<span class="q__hint">选填</span></div></div>
+                        </div>
+                        <div class="q__body"><div class="input">请输入</div></div>
+                      </div>
+                      <div class="q">
+                        <div class="q__head">
+                          <span class="q__no num">2</span>
+                          <div><div class="q__title">您所在的部门<span class="q__req">*</span></div></div>
+                        </div>
+                        <div class="q__body" data-group>
+                          <div class="opt is-on" data-opt><span class="opt__mark"></span><span class="opt__label">技术部</span></div>
+                          <div class="opt" data-opt><span class="opt__mark"></span><span class="opt__label">产品部</span></div>
+                          <div class="opt" data-opt><span class="opt__mark"></span><span class="opt__label">市场部</span></div>
+                          <div class="opt" data-opt><span class="opt__mark"></span><span class="opt__label">职能部</span></div>
+                        </div>
+                      </div>
+                      <div class="q">
+                        <div class="q__head">
+                          <span class="q__no num">3</span>
+                          <div><div class="q__title">您在本公司的⼯作年限（年）<span class="q__req">*</span></div></div>
+                        </div>
+                        <div class="q__body"><div class="input input--focus">请输入</div></div>
+                      </div>
+                      <div class="q">
+                        <div class="q__head">
+                          <span class="q__no num">6</span>
+                          <div>
+                            <div class="q__title">您认为公司在哪些方面做得好？（可多选）<span class="q__req">*</span></div>
+                            <span class="q__hint">多选题（可选择多项）</span>
+                          </div>
+                        </div>
+                        <div class="q__body">
+                          <div class="opt opt--box" data-opt><span class="opt__mark"></span><span class="opt__label">团队氛围</span></div>
+                          <div class="opt opt--box" data-opt><span class="opt__mark"></span><span class="opt__label">薪酬福利</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dock">
+                    <button class="btn btn-accent">提交问卷</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption style="margin-top:14px">
+              <div class="cap-title">02 · 作答</div>
+              <div class="cap-note">点选项试试：选中态是科技蓝描边 + 浅底，标记像钢笔点了一下纸。</div>
+            </figcaption>
+          </figure>
+
+          <!-- 结果 -->
+          <figure>
+            <div class="phone">
+              <div class="phone__screen">
+                <div class="app">
+                  <div class="app-bar">
+                    <span class="icon-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                    </span>
+                    <span class="app-bar__title">作答结果</span>
+                    <span style="width:32px"></span>
+                  </div>
+                  <div class="sheet">
+                    <div class="paper score-card">
+                      <span class="score__done">已提交</span>
+                      <div class="score__num num" id="scoreNum">13<small>/ 20 分</small></div>
+                      <div class="score__bar"><div class="score__fill" id="scoreFill"></div></div>
+                      <div class="result-stats">
+                        <span class="stat-pill"><b class="num">2</b>答对</span>
+                        <span class="stat-pill"><b class="num">0</b>答错</span>
+                        <span class="stat-pill"><b class="num">0</b>未答</span>
+                      </div>
+                      <p class="note" style="margin-top:14px">本次作答已提交，感谢参与</p>
+                    </div>
+
+                    <div class="block-title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V5"/><path d="M4 15l5-5 4 3 7-7"/></svg>
+                      逐题得分
+                    </div>
+                    <div class="bullet">
+                      <div class="bullet__head"><span>5. 您对当前工作的整体满意度</span><span class="num">10 / 10</span></div>
+                      <div class="bullet__track"><div class="bullet__fill" data-bar="100"></div><span class="bullet__target" style="left:80%"></span></div>
+                    </div>
+                    <div class="bullet">
+                      <div class="bullet__head"><span>6. 您认为公司在哪些方面做得好？</span><span class="num">0 / 10</span></div>
+                      <div class="bullet__track"><div class="bullet__fill" data-bar="0"></div><span class="bullet__target" style="left:80%"></span></div>
+                    </div>
+
+                    <div class="block-title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l2.5 2.5"/><circle cx="12" cy="12" r="9"/></svg>
+                      建议
+                    </div>
+                    <div class="advice">
+                      <p>感谢参与！你的反馈已记录。后续可关注园区员工关怀活动的通知。</p>
+                    </div>
+                    <div style="margin-top:16px;display:flex;gap:10px">
+                      <button class="btn btn-ink" style="flex:1">重新测试</button>
+                      <button class="btn btn-outline">分享结果</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption style="margin-top:14px">
+              <div class="cap-title">03 · 结果</div>
+              <div class="cap-note">分数是大数字 + 细进度条；逐题得分只列计分题，建议用左侧色条引用块。</div>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 管理端 -->
+    <section class="section" data-od-id="desktop">
+      <div class="container">
+        <p class="eyebrow">管理侧 · 桌面端</p>
+        <h2 class="h2">列表是行，设计器是三栏</h2>
+
+        <div class="stage" style="margin-top:32px;flex-direction:column;gap:44px">
+          <figure style="width:100%">
+            <div class="browser">
+              <div class="browser__bar">
+                <span class="browser__dots"><i></i><i></i><i></i></span>
+                <span class="browser__url">gxqcxkj.com/quest/#/pages/editor/list/index</span>
+              </div>
+              <div class="browser__view">
+                <div class="desk">
+                  <div class="desk-bar">
+                    <span class="desk-bar__title">问卷列表</span>
+                    <span class="spacer"></span>
+                    <button class="btn btn-outline btn-sm">登录</button>
+                    <button class="btn btn-accent btn-sm">新建问卷</button>
+                  </div>
+                  <div class="toolbar">
+                    <div class="search">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                      搜索问卷标题
+                    </div>
+                    <button class="btn btn-outline btn-sm">搜索</button>
+                    <button class="btn btn-outline btn-sm">重置</button>
+                    <span class="seg"><span class="is-on">全部</span><span>未开始</span><span>进行中</span><span>已结束</span></span>
+                  </div>
+                  <div class="list">
+                    <div class="row">
+                      <div>
+                        <div class="row__title">员工满意度调查（演示问卷）</div>
+                        <div class="row__sub">覆盖全部题型的演示问卷，用于人工验收</div>
+                        <div class="row__meta num"><span>自测</span><i></i><span>11 题</span><i></i><span>0 次提交</span><i></i><span>2026-10-11 ~ 2027-12-31</span></div>
+                      </div>
+                      <span class="state state--live">进行中</span>
+                      <div class="row__acts">
+                        <button class="text-act">编辑</button>
+                        <button class="text-act">作答</button>
+                        <button class="text-act text-act--danger">删除</button>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div>
+                        <div class="row__title">bxq 特殊题型测试问卷</div>
+                        <div class="row__sub">bxq 特殊题型测试（图片 / 引用 / 地址）</div>
+                        <div class="row__meta num"><span>自测</span><i></i><span>4 题</span><i></i><span>0 次提交</span><i></i><span>2026-10-11 ~ 2027-12-31</span></div>
+                      </div>
+                      <span class="state state--live">进行中</span>
+                      <div class="row__acts">
+                        <button class="text-act">编辑</button>
+                        <button class="text-act">作答</button>
+                        <button class="text-act text-act--danger">删除</button>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div>
+                        <div class="row__title">bxq 自动化测试问卷 20261010100256</div>
+                        <div class="row__sub">bxq 自动化测试问卷</div>
+                        <div class="row__meta num"><span>自测</span><i></i><span>4 题</span><i></i><span>0 次提交</span><i></i><span>2026-10-10 ~ 2027-12-31</span></div>
+                      </div>
+                      <span class="state state--live">进行中</span>
+                      <div class="row__acts">
+                        <button class="text-act">编辑</button>
+                        <button class="text-act">作答</button>
+                        <button class="text-act text-act--danger">删除</button>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div>
+                        <div class="row__title">1111</div>
+                        <div class="row__sub">问卷 · 0 题 · 0 次提交</div>
+                        <div class="row__meta num"><span>2026-05-12 ~ 2026-05-13</span></div>
+                      </div>
+                      <span class="state state--done">已结束</span>
+                      <div class="row__acts">
+                        <button class="text-act">编辑</button>
+                        <button class="text-act">作答</button>
+                        <button class="text-act text-act--danger">删除</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption style="margin-top:14px">
+              <div class="cap-title">04 · 问卷列表</div>
+              <div class="cap-note">行是纸卡片，hover 微浮；操作用文字按钮，删除用危险色但不刺眼。</div>
+            </figcaption>
+          </figure>
+
+          <figure style="width:100%">
+            <div class="browser">
+              <div class="browser__bar">
+                <span class="browser__dots"><i></i><i></i><i></i></span>
+                <span class="browser__url">gxqcxkj.com/quest/#/pages/editor/design/index?activity_no=20261011154728000005</span>
+              </div>
+              <div class="browser__view">
+                <div class="desk">
+                  <div class="desk-bar">
+                    <span class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></span>
+                    <span class="desk-bar__title">问卷设计</span>
+                    <span class="spacer"></span>
+                    <button class="btn btn-outline btn-sm">放弃</button>
+                    <button class="btn btn-accent btn-sm">保存</button>
+                  </div>
+                  <div class="studio">
+                    <div class="pane">
+                      <div class="pane__head"><span>问卷信息</span><span>题目 4</span></div>
+                      <div class="pane__body">
+                        <div class="prop">
+                          <span class="prop__label">问卷标题 *</span>
+                          <div class="prop__input">bxq 自动化测试问卷 20261010100256</div>
+                        </div>
+                        <div class="prop-group">题目</div>
+                        <div class="outline is-on"><span class="outline__no num">1</span><div><div class="outline__t">单选题：你更喜欢哪种沟通方式？</div><div class="outline__tag">单选 · 必填 · 4 个选项、10 分</div></div></div>
+                        <div class="outline"><span class="outline__no num">2</span><div><div class="outline__t">多选题：你使用过以下哪些功能？</div><div class="outline__tag">多选 · 必填 · 3 个选项、10 分</div></div></div>
+                        <div class="outline"><span class="outline__no num">3</span><div><div class="outline__t">填空题：请留下你的建议</div><div class="outline__tag">文本 · 必填 · 10 分</div></div></div>
+                        <div class="outline"><span class="outline__no num">4</span><div><div class="outline__t">数字题：今年是哪一年？</div><div class="outline__tag">数字 · 必填 · 10 分</div></div></div>
+                      </div>
+                    </div>
+                    <div class="canvas">
+                      <div class="canvas__paper">
+                        <div class="canvas__q is-on"><span class="canvas__no num">1</span><span class="canvas__t">单选题：你更喜欢哪种沟通方式？</span><span class="canvas__type">单选</span></div>
+                        <div class="canvas__q"><span class="canvas__no num">2</span><span class="canvas__t">多选题：你使用过以下哪些功能？</span><span class="canvas__type">多选</span></div>
+                        <div class="canvas__q"><span class="canvas__no num">3</span><span class="canvas__t">填空题：请留下你的建议</span><span class="canvas__type">文本</span></div>
+                        <div class="canvas__q"><span class="canvas__no num">4</span><span class="canvas__t">数字题：今年是哪一年？</span><span class="canvas__type">数字</span></div>
+                      </div>
+                    </div>
+                    <div class="pane">
+                      <div class="pane__head"><span>题目设置</span></div>
+                      <div class="pane__body">
+                        <div class="prop-group">题目</div>
+                        <div class="prop"><span class="prop__label">题干 *</span><div class="prop__input">你更喜欢哪种沟通方式？</div></div>
+                        <div class="prop-group">计分</div>
+                        <div class="prop"><span class="prop__label">分值</span><div class="prop__input">10</div></div>
+                        <div class="prop-group">题型属性</div>
+                        <div class="prop"><span class="prop__label">答案类型</span><div class="seg" style="width:100%;justify-content:space-between"><span class="is-on">单选</span><span>多选</span></div></div>
+                        <div class="prop-group">选项</div>
+                        <div class="prop"><span class="prop__label">选项 1</span><div class="prop__input">当面沟通</div></div>
+                        <div class="prop"><span class="prop__label">选项 2</span><div class="prop__input">书面沟通</div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption style="margin-top:14px">
+              <div class="cap-title">05 · 可视化设计器</div>
+              <div class="cap-note">三栏都是纸卡片，中间画布是实底纸面；选中态用左侧色条 + 浅底。</div>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- 设计系统 -->
+    <section class="section" data-od-id="system">
+      <div class="container">
+        <p class="eyebrow">设计系统</p>
+        <h2 class="h2">色彩、材质、图形与动效</h2>
+        <div class="spec-grid">
+          <div class="spec-card">
+            <p class="h3">色彩</p>
+            <div class="swatches">
+              <i style="background:#2563eb"></i>
+              <i style="background:#1c1917"></i>
+              <i style="background:#faf9f6"></i>
+              <i style="background:#e7e5e4"></i>
+            </div>
+            <ul class="spec-list">
+              <li><b>底色</b><span>暖白 #FAF9F6，像打印纸</span></li>
+              <li><b>强调</b><span>科技蓝 #2563EB，唯一强调色</span></li>
+              <li><b>文字</b><span>#1C1917 / #57534E / #A8A29E</span></li>
+              <li><b>状态</b><span>进行中=科技蓝、已结束=中性、未开始=绿</span></li>
+            </ul>
+          </div>
+          <div class="spec-card">
+            <p class="h3">材质与阴影</p>
+            <ul class="spec-list">
+              <li><b>纸面</b><span>纯白卡片 + 柔和多层阴影</span></li>
+              <li><b>阴影</b><span>0 1px 2px + 0 4px 12px，像纸叠在桌上</span></li>
+              <li><b>悬停</b><span>上浮 1px，阴影加深一档</span></li>
+              <li><b>圆角</b><span>8 / 12 / 16 / 20，纸面 20、卡片 16、控件 12</span></li>
+            </ul>
+          </div>
+          <div class="spec-card">
+            <p class="h3">动效</p>
+            <ul class="spec-list">
+              <li><b>时长</b><span>120 / 180 / 380 / 800ms</span></li>
+              <li><b>落笔</b><span>选项标记 scale 0→1，240ms spring</span></li>
+              <li><b>进度</b><span>宽度过渡 380ms</span></li>
+              <li><b>降级</b><span>prefers-reduced-motion 全部归零</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="spec-card" style="margin-top:16px">
+          <p class="h3">落到工程里要改什么</p>
+          <ul class="spec-list">
+            <li><b>令牌</b><span>--bx-bg 改 #FAF9F6，--bx-blue 改 #2563EB，阴影换柔和多层</span></li>
+            <li><b>组件</b><span>选中态从「浅蓝底 + 蓝描边」改「浅科技蓝底 + 科技蓝描边」</span></li>
+            <li><b>按钮</b><span>主按钮从墨蓝改科技蓝，hover 加深 + 微浮</span></li>
+            <li><b>排版</b><span>标题字重 700、字距 -0.02em；正文行高 1.75</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot" data-od-id="footer">
+    园区问卷 / 健康测评 · 暖纸墨字 视觉提案 · 2026-10-22
+  </footer>
+
+  <script>
+    // 选项选中：标记 spring + 底色，联动进度
+    document.querySelectorAll('[data-opt]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var group = el.closest('[data-group]');
+        if (group) {
+          group.querySelectorAll('[data-opt]').forEach(function (o) { o.classList.remove('is-on'); });
+        }
+        el.classList.toggle('is-on');
+        var answered = document.querySelectorAll('[data-opt].is-on').length;
+        var fill = document.getElementById('pfill');
+        var answeredEl = document.getElementById('panswered');
+        var leftEl = document.getElementById('pleft');
+        if (fill) fill.style.width = (answered * 9) + '%';
+        if (answeredEl) answeredEl.textContent = String(answered);
+        if (leftEl) leftEl.textContent = '还差 ' + Math.max(0, 4 - answered) + ' 题必答';
+      });
+    });
+
+    // 结果页：分数条动画
+    var played = false;
+    function playResult() {
+      if (played) return;
+      played = true;
+      var fill = document.getElementById('scoreFill');
+      if (fill) fill.style.width = '65%';
+      document.querySelectorAll('[data-bar]').forEach(function (bar, i) {
+        setTimeout(function () { bar.style.width = bar.getAttribute('data-bar') + '%'; }, 120 + i * 80);
+      });
+    }
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) { playResult(); io.disconnect(); } });
+      }, { threshold: 0.25 });
+      var t = document.getElementById('scoreFill');
+      if (t) io.observe(t);
+    } else { playResult(); }
+    setTimeout(playResult, 1200);
+  </script>
+</body>
+</html>

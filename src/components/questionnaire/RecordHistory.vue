@@ -8,6 +8,9 @@
  *
  * `onLoad` / `onReachBottom` 是页面级生命周期，只能在页面文件里调用，
  * 因此由页面把 activityNo / title 作为 props 传进来，并转发 loadMore。
+ *
+ * 视觉（docs/UI-UX-V6-设计系统.md §4/§5）：页面底 `--bx-bg`、内容走 `.bx-container`，
+ * 区块之间 16，列表本身是一张带 1px 描边与圆角 14 的卡。
  */
 
 import { ref } from 'vue'
@@ -48,7 +51,7 @@ defineExpose({ loadMore, refresh })
   <view class="history-page">
     <BxNavBar :title="title" :fallback-url="coverUrl(activityNo)" />
 
-    <view class="history-page__body">
+    <view class="history-page__body bx-container">
       <RecordList v-if="activityNo" ref="listRef" :activity-no="activityNo" />
       <BxEmpty v-else text="缺少活动编号" tip="请从问卷页进入记录列表" />
     </view>

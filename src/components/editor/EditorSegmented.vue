@@ -7,8 +7,8 @@
  * 而且在 PC 上不需要额外一次点击。取值一律来自平台元数据的枚举，
  * 不做自由输入 —— 自由输入必然产生平台不接受的脏值。
  *
- * 版式是**一段连续的控件**而不是一排药丸：外框是一个浅底槽，选中项是一块
- * 抬起来的白片（规范 §6 的控件语言）。药丸排布在选项变多时会散成一地。
+ * V6「清简」版式：外框是胶囊槽（`--bx-surface-2` 底 + 1px 描边），选中项是槽里
+ * 抬起来的一块白片（`--bx-surface` + `--bx-elev-1`），与列表页状态筛选是同一个控件。
  */
 
 interface Option {
@@ -46,26 +46,26 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 </template>
 
 <style lang="scss" scoped>
-/* 槽：浅底 + 1px 描边，选中项是槽里的一块白片 */
+/* 槽：胶囊 + 3px 内边距；选中项是槽里的一枚白片 */
 .bx-seg {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  padding: 2px;
+  padding: 3px;
   background-color: var(--bx-surface-2);
   border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-sm);
+  border-radius: var(--bx-radius-pill);
 }
 
 .bx-seg__item {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
+  height: 28px;
   padding: 0 12px;
   cursor: pointer;
-  border-radius: var(--bx-radius-xs);
+  border-radius: var(--bx-radius-pill);
   transition:
     background-color var(--bx-duration-fast) var(--bx-ease-out),
     color var(--bx-duration-fast) var(--bx-ease-out);
@@ -74,7 +74,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 /* 悬停反馈只给指针设备（触屏端没有悬停态） */
 @media (hover: hover) {
   .bx-seg__item:hover {
-    background-color: var(--bx-line-2);
+    color: var(--bx-text);
   }
 }
 
@@ -84,25 +84,20 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
   box-shadow: var(--bx-elev-1);
 }
 
-@media (hover: hover) {
-  .bx-seg__item--on:hover {
-    background-color: var(--bx-surface);
-  }
-}
-
 .bx-seg__item:focus-visible {
   outline: 2px solid var(--bx-primary);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .bx-seg__text {
   font-size: 13px;
-  line-height: 20px;
-  color: var(--bx-text-2);
+  line-height: 1;
+  color: var(--bx-text-3);
+  white-space: nowrap;
 }
 
 .bx-seg__item--on .bx-seg__text {
-  color: var(--bx-primary);
+  color: var(--bx-text);
   font-weight: 500;
 }
 </style>

@@ -2,7 +2,7 @@
 /**
  * 题目列表里的一行（收起态）—— 设计器的**题纲**
  *
- * 一行三件事：题号、题干摘要、题型标签（规范 §7.6）。
+ * 一行三件事：题号（01 / 02…）、题干摘要、元信息（题型 · 选项数 · 分值）。
  * 选中态用「左侧 2px 主色条 + 浅主色底」，与画布上的落笔色是同一支墨。
  *
  * **高度必须等于 `ITEM_ROW_HEIGHT`**：拖拽重排用固定行高反算落点，
@@ -11,6 +11,9 @@
  *
  * 行间用 `border-bottom` 而不是 `margin` —— 有间隙的话「第 n 行」的区间就不再是
  * `[n*h, (n+1)*h)`，落点会算偏。
+ *
+ * 上移 / 下移 / 删除三个按钮**默认隐形**（与原型一致）：悬停、键盘聚焦或选中
+ * 这一行时才出现。选中即常驻，触屏端先点行再操作，不会没有入口。
  */
 
 import type { EditorItem } from '@/domain/editor'
@@ -64,16 +67,19 @@ const emit = defineEmits<{
  */
 const title = computed(() => stripQuestionTitleIndex(plainText(props.item.title)) || '未命名题目')
 
-/** 副信息：选项数与分值（没有就不占位） */
-const note = computed(() => {
-  const parts: string[] = []
+/** 题号补零到两位（原型：01 / 02 …） */
+const displayNo = computed(() => String(props.index + 1).padStart(2, '0'))
+
+/** 元信息：题型 · 选项数 · 分值（没有的部分不占位） */
+const metaParts = computed(() => {
+  const parts: string[] = [props.item.type]
   if (typeHasOptions(props.item.type)) {
-    parts.push(`${props.item.options.length} 个选项`)
+    parts.push(`${props.item.options.length} 项`)
   }
   if (props.item.points > 0) {
     parts.push(`${props.item.points} 分`)
   }
-  return parts.join('、')
+  return parts
 })
 </script>
 
@@ -98,14 +104,21 @@ const note = computed(() => {
       <view class="bx-editor-item-row__handle-dots" aria-hidden="true" />
     </view>
 
-    <text class="bx-editor-item-row__index">{{ props.index + 1 }}</text>
+    <text class="bx-editor-item-row__index">{{ displayNo }}</text>
 
     <view class="bx-editor-item-row__main" @click="emit('select')">
       <text class="bx-editor-item-row__title">{{ title }}</text>
-      <view class="bx-editor-item-row__tags">
-        <text class="bx-editor-item-row__tag">{{ props.item.type }}</text>
-        <text v-if="props.item.required" class="bx-editor-item-row__tag bx-editor-item-row__tag--req">必填</text>
-        <text v-if="note" class="bx-editor-item-row__note">{{ note }}</text>
+      <view class="bx-editor-item-row__meta">
+        <view v-if="props.item.required" class="bx-editor-item-row__reqdot" aria-hidden="true" />
+        <text v-if="props.item.required" class="bx-editor-item-row__req">必答</text>
+        <text class="bx-editor-item-row__meta-item">{{ metaParts[0] }}</text>
+        <text
+          v-for="part in metaParts.slice(1)"
+          :key="part"
+          class="bx-editor-item-row__meta-item"
+        >
+          · {{ part }}
+        </text>
       </view>
     </view>
 
@@ -176,7 +189,14 @@ const note = computed(() => {
     border-color var(--bx-duration-base) var(--bx-ease-out);
 }
 
-/* 选中：左侧 2px 主色条 + 浅主色底（规范 §7.6） */
+/* 悬停：只提一档浅底，不抢选中态 */
+@media (hover: hover) {
+  .bx-editor-item-row:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+/* 选中：左侧 2px 主色条 + 浅主色底 */
 .bx-editor-item-row--selected {
   border-left-color: var(--bx-primary);
   background-color: var(--bx-primary-soft);
@@ -204,9 +224,10 @@ const note = computed(() => {
 
 .bx-editor-item-row__handle {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 20px;
   height: 100%;
   cursor: grab;
   user-select: none;
@@ -215,9 +236,8 @@ const note = computed(() => {
 /*
  * 拖拽把手：2×3 点阵
  *
- * 原先是一个「⋮⋮」文字符号 —— 字形随字体变化，两个竖排点在各平台的间距也不一致。
- * 这里用「一个小圆 + 5 个 box-shadow 偏移」画点阵，比 radial-gradient 背景更稳
- * （部分小程序内核不支持 radial-gradient）。
+ * 用「一个小圆 + 5 个 box-shadow 偏移」画点阵，比文字符号稳
+ * （字形随字体变化），也比 radial-gradient 背景稳（部分小程序内核不支持）。
  */
 .bx-editor-item-row__handle-dots {
   width: 3px;
@@ -225,24 +245,31 @@ const note = computed(() => {
   background-color: var(--bx-text-4);
   border-radius: 50%;
   box-shadow:
-    5px 0 0 var(--bx-text-4),
-    0 5px 0 var(--bx-text-4),
-    5px 5px 0 var(--bx-text-4),
-    0 10px 0 var(--bx-text-4),
-    5px 10px 0 var(--bx-text-4);
+    4px 0 0 var(--bx-text-4),
+    0 4px 0 var(--bx-text-4),
+    4px 4px 0 var(--bx-text-4),
+    0 8px 0 var(--bx-text-4),
+    4px 8px 0 var(--bx-text-4);
 }
 
-/* 题号：中性色 + 等宽数字（规范 §3.2：数字一律 tabular-nums） */
+/* 题号：11 / 500 + 等宽数字（与画布题号同一套） */
 .bx-editor-item-row__index {
   flex: none;
-  width: 26px;
-  font-size: 12px;
-  line-height: 18px;
+  width: 22px;
+  padding-top: 1px;
   color: var(--bx-text-3);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
+.bx-editor-item-row--selected .bx-editor-item-row__index {
+  color: var(--bx-primary);
+}
+
+/* 右侧给操作按钮留出位置（按钮绝对定位，悬停才出现） */
 .bx-editor-item-row__main {
   display: flex;
   flex: 1;
@@ -250,74 +277,97 @@ const note = computed(() => {
   justify-content: center;
   min-width: 0;
   height: 100%;
+  padding-right: 76px;
   cursor: pointer;
 }
 
 /* 单行省略：题目行必须保持固定高度，两行文字会溢出 */
 .bx-editor-item-row__title {
   overflow: hidden;
-  font-size: 14px;
-  line-height: 20px;
   color: var(--bx-text);
+  font-size: 13px;
+  line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 题型标签 + 必填 + 计数：一行小字，把「这题是什么」说清楚 */
-.bx-editor-item-row__tags {
+.bx-editor-item-row--selected .bx-editor-item-row__title {
+  color: var(--bx-primary);
+}
+
+/* 元信息：11 元信息灰，一行排开 */
+.bx-editor-item-row__meta {
   display: flex;
   align-items: center;
-  margin-top: 2px;
+  gap: 4px;
   overflow: hidden;
-}
-
-.bx-editor-item-row__tag {
-  flex: none;
-  padding: 0 6px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--bx-text-2);
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius-xs);
-}
-
-/* 必填：红星只标「必答」，不用语义底色 —— 一行里只该有一处主色 */
-.bx-editor-item-row__tag--req {
-  margin-left: 4px;
-  color: var(--bx-danger);
-  border-color: var(--bx-danger-line);
-}
-
-.bx-editor-item-row__note {
-  margin-left: 6px;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 16px;
+  margin-top: 1px;
   color: var(--bx-text-3);
-  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 16px;
   white-space: nowrap;
 }
 
-.bx-editor-item-row__actions {
-  display: flex;
+.bx-editor-item-row__meta-item {
   flex: none;
-  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 36px 点击区：56px 的行高装得下，比原 32px 更接近触摸目标下限 */
+/* 必答：一颗 4px 主色小点 + 文字（状态不只靠颜色） */
+.bx-editor-item-row__reqdot {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--bx-primary);
+}
+
+.bx-editor-item-row__req {
+  flex: none;
+  color: var(--bx-primary);
+}
+
+/* 操作：绝对定位在行右侧，默认隐形 */
+.bx-editor-item-row__actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: flex;
+  gap: 0;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-editor-item-row:hover .bx-editor-item-row__actions,
+.bx-editor-item-row:focus-within .bx-editor-item-row__actions,
+.bx-editor-item-row--selected .bx-editor-item-row__actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  /* 触屏没有悬停：选中行才显形，先点行再操作 */
+  .bx-editor-item-row__actions {
+    opacity: 1;
+  }
+}
+
 .bx-editor-item-row__btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
   cursor: pointer;
-  border-radius: var(--bx-radius-sm);
+  border-radius: var(--bx-radius-xs);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-.bx-editor-item-row__btn:hover,
-.bx-editor-item-row__btn:active {
-  background-color: var(--bx-line-2);
+@media (hover: hover) {
+  .bx-editor-item-row__btn:hover {
+    background-color: var(--bx-line-2);
+  }
 }
 
 .bx-editor-item-row__btn:focus-visible {
@@ -330,16 +380,16 @@ const note = computed(() => {
   height: 8px;
 }
 
-/* 上 / 下移箭头：两条边框旋转 45°（不再用 ↑ ↓ 文字符号） */
+/* 上 / 下移箭头：两条边框旋转 45°（不用 ↑ ↓ 文字符号） */
 .bx-editor-item-row__btn-text--up {
-  border-top: 2px solid var(--bx-text-2);
-  border-left: 2px solid var(--bx-text-2);
+  border-top: 1.5px solid var(--bx-text-2);
+  border-left: 1.5px solid var(--bx-text-2);
   transform: rotate(45deg);
 }
 
 .bx-editor-item-row__btn-text--down {
-  border-right: 2px solid var(--bx-text-2);
-  border-bottom: 2px solid var(--bx-text-2);
+  border-right: 1.5px solid var(--bx-text-2);
+  border-bottom: 1.5px solid var(--bx-text-2);
   transform: rotate(45deg);
 }
 
@@ -349,11 +399,11 @@ const note = computed(() => {
   border-color: var(--bx-line);
 }
 
-/* 删除：两条交叉线（不再用 ✕ 文字符号） */
+/* 删除：两条交叉线（不用 ✕ 文字符号） */
 .bx-editor-item-row__btn-text--close {
   position: relative;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 
 .bx-editor-item-row__btn-text--close::before,
@@ -362,7 +412,7 @@ const note = computed(() => {
   position: absolute;
   top: 50%;
   left: 0;
-  width: 10px;
+  width: 9px;
   height: 1.5px;
   margin-top: -0.75px;
   background-color: var(--bx-danger);

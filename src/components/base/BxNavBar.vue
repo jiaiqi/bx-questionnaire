@@ -107,7 +107,7 @@ function onKeydown(event: KeyboardEvent): void {
  */
 /* #ifdef H5 */
 .bx-navbar {
-  background-color: #FFFFFFE6;
+  background-color: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -115,7 +115,7 @@ function onKeydown(event: KeyboardEvent): void {
 /* #endif */
 
 .bx-navbar--border {
-  border-bottom: 1px solid var(--bx-line);
+  border-bottom: 1px solid var(--bx-line-2);
 }
 
 .bx-navbar__side {
@@ -166,9 +166,10 @@ function onKeydown(event: KeyboardEvent): void {
 .bx-navbar__title {
   flex: 1;
   overflow: hidden;
-  font-size: var(--bx-font-h2);
-  font-weight: 600;
-  line-height: var(--bx-leading-h2);
+  font-size: var(--bx-font-body);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
   color: var(--bx-text);
   text-align: center;
   white-space: nowrap;

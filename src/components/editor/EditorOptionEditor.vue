@@ -11,6 +11,9 @@
  *
  * 拖拽浮层只覆盖选项列表区域：选项在题目面板内部，而题目面板在移动端本身就是一个
  * 全屏浮层，所以不能再放一个全屏浮层（会盖住面板的保存/关闭按钮）。
+ *
+ * V6「清简」：字母用 11 元信息，输入框 32 高、白底细描边；正确答案是一枚小圆点
+ * 开关（选中 = 成功绿 + 白勾）；上移 / 下移 / 删除是 24px 的图标按钮。
  */
 
 import type { EditorOption } from '@/domain/editor'
@@ -194,10 +197,7 @@ function onPointsInput(index: number, event: unknown): void {
       />
     </view>
 
-    <!--
-      计数放在列表下面：外层分组标题已经写了「选项」，这里再写一遍
-      标题就变成同一件事标两遍；只剩一个计数，谁都不误导。
-    -->
+    <!-- 计数：列表下方右对齐（「选项」标签由外层分组给出，这里只有计数） -->
     <view class="bx-editor-option__foot">
       <text class="bx-editor-option__count">{{ props.options.length }} / {{ MAX_OPTIONS }}</text>
     </view>
@@ -235,9 +235,9 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 .bx-editor-option__count {
-  font-size: 12px;
-  line-height: 18px;
   color: var(--bx-text-3);
+  font-size: 11px;
+  line-height: 16px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -246,9 +246,9 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 .bx-editor-option-list {
-  border: 1px solid var(--bx-line);
-  border-radius: var(--bx-radius);
   overflow: hidden;
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
 }
 
 /*
@@ -274,6 +274,12 @@ function onPointsInput(index: number, event: unknown): void {
   border-bottom: none;
 }
 
+@media (hover: hover) {
+  .bx-editor-option-row:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
 /* 拖起：压下去一点 + 抬起来一点（与题纲行同一套反馈） */
 .bx-editor-option-row--dragging {
   z-index: 2;
@@ -288,9 +294,10 @@ function onPointsInput(index: number, event: unknown): void {
 
 .bx-editor-option-row__handle {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 16px;
   height: 100%;
   cursor: grab;
   user-select: none;
@@ -299,8 +306,8 @@ function onPointsInput(index: number, event: unknown): void {
 /*
  * 拖拽把手：2×3 点阵
  *
- * 原为「⋮⋮」文字符号 —— 字形随字体变化、间距不一致。这里用「一个小圆 + 5 个
- * box-shadow 偏移」画点阵，比 radial-gradient 背景更稳（部分小程序内核不支持）。
+ * 用「一个小圆 + 5 个 box-shadow 偏移」画点阵，比文字符号稳，
+ * 比 radial-gradient 背景稳（部分小程序内核不支持）。
  */
 .bx-editor-option-row__dots {
   width: 3px;
@@ -315,24 +322,29 @@ function onPointsInput(index: number, event: unknown): void {
     4px 8px 0 var(--bx-text-4);
 }
 
+/* 字母：11 元信息 + 等宽（选项位置由下标算出） */
 .bx-editor-option-row__letter {
-  width: 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--bx-text-2);
+  flex: none;
+  width: 18px;
+  color: var(--bx-text-3);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .bx-editor-option-row__input {
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
   height: 30px;
   padding: 0 8px;
-  font-size: 13px;
   color: var(--bx-text);
+  font-size: 12px;
   background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius-sm);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-xs);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
@@ -343,19 +355,28 @@ function onPointsInput(index: number, event: unknown): void {
   box-shadow: var(--bx-focus-glow);
 }
 
+/* 正确答案：一枚小圆点开关 */
 .bx-editor-option-row__answer {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
   cursor: pointer;
+  background-color: var(--bx-surface);
   border: 1px solid var(--bx-line-strong);
   border-radius: 50%;
-  background-color: var(--bx-surface);
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+.bx-editor-option-row__answer:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
 }
 
 .bx-editor-option-row__answer--on {
@@ -364,17 +385,15 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 /*
- * 正确答案的对勾
- *
- * 用两条边框旋转绘制（原为「✓」文字符号）。未选中时用 opacity 藏起来，
- * 而不是像原来那样把文字颜色设成 transparent —— 后者的元素仍在布局里占位。
+ * 正确答案的对勾：两条边框旋转绘制。
+ * 用 opacity 藏起来而不是把颜色设成 transparent —— 后者元素仍在布局里占位。
  */
 .bx-editor-option-row__answer-text {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   opacity: 0;
-  border-right: 2px solid #fff;
-  border-bottom: 2px solid #fff;
+  border-right: 2px solid var(--bx-surface);
+  border-bottom: 2px solid var(--bx-surface);
   transform: rotate(45deg) translate(-1px, -1px);
 }
 
@@ -383,16 +402,18 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 .bx-editor-option-row__points {
-  width: 40px;
+  box-sizing: border-box;
+  width: 34px;
   height: 30px;
   margin-left: 4px;
-  padding: 0 4px;
-  font-size: 13px;
-  color: var(--bx-text);
+  padding: 0 2px;
+  color: var(--bx-text-2);
+  font-size: 12px;
   text-align: center;
   background-color: var(--bx-surface-2);
-  border: 1px solid var(--bx-line-strong);
-  border-radius: var(--bx-radius-sm);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-xs);
+  font-variant-numeric: tabular-nums;
   transition:
     border-color var(--bx-duration-fast) var(--bx-ease-out),
     box-shadow var(--bx-duration-fast) var(--bx-ease-out);
@@ -405,19 +426,29 @@ function onPointsInput(index: number, event: unknown): void {
 
 .bx-editor-option-row__btn {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 28px;
+  width: 22px;
+  height: 26px;
   cursor: pointer;
-  border-radius: var(--bx-radius-sm);
+  border-radius: var(--bx-radius-xs);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-/* 悬停反馈只给指针设备（触屏端走 hover-class 的按下态） */
 @media (hover: hover) {
   .bx-editor-option-row__btn:hover {
     background-color: var(--bx-line-2);
   }
+
+  .bx-editor-option-row__btn--danger:hover {
+    background-color: var(--bx-danger-soft);
+  }
+}
+
+.bx-editor-option-row__btn:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: -2px;
 }
 
 .bx-editor-option-row__btn-text {
@@ -425,7 +456,7 @@ function onPointsInput(index: number, event: unknown): void {
   height: 7px;
 }
 
-/* 上 / 下移箭头：两条边框旋转 45°（不再用 ↑ ↓ 文字符号） */
+/* 上 / 下移箭头：两条边框旋转 45°（不用 ↑ ↓ 文字符号） */
 .bx-editor-option-row__btn-text--up {
   border-top: 1.5px solid var(--bx-text-2);
   border-left: 1.5px solid var(--bx-text-2);
@@ -444,7 +475,7 @@ function onPointsInput(index: number, event: unknown): void {
   border-color: var(--bx-line);
 }
 
-/* 删除：两条交叉线（不再用 ✕ 文字符号） */
+/* 删除：两条交叉线（不用 ✕ 文字符号） */
 .bx-editor-option-row__btn-text--close {
   position: relative;
   width: 9px;
@@ -479,7 +510,6 @@ function onPointsInput(index: number, event: unknown): void {
   bottom: 0;
   left: 0;
   z-index: 10;
-  /* 拖拽时蒙一层极浅的墨蓝（6%），告诉用户「现在是在拖」 */
   opacity: 0.6;
   background-color: var(--bx-glow);
 }
@@ -502,26 +532,27 @@ function onPointsInput(index: number, event: unknown): void {
   bottom: 0;
 }
 
+/* 添加选项：静默文字按钮（加号 + 文案），不用整块虚线框抢注意力 */
 .bx-editor-option__add {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 36px;
-  margin-top: 8px;
+  align-self: flex-start;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--bx-radius-xs);
   cursor: pointer;
-  border: 1px dashed var(--bx-primary-line);
-  border-radius: var(--bx-radius);
-  transition:
-    background-color var(--bx-duration-fast) var(--bx-ease-out),
-    border-color var(--bx-duration-fast) var(--bx-ease-out);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
 }
 
-/* 悬停反馈只给指针设备（触屏端走 hover-class 的按下态） */
 @media (hover: hover) {
   .bx-editor-option__add:hover {
-    border-color: var(--bx-primary);
-    background-color: var(--bx-primary-soft);
+    background-color: var(--bx-surface-2);
   }
+}
+
+.bx-editor-option__add:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 1px;
 }
 
 .bx-editor-option__add--off {
@@ -529,12 +560,12 @@ function onPointsInput(index: number, event: unknown): void {
   opacity: var(--bx-disabled-opacity);
 }
 
-/* 加号用两条线绘制（原为「＋ 添加选项」里的全角加号） */
+/* 加号用两条线绘制（不用「＋」全角符号） */
 .bx-editor-option__add-icon {
   position: relative;
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   margin-right: 6px;
 }
 
@@ -544,7 +575,7 @@ function onPointsInput(index: number, event: unknown): void {
   position: absolute;
   top: 50%;
   left: 0;
-  width: 10px;
+  width: 9px;
   height: 1.5px;
   margin-top: -0.75px;
   background-color: var(--bx-primary);
@@ -556,13 +587,15 @@ function onPointsInput(index: number, event: unknown): void {
 }
 
 .bx-editor-option__add-text {
-  font-size: 13px;
   color: var(--bx-primary);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .bx-editor-option__hint {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 4px;
   color: var(--bx-text-3);
+  font-size: 11px;
+  line-height: 16px;
 }
 </style>
