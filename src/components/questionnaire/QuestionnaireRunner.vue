@@ -327,6 +327,9 @@ async function init(): Promise<void> {
 
   // 嵌入场景：问卷配置就绪，告诉父页面可以收起加载动画（契约 FORM_READY）
   notifyParent('FORM_READY', { serviceName: 'srvdaq_init_view_select' })
+  // 兼容 l-mp-weixin-reface 的 webview 壳：它只认 h5_loaded 才撤加载遮罩（历史自定义协议），
+  // 同步补发一条，否则问卷被它嵌入时会一直停在「加载中」。
+  notifyParent('h5_loaded', { serviceName: 'srvdaq_init_view_select' })
 
   if (Object.keys(backfill.value).length > 0) {
     replace(backfill.value)

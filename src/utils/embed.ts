@@ -16,6 +16,7 @@
  * | `REFRESH_LIST` | 业务要求父页面刷新列表 | 可选 |
  * | `RESIZE` | 内容高度变化 | `{height}` |
  * | `TICKET_EXPIRED` | 收到 `0011` 会话过期 | — |
+ * | `h5_loaded` | 首屏就绪（兼容 l-mp-weixin-reface 的 webview 壳，非平台契约） | `{serviceName}` |
  *
  * 只在 H5 生效：小程序 / App 没有 `window.parent`，条件编译整段剥离
  * （`scripts/check-conditional.mjs` 会校验指纹在 H5 产物中存在、在小程序产物中被剥离）。
@@ -31,6 +32,11 @@ export type EmbedMessageType
     | 'REFRESH_LIST'
     | 'RESIZE'
     | 'TICKET_EXPIRED'
+    /**
+     * 历史自定义协议：l-mp-weixin-reface 的 `views/public/webview/webview` 壳页
+     * 只认这条消息来撤掉加载遮罩。发 `FORM_READY` 时同步补发一条，两套宿主都兼容。
+     */
+    | 'h5_loaded'
 
 /** 写操作成功载荷（对齐平台 `buildSubmitPayload`） */
 export interface EmbedSubmitPayload {

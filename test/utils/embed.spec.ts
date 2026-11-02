@@ -85,6 +85,17 @@ describe('embed · notifyParent', () => {
     expect(posted).toEqual([{ message: { type: 'RESIZE', data: { height: 1234 } }, targetOrigin: '*' }])
   })
 
+  it('h5_loaded 与平台消息同信封发送 —— l-mp-weixin-reface 的 webview 壳按 type 撤加载遮罩', () => {
+    const { posted } = stubWindow({ sameAsTop: false })
+
+    notifyParent('h5_loaded', { serviceName: 'srvdaq_init_view_select' })
+
+    expect(posted).toEqual([{
+      message: { type: 'h5_loaded', data: { serviceName: 'srvdaq_init_view_select' } },
+      targetOrigin: '*',
+    }])
+  })
+
   it('data 省略时补空对象 —— 父页面解构 data 不会拿到 undefined', () => {
     const { posted } = stubWindow({ sameAsTop: false })
 
