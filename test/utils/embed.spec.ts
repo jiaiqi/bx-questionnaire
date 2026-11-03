@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildSubmitPayload, isEmbedded, notifyParent } from '@/utils/embed'
+import { buildSubmitPayload, detectHostChrome, isEmbedded, isHostChrome, notifyParent } from '@/utils/embed'
 
 /**
  * 最小 window 桩
@@ -67,6 +67,204 @@ describe('embed · isEmbedded', () => {
   it('访问 window.top 抛 SecurityError → **算嵌入** —— 跨域 iframe 恰恰是典型嵌入场景，判断反了就全错', () => {
     stubWindow({ sameAsTop: false, throwing: true })
     expect(isEmbedded()).toBe(true)
+  })
+})
+
+/**
+ * 各端真实 UA 样本
+ *
+ * 取真机实测的形态而不是编造：判定逻辑的价值全在「这些词到底出没出现」，
+ * 用假 UA 写测试等于自己给答案。
+ */
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+/** 微信小程序 web-view（Android，微信 7.0 起 UA 带 miniProgram） */
+const WX_MP_UA = 'Mozilla/5.0 (Linux; Android 13; 2211133C Build/TKQ1.221114.001; wv) AppleWebKit/537.36 '
+  + '(KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 Mobile Safari/537.36 XWEB/1160065 MMWEBSDK/20231202 '
+  + 'MicroMessenger/8.0.47.2560(0x28002F35) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64 '
+  + 'miniProgram/wx1234567890abcdef'
+
+/** 公众号 H5（微信内置浏览器，只有 MicroMessenger，没有 miniProgram） */
+const WX_OA_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 '
+  + '(KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128) NetType/WIFI Language/zh_CN'
+
+/** 鸿蒙微信：官方建议看 ArkWeb + MicroMessenger，但公众号同款也带这两个词 */
+const WX_HARMONY_UA = 'Mozilla/5.0 (Phone; OpenHarmony 5.0) AppleWebKit/537.36 (KHTML, like Gecko) '
+  + 'Chrome/114.0.0.0 Safari/537.36 ArkWeb/4.1.6.1 Mobile MicroMessenger/8.0.56'
+
+/** 支付宝小程序 web-view（MiniProgram 大写） */
+const ALIPAY_MP_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 '
+  + '(KHTML, like Gecko) Mobile/15E148 Ariver/1.0.0 AliApp(AP/10.5.0.6000) Nebula WK RVKType(0) '
+  + 'AlipayDefined(nt:WIFI,ws:390|844|3.0) AlipayClient/10.5.0.6000 Language/zh-Hans Region/CN miniProgram'
+
+/** 抖音小程序 web-view */
+const TOUTIAO_MP_UA = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) '
+  + 'Chrome/116.0.0.0 Mobile Safari/537.36 ToutiaoMicroApp/2.0'
+
+/** uni-app / HTML5+ 打包的 App 里的 web-view */
+const APP_UA = 'Mozilla/5.0 (Linux; Android 13; V2254A Build/TP1A.220624.014) AppleWebKit/537.36 '
+  + '(KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36 Html5Plus/1.0'
+
+describe('embed · detectHostChrome', () => {
+  it('普通浏览器独立打开 → 保留导航栏', () => {
+    expect(detectHostChrome({ userAgent: CHROME_UA })).toBe(false)
+    expect(detectHostChrome()).toBe(false)
+  })
+
+  it('iframe 内 → 隐藏 —— 门户 / 平台弹窗自己画了标题栏', () => {
+    expect(detectHostChrome({ iframe: true, userAgent: CHROME_UA })).toBe(true)
+  })
+
+  it('微信小程序 web-view（UA 带 miniProgram）→ 隐藏', () => {
+    expect(detectHostChrome({ userAgent: WX_MP_UA })).toBe(true)
+  })
+
+  it('支付宝小程序 web-view（MiniProgram 大写）→ 隐藏 —— 大小写不一致，不能区分对待', () => {
+    expect(detectHostChrome({ userAgent: ALIPAY_MP_UA })).toBe(true)
+  })
+
+  it('抖音小程序 web-view → 隐藏', () => {
+    expect(detectHostChrome({ userAgent: TOUTIAO_MP_UA })).toBe(true)
+  })
+
+  it('uni-app / HTML5+ 的 App web-view（UA 带 Html5Plus）→ 隐藏', () => {
+    expect(detectHostChrome({ userAgent: APP_UA })).toBe(true)
+  })
+
+  it('存在 HTML5+ 运行时 → 隐藏 —— UA 被 App 改过时的第二条通道', () => {
+    expect(detectHostChrome({ appRuntime: true, userAgent: CHROME_UA })).toBe(true)
+  })
+
+  it('公众号 H5（微信内置浏览器，UA 带 MicroMessenger）→ 隐藏 —— 微信自己的标题栏已经占位', () => {
+    expect(detectHostChrome({ userAgent: WX_OA_UA })).toBe(true)
+  })
+
+  it('鸿蒙微信（ArkWeb + MicroMessenger）→ 隐藏 —— 微信内置浏览器同款标题栏，不需要单独看 ArkWeb', () => {
+    expect(detectHostChrome({ userAgent: WX_HARMONY_UA })).toBe(true)
+  })
+
+  it('__wxjs_environment === miniprogram → 隐藏（UA 之外的补充信号）', () => {
+    expect(detectHostChrome({ wxjsEnvironment: 'miniprogram', userAgent: CHROME_UA })).toBe(true)
+    // 大小写不敏感：这个变量由客户端注入，值形态不完全固定
+    expect(detectHostChrome({ wxjsEnvironment: 'MiniProgram', userAgent: CHROME_UA })).toBe(true)
+  })
+
+  it('__wxjs_environment 是其它值（如 wechat）→ 不影响判定', () => {
+    expect(detectHostChrome({ wxjsEnvironment: 'wechat', userAgent: CHROME_UA })).toBe(false)
+  })
+
+  it('hideHeader=1 强制隐藏 —— 宿主 UA / 容器都识别不出来时的出口', () => {
+    expect(detectHostChrome({ search: '?hideHeader=1', userAgent: CHROME_UA })).toBe(true)
+    expect(detectHostChrome({ search: 'hideHeader=true', userAgent: CHROME_UA })).toBe(true)
+  })
+
+  it('hideHeader=0 强制保留 —— 覆盖 iframe 与 web-view 的自动判定，用于排查「导航栏怎么没了」', () => {
+    expect(detectHostChrome({ search: '?hideHeader=0', iframe: true, userAgent: WX_MP_UA })).toBe(false)
+    expect(detectHostChrome({ search: 'hideHeader=false', iframe: true })).toBe(false)
+  })
+
+  it('hideHeader 取值不认识时不改变自动判定 —— 不能因为拼写错误就静默藏掉导航栏', () => {
+    expect(detectHostChrome({ search: '?hideHeader=yes', userAgent: CHROME_UA })).toBe(false)
+    expect(detectHostChrome({ search: '?hideHeader=yes', iframe: true })).toBe(true)
+    expect(detectHostChrome({ search: '?hideHeader=', userAgent: CHROME_UA })).toBe(false)
+  })
+
+  it('查询串里混杂其它参数也能取到 hideHeader', () => {
+    expect(detectHostChrome({ search: '?t=abcd&hideHeader=1&srvApp=daq', userAgent: CHROME_UA })).toBe(true)
+  })
+})
+
+/**
+ * 浏览器桩（供 `isHostChrome` 用）
+ *
+ * 与 `stubWindow` 分开：那个只覆盖 postMessage 需要的最少成员；这个还要
+ * `location`、`navigator`、微信注入的环境变量与 HTML5+ 的 `plus`。
+ */
+function stubBrowser(options: {
+  sameAsTop?: boolean
+  userAgent?: string
+  search?: string
+  hash?: string
+  wxjsEnvironment?: string
+  plus?: unknown
+} = {}): void {
+  const sameAsTop = options.sameAsTop ?? true
+  const collect = (): void => {}
+  const self: Record<string, unknown> = {
+    postMessage: collect,
+    location: { search: options.search ?? '', hash: options.hash ?? '' },
+  }
+  const parent = sameAsTop ? self : { postMessage: collect }
+  const win: Record<string, unknown> = {
+    self,
+    parent,
+    top: sameAsTop ? self : parent,
+    postMessage: collect,
+    location: self.location,
+  }
+  if (options.wxjsEnvironment !== undefined) {
+    win.__wxjs_environment = options.wxjsEnvironment
+  }
+  if (options.plus !== undefined) {
+    win.plus = options.plus
+  }
+  vi.stubGlobal('window', win)
+  vi.stubGlobal('navigator', { userAgent: options.userAgent ?? '' })
+}
+
+describe('embed · isHostChrome', () => {
+  it('node 环境没有 window → 保留导航栏（小程序产物恒走这条）', () => {
+    expect(typeof window).toBe('undefined')
+    expect(isHostChrome()).toBe(false)
+  })
+
+  it('独立打开的普通浏览器 → 保留', () => {
+    stubBrowser({ userAgent: CHROME_UA })
+    expect(isHostChrome()).toBe(false)
+  })
+
+  it('iframe 内 → 隐藏', () => {
+    stubBrowser({ sameAsTop: false, userAgent: CHROME_UA })
+    expect(isHostChrome()).toBe(true)
+  })
+
+  it('小程序 web-view（UA 判定）→ 隐藏', () => {
+    stubBrowser({ userAgent: WX_MP_UA })
+    expect(isHostChrome()).toBe(true)
+  })
+
+  it('公众号 H5（微信内置浏览器）→ 隐藏', () => {
+    stubBrowser({ userAgent: WX_OA_UA })
+    expect(isHostChrome()).toBe(true)
+  })
+
+  it('存在 HTML5+ 的 window.plus → 隐藏', () => {
+    stubBrowser({ userAgent: CHROME_UA, plus: { navigator: {} } })
+    expect(isHostChrome()).toBe(true)
+  })
+
+  it('嵌入地址像 README 那样把参数写在 # 之前，也能读到 hideHeader', () => {
+    stubBrowser({ userAgent: CHROME_UA, search: '?hideHeader=1', hash: '#/pages/questionnaire/index/index' })
+    expect(isHostChrome()).toBe(true)
+  })
+
+  it('页面自己拼的 hash 路由参数也认 —— 参数写在 ? 之后同样是一个入口', () => {
+    stubBrowser({ userAgent: CHROME_UA, hash: '#/pages/questionnaire/index/index?activity_no=x&hideHeader=1' })
+    expect(isHostChrome()).toBe(true)
+  })
+
+  it('宿主级开关优先于 hash 里的页面级写法 —— 前者是宿主的明确指令', () => {
+    stubBrowser({
+      userAgent: CHROME_UA,
+      search: '?hideHeader=0',
+      hash: '#/pages/questionnaire/index/index?hideHeader=1',
+    })
+    expect(isHostChrome()).toBe(false)
+  })
+
+  it('iframe 里显式 hideHeader=0 → 保留（排障出口真的能用）', () => {
+    stubBrowser({ sameAsTop: false, userAgent: CHROME_UA, search: '?hideHeader=0' })
+    expect(isHostChrome()).toBe(false)
   })
 })
 

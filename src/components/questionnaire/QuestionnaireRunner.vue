@@ -47,7 +47,7 @@ import {
 import { matchEntryPrefill } from '@/domain/questionnaire/prefill'
 import { coverUrl, historyUrl, withQuery } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
-import { buildSubmitPayload, notifyParent } from '@/utils/embed'
+import { buildSubmitPayload, isHostChrome, notifyParent } from '@/utils/embed'
 import { BxError } from '@/utils/request'
 import { draftAnswersKey, rememberMyBatch, storage, STORAGE_KEYS } from '@/utils/storage'
 import { confirmDialog, scrollToSelector, toast } from '@/utils/ui'
@@ -76,6 +76,14 @@ const { submitting, submit } = useSubmit()
 
 // 嵌入场景：内容变高时告诉父页面调整 iframe 高度
 useEmbedResize()
+
+/**
+ * 宿主已提供标题栏（iframe / 小程序 / App 的 web-view）
+ *
+ * 此时 `BxNavBar` 不渲染，吸顶进度区上方就没有导航栏可贴了，
+ * 需要把 48px 的偏移一起去掉（见样式里的 `.runner--host-chrome`）。
+ */
+const hostChrome = isHostChrome()
 
 const errors = ref<Record<string, string>>({})
 
@@ -605,12 +613,15 @@ function onHistoryKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <view class="runner">
+  <view class="runner" :class="{ 'runner--host-chrome': hostChrome }">
     <BxNavBar :title="title" :fallback-url="coverUrl(props.activityNo)">
       <template #extra>
         <!--
           答题记录入口：老工程在标题栏常驻「答题记录」按钮（无 v-if），
           新工程此前只能在记录页里手动改 URL 进入，属入口缺失。
+
+          宿主自带标题栏时导航栏整条不渲染，这个入口改由吸顶进度区右侧承载
+          （见下方 `.runner__progress-records`），不会跟着丢。
         -->
         <view
           class="runner__nav-link"
@@ -637,7 +648,12 @@ function onHistoryKeydown(event: KeyboardEvent): void {
     <view class="runner__progress">
       <view class="runner__progress-inner bx-container">
         <BxProgressBar :percent="barPercent" />
-        <view v-if="!loading && !errorMessage" class="runner__progress-meta">
+        <!--
+          宿主自带标题栏时（hostChrome）这一行**始终渲染**：导航栏整条不渲染，
+          「记录」入口挪到这里，加载中 / 加载失败时也要能进记录页 —— 与导航栏
+          时代的行为一致。非宿主模式保持原样：数据没回来就不占这一行的高度。
+        -->
+        <view v-if="hostChrome || (!loading && !errorMessage)" class="runner__progress-meta">
           <!--
             「共 N 题」与「已答 M」是两个独立条目，用竖细线分隔：
             规范 §3.2 禁止中点连接 meta（`A · B · C`）。
@@ -645,7 +661,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
             逐个模式把第一条换成「3 / 11」（当前第几题 / 共几题）：一次一题时
             用户关心的是位置，不是总数；已答多少仍单独列出，两者口径不混。
           -->
-          <view class="runner__progress-count">
+          <view v-if="!loading && !errorMessage" class="runner__progress-count">
             <template v-if="stepMode">
               <text class="runner__progress-count-item runner__progress-count-item--step">
                 {{ stepProgressView.current }} / {{ stepProgressView.total }}
@@ -657,13 +673,34 @@ function onHistoryKeydown(event: KeyboardEvent): void {
             <view class="runner__progress-divider" />
             <text class="runner__progress-count-item">已答 {{ progress.answered }}</text>
           </view>
-          <text
-            v-if="!readOnly"
-            class="runner__progress-left"
-            :class="{ 'runner__progress-left--done': requiredLeft === 0 }"
-          >
-            {{ requiredLeft > 0 ? `还差 ${requiredLeft} 题必答` : '必答题已答完' }}
-          </text>
+          <view class="runner__progress-side">
+            <text
+              v-if="!loading && !errorMessage && !readOnly"
+              class="runner__progress-left"
+              :class="{ 'runner__progress-left--done': requiredLeft === 0 }"
+            >
+              {{ requiredLeft > 0 ? `还差 ${requiredLeft} 题必答` : '必答题已答完' }}
+            </text>
+            <!--
+              宿主模式下的「记录」入口：导航栏不渲染后，这里是它最自然的落点 ——
+              吸顶常驻、位置与导航栏右侧一致，又不像浮动按钮那样盖住题目。
+            -->
+            <template v-if="hostChrome">
+              <view class="runner__progress-divider" />
+              <view
+                class="runner__progress-records"
+                role="button"
+                aria-label="答题记录"
+                tabindex="0"
+                hover-class="runner__progress-records--hover"
+                :hover-stay-time="60"
+                @click="openHistory"
+                @keydown="onHistoryKeydown"
+              >
+                <text class="runner__progress-records-text">记录</text>
+              </view>
+            </template>
+          </view>
         </view>
       </view>
     </view>
@@ -864,12 +901,30 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   border-bottom: 1px solid var(--bx-line-2);
 }
 
+/*
+ * 宿主自带标题栏（iframe / web-view）：导航栏整条不渲染，进度区顶到 0
+ *
+ * 不把全局 `--bx-navbar-height` 归零：设计器页头也拿这个令牌当高度用，
+ * 全局归零会把那边的页头压扁。这里只覆盖本组件需要的这一段偏移。
+ */
+.runner--host-chrome .runner__progress {
+  top: var(--status-bar-height, 0px);
+}
+
 /* 内部内容限宽居中：进度条与计数跟下面那张纸左对齐 */
 .runner__progress-meta {
   display: flex;
-  align-items: baseline;
+  /* 居中而不是 baseline：右侧「记录」是 44px 触摸区，baseline 对齐会让它把行高撑歪 */
+  align-items: center;
   justify-content: space-between;
   padding-top: 8px;
+}
+
+/* 右侧一组：必答提示 +（宿主模式下的）记录入口；margin-left:auto 保证只剩记录时也靠右 */
+.runner__progress-side {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
 }
 
 .runner__progress-count {
@@ -912,6 +967,46 @@ function onHistoryKeydown(event: KeyboardEvent): void {
 
 .runner__progress-left--done {
   color: var(--bx-success);
+}
+
+/*
+ * 宿主模式下的「记录」入口
+ *
+ * 触摸区 44px（与导航栏返回键同一规格），用负外边距把多出来的高度收回去：
+ * 上下各 13px 落在进度条与进度区下内边距里，行高仍是 18px，视觉上不撑高吸顶区。
+ */
+.runner__progress-records {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  margin: -13px 0;
+  padding: 0 6px;
+  cursor: pointer;
+  border-radius: var(--bx-radius-sm);
+  transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+/* 悬停反馈只给指针设备（规范 §5.3） */
+@media (hover: hover) {
+  .runner__progress-records:hover {
+    background-color: var(--bx-surface-2);
+  }
+}
+
+/* 焦点可见性：uni-app 内置样式把 outline 设成 none */
+.runner__progress-records:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: -2px;
+}
+
+.runner__progress-records--hover {
+  background-color: var(--bx-surface-2);
+}
+
+.runner__progress-records-text {
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-2);
 }
 
 .runner__body {

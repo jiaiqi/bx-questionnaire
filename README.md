@@ -60,10 +60,10 @@ pnpm type-check      # vue-tsc
 pnpm lint            # eslint（lint:fix 自动修复）
 pnpm mutation        # 变异测试：验证单测是否真的在守着逻辑（当前 210 变异 / 存活 0）
 pnpm perf            # 首屏性能基线（需先在 --mode test 下构建并起产物服务）
-pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面 × PC/移动竖屏/移动横屏/公众号H5（需先 pnpm dev h5）
+pnpm smoke           # 页面冒烟：CDP 真实浏览器遍历全部页面 × PC/移动竖屏/移动横屏/公众号H5/小程序web-view（需先 pnpm dev h5）
 pnpm a11y            # 可访问性审计：可读名称 / 图片 alt / 真实 Tab 键焦点可见性（需先 pnpm dev h5）
 pnpm e2e             # 端到端交互：真实作答 → 逐题自动保存 → 提交（默认不提交，加 --submit）
-pnpm embed           # iframe 嵌入通信：跨域父页面真嵌一次，断言 FORM_READY/RESIZE/ADD_SUCCESS 到达（默认不提交，加 --submit）
+pnpm embed           # iframe 嵌入：跨域父页面真嵌一次，断言 FORM_READY/RESIZE/ADD_SUCCESS 到达、自绘导航栏已隐藏（默认不提交，加 --submit）
 pnpm editor:e2e      # 可视化设计器界面级保存链路：改标题 → 点保存 → 服务端查回来确认（会真写服务端，跑完还原）
 pnpm login:e2e       # 登录链路端到端：真实账号登录 → 校验票据写入与回跳（凭据走环境变量，需先 pnpm dev h5）
 pnpm build h5        # 产物 dist/build/h5
@@ -210,16 +210,26 @@ pnpm build mp-weixin   # 产物 dist/build/mp-weixin，用微信开发者工具�
 
 ## 多端适配
 
-同一套代码覆盖四种形态：
+同一套代码覆盖五种形态：
 
 - 浏览器 PC / 移动端
 - 微信小程序（竖屏）
 - 微信小程序 PC 横屏窗口
 - 公众号 H5
+- 被宿主嵌入（门户 iframe / 小程序与 App 的 web-view）
 
 布局策略：`.bx-container` 固定最大宽度 `--bx-content-width`（720px）居中，窄屏自动铺满，
 左右内边距 16px（≥760px 时 24px）；管理侧（问卷列表 / 设计器）用更宽的
 `--bx-content-width-wide`（1180px），由 `.bx-container--wide` 切换。
+
+**宿主已有标题栏时隐藏自绘导航栏**：被门户 iframe 嵌入、在微信内置浏览器（公众号 H5）
+打开、或在小程序 / App 的 web-view 里打开时，宿主自己画了标题栏和返回键，`BxNavBar`
+整条不渲染（否则就是双标题栏）。判定见 `src/utils/embed.ts` 的 `isHostChrome()`：
+iframe 自动识别，微信内置浏览器 / 小程序 / App 的 web-view 看 UA
+（`MicroMessenger` / `miniProgram` / `Html5Plus` / `window.plus`），识别不出来时用
+平台契约的 `hideHeader=1` 显式指定，`hideHeader=0` 可恢复（排障用）。
+导航栏右侧的「记录」入口不会跟着丢：宿主模式下挪到吸顶进度区右侧。
+小程序 / App 原生包不在此列 —— 那两种形态的导航栏本来就是自绘的。
 
 设计语言见 `docs/UI-UX-V6-设计系统.md`（清简 · V6.1）：色彩 / 排版 / 形状 / 动效的
 唯一规范，`src/styles/tokens.scss` 是令牌的唯一真源。V6 已于 2026-10-22 落到本仓库

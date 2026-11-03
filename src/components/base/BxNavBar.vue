@@ -8,7 +8,15 @@
  * H5 端允许半透明 + 毛玻璃（内容从栏下滑过时能看见层次）；
  * **小程序端不用 backdrop-filter** —— 微信基础库对它的支持不稳定，
  * 表现各机型不一，宁可给一块实色。
+ *
+ * **宿主自带标题栏时整条不渲染**（见 `utils/embed` 的 `isHostChrome()`）：
+ * 被门户 / 平台弹窗用 iframe 嵌入，在微信内置浏览器（公众号 H5）打开，
+ * 或在微信、支付宝、App 的 web-view 里打开时，宿主已经有标题栏和返回键，
+ * 再画一条就是双标题栏 —— 首屏白吃 48px、多一个返回箭头。
+ * 宿主识别不出来时，平台契约的 `hideHeader=1` 可以显式要求隐藏。
  */
+import { isHostChrome } from '@/utils/embed'
+
 interface Props {
   title?: string
   showBack?: boolean
@@ -31,6 +39,14 @@ const props = withDefaults(defineProps<Props>(), {
   border: true,
   fallbackUrl: '',
 })
+
+/**
+ * 宿主是否已经提供了标题栏
+ *
+ * 判定放在 setup 里一次性算完：运行时环境（是否 iframe / UA）在页面生命周期内
+ * 不会变，没必要每次渲染重新匹配 UA。
+ */
+const hostChrome = isHostChrome()
 
 function goBack(): void {
   const pages = getCurrentPages()
@@ -60,7 +76,7 @@ function onKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <view class="bx-navbar" :class="{ 'bx-navbar--border': props.border }">
+  <view v-if="!hostChrome" class="bx-navbar" :class="{ 'bx-navbar--border': props.border }">
     <view class="bx-navbar__side">
       <view
         v-if="props.showBack"

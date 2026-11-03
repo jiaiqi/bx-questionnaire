@@ -15,6 +15,7 @@ const H5_FINGERPRINTS = [
   { name: 'ui.ts scrollToSelector', pattern: 'scrollIntoView' },
   { name: 'embed.ts notifyParent', pattern: 'postMessage' },
   { name: 'embed.ts isEmbedded', pattern: 'window.parent' },
+  { name: 'embed.ts isHostChrome（宿主判定）', pattern: '__wxjs_environment' },
   { name: 'useEmbedResize', pattern: 'ResizeObserver' },
 ]
 

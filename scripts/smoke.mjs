@@ -35,6 +35,15 @@ const FILL_BATCH_NO = '4d5b54fb88144b53bd136776f6a383d3'
  * 注意 markers 只用于「确认页面壳挂上了」，不能要求具体业务 class ——
  * 空态、错误态页面本来就不渲染 .bx-container / .cover，那样会把正常的
  * 空态误判成白屏。判定「渲染成功」主要看文本长度。
+ *
+ * `hasNavBar` 标记该页是否**带自绘导航栏**（`BxNavBar`）。断言分两层：
+ * - 普通浏览器：导航栏必须在（回归「自绘导航栏被误删」）；
+ * - 公众号 H5 / 小程序 web-view：导航栏必须不在（微信自己的标题栏已经占位）。
+ * 不标这个字段的页面（封面 / 编辑器 / 登录）不参与导航栏断言。
+ *
+ * `hasProgressRecords` 标记该页在**导航栏隐藏时**是否把「记录」入口挪到吸顶进度区
+ * （`.runner__progress-records`）：宿主模式下必须在，普通浏览器下必须不在
+ * （普通浏览器由导航栏右侧承载，重复出现就是两个入口）。
  */
 const RENDERED = ['uni-app']
 
@@ -48,52 +57,65 @@ const PAGES = [
     name: '问卷作答页',
     route: `/pages/questionnaire/index/index?activity_no=${ACTIVITY_NO}&formType=form&status=进行中`,
     markers: RENDERED,
+    hasNavBar: true,
+    // 导航栏隐藏时「记录」入口挪到吸顶进度区右侧，不能跟着丢
+    hasProgressRecords: true,
   },
   {
     name: '登记信息页',
     route: `/pages/questionnaire/index/submitInfo?activity_no=${ACTIVITY_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     name: '结果页',
     route: `/pages/questionnaire/index/result?activity_no=${ACTIVITY_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     name: '作答记录页',
     route: `/pages/questionnaire/history/history?activity_no=${ACTIVITY_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     name: '我的测评页',
     route: '/pages/questionnaire/couple/couple',
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     name: '调研页',
     route: `/pages/questionnaire/survey/survey?activity_no=${ACTIVITY_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
+    hasProgressRecords: true,
   },
   {
     name: '调研记录页',
     route: `/pages/questionnaire/survey/history?activity_no=${ACTIVITY_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     name: '调研结果页',
     route: `/pages/questionnaire/survey/result?activity_no=${ACTIVITY_NO}&fill_batch_no=${FILL_BATCH_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     name: '评估结果页',
     route: `/pages/questionnaire/assessmentResult/assessmentResult?activity_no=${ACTIVITY_NO}&fill_batch_no=${FILL_BATCH_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
   },
   {
     // 缺批次号时必须给出明确提示，而不是把网关的「系统繁忙」透出来
     name: '评估结果页（缺批次号）',
     route: `/pages/questionnaire/assessmentResult/assessmentResult?activity_no=${ACTIVITY_NO}`,
     markers: RENDERED,
+    hasNavBar: true,
     expectText: '缺少作答批次号',
   },
   {
@@ -199,18 +221,45 @@ class Cdp {
  * 内核与 Chrome 近似但不相同，且微信会给 UA 加 `MicroMessenger` 标记。真机无法
  * 本地覆盖，但可以用 `Emulation.setUserAgentOverride` 把 UA 换成微信的，验证页面
  * 在有微信标记时仍然正常渲染 —— 至少能排除「代码里按 UA 分支却写错了」这类问题。
+ * 微信内置浏览器自带标题栏，所以这一档也是 `hostChrome: true`。
+ *
+ * 「小程序 web-view」同样能本地模拟：微信 7.0 起 web-view 的 UA 会带
+ * `miniProgram` 字样，替换 UA 即可验证「宿主已有导航栏时自绘导航栏不渲染」。
+ * `hostChrome: true` 表示该视口由宿主提供标题栏，带 `hasNavBar` 的页面
+ * 应当**没有** `.bx-navbar`。
  *
  * `expectWx` 显式声明该视口**期望**是否带微信标记。不要从 name 里推断 ——
  * 首版写成 `name.includes('微信')`，给 PC 错配 UA 做反向验证时提示语成了
  * 「期望不带 MicroMessenger，实际 wx=false」，自相矛盾且看不出问题在哪。
  */
 const WX_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49(0x18003128) NetType/WIFI Language/zh_CN'
+const WX_MP_UA = 'Mozilla/5.0 (Linux; Android 13; 2211133C Build/TKQ1.221114.001; wv) AppleWebKit/537.36 '
+  + '(KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 Mobile Safari/537.36 XWEB/1160065 MMWEBSDK/20231202 '
+  + 'MicroMessenger/8.0.47.2560(0x28002F35) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64 '
+  + 'miniProgram/wx1234567890abcdef'
 
 const VIEWPORTS = [
   { name: 'PC', width: 1440, height: 900, mobile: false, expectWx: false },
   { name: '移动竖屏', width: 375, height: 812, mobile: true, expectWx: false },
   { name: '移动横屏', width: 812, height: 375, mobile: true, expectWx: false },
-  { name: '公众号H5(微信内置)', width: 375, height: 812, mobile: true, ua: WX_UA, expectWx: true },
+  {
+    name: '公众号H5(微信内置)',
+    width: 375,
+    height: 812,
+    mobile: true,
+    ua: WX_UA,
+    expectWx: true,
+    hostChrome: true,
+  },
+  {
+    name: '小程序web-view(微信)',
+    width: 375,
+    height: 812,
+    mobile: true,
+    ua: WX_MP_UA,
+    expectWx: true,
+    hostChrome: true,
+  },
 ]
 
 async function connect() {
@@ -269,7 +318,7 @@ async function main() {
 
       // Vite dev 按需编译：首次访问某页可能要等编译完成。
       // 固定 sleep 会让「编译慢」看起来像「页面白屏」，所以轮询到有内容为止。
-      let r = { hit: [], textLen: 0, head: '', overflow: 0 }
+      let r = { hit: [], textLen: 0, head: '', overflow: 0, hasNavBar: false, hasProgressRecords: false, wx: false }
       for (let attempt = 0; attempt < 20; attempt++) {
         await sleep(700)
         const probe = await cdp.send('Runtime.evaluate', {
@@ -280,10 +329,14 @@ async function main() {
             const text = (root.innerText || '').trim()
             // 横向溢出：整页宽度超过视口即为撑破
             const overflow = Math.max(0, document.documentElement.scrollWidth - window.innerWidth)
+            // 自绘导航栏是否渲染（宿主自带标题栏时应当没有）
+            const hasNavBar = !!document.querySelector('.bx-navbar')
+            // 导航栏隐藏时「记录」入口是否挪到了吸顶进度区
+            const hasProgressRecords = !!document.querySelector('.runner__progress-records')
             // 顺带回读 UA，确认 setUserAgentOverride 真的生效（否则微信视口是假的）
             const ua = navigator.userAgent
             return {
-              hit, textLen: text.length, head: text.slice(0, 120), overflow,
+              hit, textLen: text.length, head: text.slice(0, 120), overflow, hasNavBar, hasProgressRecords,
               wx: ua.includes('MicroMessenger'),
             }
           })()`,
@@ -329,6 +382,14 @@ async function main() {
         uaOk: r.wx === vp.expectWx,
         uaIsWx: r.wx,
         uaExpectWx: vp.expectWx,
+        // 自绘导航栏：带 hasNavBar 的页面在宿主自带标题栏的视口里必须不渲染
+        expectNavBar: !!page.hasNavBar && !vp.hostChrome,
+        hasNavBar: r.hasNavBar,
+        navOk: r.hasNavBar === (!!page.hasNavBar && !vp.hostChrome),
+        // 「记录」入口：宿主模式下挪到进度区，普通浏览器下仍由导航栏承载
+        expectProgressRecords: !!page.hasProgressRecords && !!vp.hostChrome,
+        hasProgressRecords: r.hasProgressRecords,
+        progressRecordsOk: r.hasProgressRecords === (!!page.hasProgressRecords && !!vp.hostChrome),
       })
     }
   }
@@ -352,7 +413,7 @@ async function main() {
       console.log(`\n── ${r.viewport}（${r.viewportSize}）──`)
     }
     const overflowBad = r.overflow > 1
-    const ok = r.rendered && r.exceptions.length === 0 && r.consoleErrors.length === 0 && r.textOk && !overflowBad && r.uaOk
+    const ok = r.rendered && r.exceptions.length === 0 && r.consoleErrors.length === 0 && r.textOk && !overflowBad && r.uaOk && r.navOk && r.progressRecordsOk
     if (!ok) bad++
     console.log(`${ok ? '✓' : '✗'} ${r.name}（文本 ${r.textLen} 字${overflowBad ? `，横向溢出 ${r.overflow}px` : ''}${r.uaOk ? '' : '，UA 不符'}）`)
     if (!r.rendered) console.log(`    未渲染出内容，路由 ${r.route}`)
@@ -360,6 +421,8 @@ async function main() {
     if (r.head) console.log(`    首屏：${r.head.replace(/\n/g, ' / ')}`)
     if (r.expectText && !r.textOk) console.log(`    [文案不符] 期望包含「${r.expectText}」`)
     if (!r.uaOk) console.log(`    [UA 不符] 期望${r.uaExpectWx ? '带' : '不带'} MicroMessenger，实际 ${r.uaIsWx ? '带' : '不带'}`)
+    if (!r.navOk) console.log(`    [导航栏不符] 期望${r.expectNavBar ? '有' : '无'} .bx-navbar，实际${r.hasNavBar ? '有' : '无'}`)
+    if (!r.progressRecordsOk) console.log(`    [记录入口不符] 期望${r.expectProgressRecords ? '有' : '无'} .runner__progress-records，实际${r.hasProgressRecords ? '有' : '无'}`)
     for (const e of r.exceptions) console.log(`    [未捕获异常] ${e.split('\n')[0]}`)
     for (const e of r.consoleErrors) console.log(`    [console.error] ${e.slice(0, 200)}`)
   }

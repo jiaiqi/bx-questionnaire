@@ -13,6 +13,10 @@
  * targetOrigin 不匹配、上下文拿错，全都表现为「什么都没发生」。
  * 只有真的跨域嵌一次、真的在父页面收到消息，才算验证过。
  *
+ * 除通信契约外，还断言「宿主已提供标题栏时子页隐藏自绘导航栏」——
+ * 这一条同样只有真嵌一次才测得出（`window.self !== window.top` 在本地
+ * 单测里是桩出来的，真实浏览器里 iframe 才是唯一可信环境）。
+ *
  * 关键实现细节：iframe 绝对定位在 (0,0)，这样 iframe 内的
  * getBoundingClientRect 与顶层视口坐标一致，鼠标事件可以直接复用；
  * 作答操作要在 iframe 的**执行上下文**里求值（跨域拿不到 contentDocument）。
@@ -231,6 +235,39 @@ checks.push({
   pass: msgs.some(m => m.type === 'FORM_READY' && m.data?.serviceName === 'srvdaq_init_view_select'),
 })
 checks.push({ name: 'RESIZE 到达且 height 为正数', pass: msgs.some(m => m.type === 'RESIZE' && Number(m.data?.height) > 0) })
+
+/*
+ * 导航栏：嵌入方（门户弹窗）已经画了标题栏，子页再画一条就是双标题栏。
+ * 先确认页面壳真的渲染了，否则「没有导航栏」可能只是白屏 —— 两条都要看。
+ */
+const shellRendered = await evaluateInFrame(`(() => {
+  const root = document.querySelector('uni-app') || document.body;
+  return (root.innerText || '').trim().length > 0;
+})()`)
+checks.push({ name: 'iframe 内页面壳已渲染（不是白屏）', pass: shellRendered === true })
+
+const navBarPresent = await evaluateInFrame(`document.querySelector('.bx-navbar') !== null`)
+checks.push({ name: 'iframe 内隐藏自绘导航栏（宿主已有标题栏）', pass: navBarPresent === false })
+
+/*
+ * 导航栏藏了，吸顶进度区的 48px 偏移也必须一起归零：
+ * 否则进度条会停在离顶部 48px 的位置，中间留一条空白，内容从缝里穿过去。
+ */
+const progressTop = await evaluateInFrame(`(() => {
+  const el = document.querySelector('.runner__progress');
+  return el ? getComputedStyle(el).top : null;
+})()`)
+checks.push({ name: '吸顶进度区顶到 0（导航栏让出的偏移已去掉）', pass: progressTop === '0px' })
+
+/*
+ * 导航栏藏了，它右侧的「记录」入口不能跟着丢：宿主模式下挪到了吸顶进度区右侧。
+ * 断言文案而不只是元素存在 —— 元素在但没文字等于入口不可用。
+ */
+const recordsEntry = await evaluateInFrame(`(() => {
+  const el = document.querySelector('.runner__progress-records');
+  return el ? (el.innerText || '').trim() : null;
+})()`)
+checks.push({ name: '「记录」入口挪到进度区右侧（文案为「记录」）', pass: recordsEntry === '记录' })
 
 if (DO_SUBMIT) {
   console.log('\n作答并提交：')
