@@ -144,6 +144,27 @@ function onLogin(): void {
   uni.navigateTo({ url: `/pages/login/index?redirect=${encodeURIComponent('/pages/editor/list/index')}` })
 }
 
+/** 顶栏显示的账号名：优先真实姓名，其次用户名，最后账号 */
+const userDisplay = computed(() => {
+  const info = session.userInfo as { real_name?: string, user_name?: string, user_no?: string } | null
+  return info?.real_name || info?.user_name || info?.user_no || '已登录'
+})
+
+/**
+ * 退出登录
+ *
+ * `session.clear()` 此前定义了却零调用 —— 想换账号只能清浏览器缓存。
+ * 退出后必须重新拉列表：接口按登录态返回不同数据，不刷会留着上一个人的结果。
+ */
+async function onLogout(): Promise<void> {
+  const confirmed = await confirmDialog('退出后需要重新登录才能继续编辑问卷，确定退出吗？')
+  if (!confirmed) {
+    return
+  }
+  session.clear()
+  await load()
+}
+
 function onKeywordInput(event: unknown): void {
   const value = readInput(event)
   if (value !== null) {
@@ -255,6 +276,17 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
       >
         登录
       </BxButton>
+      <template v-else>
+        <text class="editor-list__user">{{ userDisplay }}</text>
+        <BxButton
+          type="secondary"
+          size="small"
+          aria-label="退出登录"
+          @click="onLogout"
+        >
+          退出
+        </BxButton>
+      </template>
     </view>
 
     <view class="editor-list__main bx-container bx-container--wide">
@@ -509,6 +541,17 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   color: var(--bx-text-3);
   font-size: 13px;
   line-height: 20px;
+  white-space: nowrap;
+}
+
+/* 顶栏账号名：比面包屑稍实一点，但不与两个按钮争注意力 */
+.editor-list__user {
+  max-width: 120px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--bx-text-2);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
