@@ -9,7 +9,7 @@
  * 避免页面上出现一个空白方块。
  */
 
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { toQrCodeDataUrl } from '@/utils/qrcode'
 
@@ -28,16 +28,30 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const dataUrl = computed(() => toQrCodeDataUrl(props.value, { cellSize: 4, margin: 2 }))
+
+/**
+ * 图片加载失败兜底
+ *
+ * 生成结果是 GIF data URL。微信小程序官方支持 GIF 格式与 base64，但为防个别
+ * 低版本基础库对 `data:image/gif` 前缀支持不全，加载失败时**整块不渲染**，
+ * 而不是留一个破图或空白方块。
+ */
+const failed = ref(false)
+
+watch(() => props.value, () => {
+  failed.value = false
+})
 </script>
 
 <template>
-  <view v-if="dataUrl" class="bx-qr">
+  <view v-if="dataUrl && !failed" class="bx-qr">
     <image
       class="bx-qr__img"
       :src="dataUrl"
       :style="{ width: `${size}px`, height: `${size}px` }"
       mode="aspectFit"
       :alt="caption || '问卷二维码'"
+      @error="failed = true"
     />
     <text v-if="caption" class="bx-qr__caption">{{ caption }}</text>
   </view>
