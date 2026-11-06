@@ -245,6 +245,21 @@ function start(): void {
   uni.navigateTo({ url: answerUrl(activityNo.value, { status: activity.value?.status ?? '进行中' }) })
 }
 
+/**
+ * 预览问卷
+ *
+ * 运营在电脑上想自己看效果，此前必须绕去设计器。这里给一个直达入口：
+ * `formType=preview` 是只读模式，不产生提交记录，也不会读已有作答。
+ */
+function openPreview(): void {
+  uni.navigateTo({
+    url: answerUrl(activityNo.value, {
+      formType: 'preview',
+      status: String(activity.value?.status ?? ''),
+    }),
+  })
+}
+
 function openRecords(): void {
   uni.navigateTo({ url: historyUrl(activityNo.value, title.value) })
 }
@@ -431,6 +446,19 @@ function onShareKeydown(event: KeyboardEvent): void {
           -->
           <view v-if="homeQrUrl" class="c-qr">
             <BxQrCode :value="homeQrUrl" :size="128" caption="扫码在手机上打开问卷首页" />
+            <!-- #ifdef H5 -->
+            <!-- 运营在电脑上想自己看效果，此前必须绕去设计器；这里给一个直达预览的入口 -->
+            <view
+              class="c-qr__preview"
+              role="button"
+              tabindex="0"
+              aria-label="预览问卷"
+              @click="openPreview"
+              @keydown.enter.prevent="openPreview"
+            >
+              <text class="c-qr__preview-text">预览问卷</text>
+            </view>
+            <!-- #endif -->
           </view>
         </template>
       </view>
@@ -934,8 +962,28 @@ function onShareKeydown(event: KeyboardEvent): void {
 @media (min-width: 760px) {
   .c-qr {
     display: flex;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
     margin-top: 32px;
   }
+}
+
+/* 预览入口：二维码下方的一行文字链接，弱化处理不抢主行动 */
+.c-qr__preview {
+  margin-top: 8px;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+.c-qr__preview:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
+.c-qr__preview-text {
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-primary);
 }
 </style>
