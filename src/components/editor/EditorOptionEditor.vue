@@ -22,6 +22,7 @@ import { computed, ref } from 'vue'
 
 import { usePointerReorder } from '@/composables/usePointerReorder'
 import { MAX_OPTIONS, optionViewNo } from '@/domain/editor'
+import { confirmDialog } from '@/utils/ui'
 import { OPTION_ROW_HEIGHT } from './constants'
 
 interface Props {
@@ -79,6 +80,21 @@ function confirmBulk(): void {
 function onBulkInput(event: unknown): void {
   const detail = (event as { detail?: { value?: string } })?.detail
   bulkText.value = detail?.value ?? ''
+}
+
+/**
+ * 删除选项前确认
+ *
+ * 选项行只有 24px 的图标按钮，误触概率不低；删掉后只能重新输入找回来，
+ * 而保存时的总数确认拦不住这种单条误删。
+ */
+async function onRemoveOption(index: number): Promise<void> {
+  const option = props.options[index]
+  const label = option?.value?.trim() || `选项 ${letter(index)}`
+  const confirmed = await confirmDialog(`删除「${label}」？`)
+  if (confirmed) {
+    emit('remove', index)
+  }
 }
 
 /**
@@ -199,8 +215,8 @@ function onPointsInput(index: number, event: unknown): void {
             role="button"
             tabindex="0"
             aria-label="删除选项"
-            @click="emit('remove', index)"
-            @keydown.enter.prevent="emit('remove', index)"
+            @click="onRemoveOption(index)"
+            @keydown.enter.prevent="onRemoveOption(index)"
           >
             <view class="bx-editor-option-row__btn-text bx-editor-option-row__btn-text--close" aria-hidden="true" />
           </view>
