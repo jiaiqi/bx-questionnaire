@@ -72,9 +72,18 @@ const statusClass = computed(() => {
 /** 简介：平台存的是富文本，先净化；没有就不占一行 */
 const summary = computed(() => plainText(text(props.row.summary)) || plainText(text(props.row.remark)))
 
-/** 题量 / 回收份数：数字列，缺省显示 0（不让列出现空白） */
+/** 题量：数字列，缺省显示 0（不让列出现空白） */
 const itemCount = computed(() => text(props.row.item_count) || '0')
-const submitCount = computed(() => text(props.row.submit_count) || '0')
+
+/**
+ * 回收份数
+ *
+ * `submit_count` 是平台 `trig_act` 维护的计数列，**实测并未被维护**：
+ * 活动 `20261106171651000002` 实际有 2 条作答记录，该列却是空的。
+ * 所以缺省显示「—」而不是「0」—— 显示 0 会让用户以为真的没人填过。
+ * 权威数字以统计页（按记录表实时聚合）为准。
+ */
+const submitCount = computed(() => text(props.row.submit_count) || '—')
 
 /** 截止：只到「日」，没有就显示破折号占位 */
 const deadline = computed(() => text(props.row.end_time).slice(0, 10) || '—')
