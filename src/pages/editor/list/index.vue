@@ -139,7 +139,9 @@ const session = useSessionStore()
  * 自动送到登录页，但在那之前用户没有任何主动登录的入口。
  */
 function onLogin(): void {
-  uni.navigateTo({ url: '/pages/login/index' })
+  // 带 redirect：登录页的兜底首页虽然也是列表页，但显式传更稳 ——
+  // 从别的页面复用这个入口时不会因为改了 HOME_PATH 而回错地方。
+  uni.navigateTo({ url: `/pages/login/index?redirect=${encodeURIComponent('/pages/editor/list/index')}` })
 }
 
 function onKeywordInput(event: unknown): void {

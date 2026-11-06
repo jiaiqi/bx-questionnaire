@@ -17,8 +17,14 @@ import LoginScreen from '@/components/auth/LoginScreen.vue'
 import { DEFAULT_LOGIN_NOTICE, isKnownLoginReason, loginNotice } from '@/domain/auth/notice'
 import { readQueryDeeply } from '@/utils/query'
 
-/** 回跳兜底：首页 */
-const HOME_PATH = '/pages/questionnaire/index/index'
+/**
+ * 回跳兜底：真正的首页
+ *
+ * 必须是**不需要入参**的页面。这里曾经指向答题页 `pages/questionnaire/index/index`，
+ * 而它要求 `activity_no`，裸登录（没有 redirect）成功后就会落到「缺少活动编号」空页，
+ * 用户以为系统坏了。
+ */
+const HOME_PATH = '/pages/editor/list/index'
 
 const notice = ref(DEFAULT_LOGIN_NOTICE)
 const redirect = ref('')
