@@ -212,6 +212,21 @@ const loginHint = computed(() => {
 })
 
 /**
+ * 空态提示
+ *
+ * 未登录时「暂无记录」有两种含义：真的没有，或者**本页 20 条全是别人的**、自己的在后面。
+ * 后者可以用「加载更多记录」继续找，提示里必须把这一层说清楚，否则用户以为记录丢了。
+ */
+const emptyTip = computed(() => {
+  if (session.isLogin) {
+    return '当前账号在本问卷下还没有作答记录'
+  }
+  return finished.value
+    ? '未登录时只显示本机作答记录；换设备或清过浏览器数据就看不到，登录后可查看账号下的全部记录'
+    : '未登录时只显示本机作答记录。已加载的这批里没有你的，可以点「加载更多记录」继续找'
+})
+
+/**
  * 请求序号
  *
  * 切换筛选会 `reset` 重拉，而 `loading` 锁只挡得住「触底加载」：快速来回点分段时，
@@ -420,11 +435,16 @@ void fetchPage(true)
     <view v-else-if="visibleRows.length === 0 && loaded" class="records__empty">
       <BxEmpty
         text="暂无作答记录"
-        :tip="session.isLogin
-          ? '当前账号在本问卷下还没有作答记录'
-          : '未登录时只显示本机作答记录；换设备或清过浏览器数据就看不到，登录后可查看账号下的全部记录'"
+        :tip="emptyTip"
       />
       <view class="records__retry">
+        <!--
+          还有下一页时必须给出口：未登录时首页 20 条可能全是别人的，自己的记录在后面。
+          没有这个按钮，空态就是一个死胡同（内容短于视口时也不会触发 onReachBottom）。
+        -->
+        <BxButton v-if="!finished" type="secondary" size="small" @click="loadMore">
+          加载更多记录
+        </BxButton>
         <BxButton type="primary" size="small" @click="goAnswer">
           去答一份问卷
         </BxButton>
