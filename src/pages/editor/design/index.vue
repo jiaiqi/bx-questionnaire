@@ -390,7 +390,7 @@ const itemDropPosition = computed<'before' | 'after' | undefined>(() => {
         type="text"
         :value="doc.activity.title"
         aria-label="问卷标题"
-        placeholder="未命名问卷"
+        :placeholder="loading ? '加载中…' : '未命名问卷'"
         @input="onTitleInput"
       >
 

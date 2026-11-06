@@ -87,6 +87,17 @@ const classifyLabel = computed(() => {
   return classifyLabels.value[classifyIndex.value] ?? props.activity.classify
 })
 
+/**
+ * 选中分类会派生出的信息采集类型
+ *
+ * `info_collect_type` 由服务端按 `classify.info_type` 派生，前端不写这个字段；
+ * 这里只把结果提前显示出来，避免选错分类要到作答 / 结果页才发现。
+ */
+const derivedInfoType = computed(() => {
+  const row = classifyRows.value.find(item => item.classify_no === props.activity.classify)
+  return String(row?.info_type ?? '').trim()
+})
+
 async function loadClassify(): Promise<void> {
   classifyError.value = ''
   try {
@@ -265,6 +276,13 @@ function errorFor(field: string): string {
             <view class="bx-eaf__picker-arrow" aria-hidden="true" />
           </view>
         </picker>
+        <!--
+          服务端按 classify.info_type 派生 info_collect_type：选完就地告诉用户会变成什么类型，
+          否则要等到作答 / 结果页才发现选错分类（前者 6 个取值、后者只有 4 个）。
+        -->
+        <text v-if="derivedInfoType" class="bx-eaf__derived">
+          信息采集类型：{{ derivedInfoType }}
+        </text>
       </EditorFormField>
 
       <EditorFormField label="关键字" required :error="errorFor('keyword')" hint="用于列表搜索与归档">
@@ -621,6 +639,15 @@ function errorFor(field: string): string {
   border-top: 1.5px solid var(--bx-text-3);
   border-right: 1.5px solid var(--bx-text-3);
   transform: rotate(135deg);
+}
+
+/* 分类派生出的信息采集类型：弱提示，跟在选择器下方 */
+.bx-eaf__derived {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
 }
 
 .bx-eaf__times {
