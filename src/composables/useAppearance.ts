@@ -64,7 +64,23 @@ const scaleFactor = computed(() => {
   return FONT_SCALE_OPTIONS.find(option => option.value === fontScale.value)?.scale ?? 1
 })
 
-/** 把偏好写进根节点；小程序端没有 document，交给系统媒体查询 */
+/**
+ * 把偏好写进根节点；小程序端没有 document，交给系统媒体查询
+ *
+ * ## 为什么 H5 还要写到页面容器上
+ *
+ * `tokens.scss` 与 `dark.scss` 都用 `page, :root` 这类**双选择器**声明整套变量
+ * （`page` 是给没有 `:root` 的小程序准备的）。uni-app 编译到 H5 时会把 `page`
+ * 变成 `uni-page-body`，于是**页面容器上也有一份完整的默认值副本**。
+ *
+ * CSS 变量的取值遵循「就近声明优先于继承」，容器自己声明了 `--bx-font-scale: 1`
+ * 和浅色 `--bx-bg`，就会把根节点上的覆盖整个遮蔽掉。只改 `<html>` 的后果是：
+ * 面板里点了深色 / 特大，`document.documentElement` 看起来变了，但页面内容纹丝不动
+ * —— 这正是「外观设置好像不生效」的真实原因。
+ *
+ * 所以 H5 端必须同时覆盖容器。容器会被 uni-app 在路由切换时重建，重建后要补一次，
+ * 由 `watchContainers()` 负责。
+ */
 function apply(): void {
   // #ifdef H5
   const root = document.documentElement
@@ -75,10 +91,56 @@ function apply(): void {
     root.dataset.theme = theme.value
   }
   root.style.setProperty('--bx-font-scale', String(scaleFactor.value))
+
+  paintContainers()
+  watchContainers()
   // #endif
   // #ifndef H5
   // 小程序端不支持运行时改根节点 CSS 变量；主题由 dark.scss 的媒体查询跟随系统。
   // #endif
+}
+
+/** 把当前偏好写到所有页面容器上（H5） */
+function paintContainers(): void {
+  for (const el of pageContainers()) {
+    if (theme.value === 'system') {
+      el.removeAttribute('data-theme')
+    }
+    else {
+      el.setAttribute('data-theme', theme.value)
+    }
+    el.style.setProperty('--bx-font-scale', String(scaleFactor.value))
+  }
+}
+
+/** H5 页面容器：`page` 编译后就是 `uni-page-body` */
+function pageContainers(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('uni-page-body, page'))
+}
+
+let observer: MutationObserver | null = null
+let rafId = 0
+
+/**
+ * 监听页面容器重建
+ *
+ * 只监听 `childList`（不监听属性）：`paintContainers` 写的是 attributes 与 inline style，
+ * 不会反过来触发自身，避免死循环。回调节流到一帧一次。
+ */
+function watchContainers(): void {
+  if (observer || typeof MutationObserver !== 'function') {
+    return
+  }
+  observer = new MutationObserver(() => {
+    if (rafId) {
+      return
+    }
+    rafId = requestAnimationFrame(() => {
+      rafId = 0
+      paintContainers()
+    })
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
 }
 
 export function useAppearance() {
