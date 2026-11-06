@@ -25,7 +25,7 @@
  * `useEditorDesign` 里：布局是模板的事、编排是 composable 的事，本文件只做绑定。
  */
 
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
@@ -231,6 +231,34 @@ async function onBack(): Promise<void> {
   }
   onBackToList()
 }
+
+/**
+ * 刷新 / 关闭标签页时拦截未保存改动
+ *
+ * 顶栏返回（`onBack`）已有确认，但浏览器刷新、点关闭、Ctrl+W 这些路径完全绕过它：
+ * 编辑器一次编辑动辄十几分钟，误触刷新等于整份丢失。H5 用 `beforeunload` 兜住。
+ *
+ * 小程序没有刷新语义（页面由微信托管，`onUnload` 也无法取消），这里不涉及；
+ * 极端的「编辑到一半被系统回收」目前没有本机草稿兜底，属于已知缺口。
+ */
+/* #ifdef H5 */
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!dirty.value) {
+    return
+  }
+  // 现代浏览器忽略自定义文案，但必须 preventDefault + 设置 returnValue 才会弹原生确认框
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+})
+/* #endif */
 
 /**
  * 题纲分片渲染
