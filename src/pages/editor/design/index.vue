@@ -1297,8 +1297,14 @@ const itemDropPosition = computed<'before' | 'after' | undefined>(() => {
 }
 
 @media (max-width: 759px) {
-  /* 手机：状态与预览让位给「保存 / 发布」两个按钮 */
-  .design__state,
+  /*
+   * 手机：预览入口让位给「保存 / 发布」，但**保存状态只收文字、保留圆点** ——
+   * 改完不知道存没存上，比少一个预览入口严重得多。
+   */
+  .design__state-text {
+    display: none;
+  }
+
   .design__topbtn--preview {
     display: none;
   }
