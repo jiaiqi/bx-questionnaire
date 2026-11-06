@@ -13,7 +13,7 @@
  * - `srvdaq_record_share_add`            微信分享记录
  */
 
-import type { DaqActivitySugRow, DaqRecordMergeRow, DaqRecordReplyRow } from './types'
+import type { DaqActivityScoreSugRow, DaqActivitySugRow, DaqRecordMergeRow, DaqRecordReplyRow } from './types'
 import type { BxCondition, BxOrder } from '@/utils/request/types'
 
 import { bxSelect, bxWrite } from '@/utils/request'
@@ -142,6 +142,21 @@ export function activitySugSelect(params: { activityNo: string, fillBatchNo?: st
     serviceName: 'srvdaq_activity_sug_select',
     colNames: ['*'],
     condition,
+  })
+}
+
+/**
+ * 分值区间结果说明（`srvdaq_activity_score_sug_select`）
+ *
+ * **登录访问**：匿名调用返回 `0011 …无权限访问`（parkDev 实测），调用方要自己判断登录态，
+ * 别在匿名结果页上白跑一次注定失败的请求。
+ */
+export function activityScoreSugSelect(activityNo: string) {
+  return bxSelect<DaqActivityScoreSugRow>({
+    serviceName: 'srvdaq_activity_score_sug_select',
+    colNames: ['*'],
+    condition: [{ colName: 'activity_no', ruleType: 'eq', value: activityNo }],
+    page: { pageNo: 1, rownumber: 50 },
   })
 }
 

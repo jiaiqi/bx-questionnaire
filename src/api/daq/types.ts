@@ -176,6 +176,24 @@ export interface DaqActivitySugRow {
 }
 
 /**
+ * 分值结果说明行（`srvdaq_activity_score_sug_select`）
+ *
+ * 平台按活动配置若干**分数区间**，命中哪段就展示哪段文案（如「您的患冠心病风险低…」）。
+ * 214 上有 58 条存量，本工程此前完全没用 —— 结果页的结论一直是前端按及格线拼的。
+ *
+ * 服务是**登录访问**：匿名调用返回 `0011 …无权限访问`（parkDev 实测），
+ * 所以只能在登录态消费。
+ */
+export interface DaqActivityScoreSugRow {
+  activity_no?: string
+  start_score?: number | string | null
+  end_score?: number | string | null
+  /** 命中该区间时展示的说明 */
+  remark?: string | null
+  [k: string]: unknown
+}
+
+/**
  * 选项配置行（`srvdaq_option_cfg_select`）
  *
  * 选项**不在题目表里**，是独立的一张表 `bxdaq_option_cfg`，按 `item_no` 关联。
