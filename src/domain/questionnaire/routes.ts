@@ -117,9 +117,15 @@ export function historyUrl(activityNo: string, title?: string): string {
  * 答题页与封面页都按 `` `/${shareAnswerPath(...)}` `` 的方式拼接，改一处要同步另一处。
  *
  * 好友点开可直接作答，因此固定带 `formType=form` 与 `status=进行中`。
+ *
+ * `path` 默认是答题页；调研答题页（`survey/survey`）传 `QUESTIONNAIRE_ROUTES.surveyAnswer`，
+ * 否则从调研页分享出去的链接会把好友带到另一个页面壳上。
  */
-export function shareAnswerPath(activityNo: string): string {
-  return `${QUESTIONNAIRE_ROUTES.answer.slice(1)}?${queryString({
+export function shareAnswerPath(
+  activityNo: string,
+  path: string = QUESTIONNAIRE_ROUTES.answer,
+): string {
+  return `${path.slice(1)}?${queryString({
     formType: 'form',
     activity_no: activityNo,
     status: '进行中',
