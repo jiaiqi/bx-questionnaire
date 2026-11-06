@@ -56,8 +56,8 @@ const {
   scoreBuckets,
   questionStats,
   coverage,
+  trendDays,
   load,
-  loadMoreDetails,
   exportReplies,
   exportDetails,
 } = useSurveyStats(activityNo)
@@ -389,7 +389,7 @@ onLoad((query) => {
           <view class="stats__card stats__trend">
             <view class="stats__card-head">
               <text class="stats__card-title">提交趋势</text>
-              <text class="stats__card-meta">近 14 天</text>
+              <text class="stats__card-meta">近 {{ trendDays }} 天</text>
             </view>
             <view class="stats__trend-bars">
               <view
@@ -448,15 +448,6 @@ onLoad((query) => {
               <text v-if="loadingDetails" class="stats__progress">
                 正在加载 {{ detailProgress.done }} / {{ detailProgress.total }}
               </text>
-              <BxButton
-                v-else-if="coverage.hasMore"
-                type="secondary"
-                size="small"
-                aria-label="加载更多逐题明细"
-                @click="loadMoreDetails"
-              >
-                加载更多
-              </BxButton>
               <BxButton
                 type="secondary"
                 size="small"
@@ -620,6 +611,7 @@ onLoad((query) => {
 
         <text class="stats__footnote">
           统计基于服务端聚合（group）：KPI、趋势、成绩分布与逐题分布均为全量口径；
+          平均用时按已加载的最近 {{ filteredReplies.length }} 份记录计算；
           逐题分布最多覆盖 {{ coverage.detailCount }} 份完成答卷，文本题按去重答案展示人数。
         </text>
       </template>

@@ -106,11 +106,26 @@ export function useSurveyStats(activityNo: Ref<string>) {
     return buildOverview(filteredReplies.value)
   })
 
+  /**
+   * 趋势跨度跟随筛选
+   *
+   * 原来固定 14 天：选「近 7 天」时后 7 天恒为 0、标题也不变，看起来像数据丢了。
+   */
+  const trendDays = computed(() => {
+    if (range.value === '7d') {
+      return 7
+    }
+    if (range.value === '30d') {
+      return 30
+    }
+    return 14
+  })
+
   const trend = computed<TrendPoint[]>(() => {
     if (aggregates.value) {
-      return buildTrendFromAggregates(aggregates.value.trend, 14)
+      return buildTrendFromAggregates(aggregates.value.trend, trendDays.value)
     }
-    return buildTrend(filteredReplies.value, 14)
+    return buildTrend(filteredReplies.value, trendDays.value)
   })
 
   const maxScore = computed(() => {
@@ -145,7 +160,6 @@ export function useSurveyStats(activityNo: Ref<string>) {
     return {
       completedInFilter,
       detailCount,
-      hasMore: false,
       capped: completedInFilter > detailCount,
     }
   })
@@ -250,11 +264,6 @@ export function useSurveyStats(activityNo: Ref<string>) {
     }
   })
 
-  /** 兼容旧页面按钮：聚合模式一次性取完，没有「加载更多」 */
-  function loadMoreDetails(): void {
-    // 聚合口径下由 STATS_MAX_AGG_BATCHES 控制上限，无需增量加载
-  }
-
   /** 下载 CSV（H5）；小程序端只提示 */
   function downloadCsv(filename: string, content: string): void {
     // #ifdef H5
@@ -315,8 +324,8 @@ export function useSurveyStats(activityNo: Ref<string>) {
     scoreBuckets,
     questionStats,
     coverage,
+    trendDays,
     load,
-    loadMoreDetails,
     exportReplies,
     exportDetails,
   }
