@@ -12,7 +12,7 @@
  * → 空态用 BxEmpty，未登录给登录入口。
  */
 
-import type { DaqRecordReplyRow } from '@/api/daq/types'
+import type { DaqActivityRow, DaqRecordReplyRow } from '@/api/daq/types'
 
 import { computed, ref } from 'vue'
 
@@ -23,12 +23,16 @@ import BxNavBar from '@/components/base/BxNavBar.vue'
 import { formatDateTime } from '@/domain/questionnaire'
 import { answerUrl, resultUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
-import { BxError } from '@/utils/request'
+import { BxError, bxSelect } from '@/utils/request'
 
 interface AssessmentItem {
   activityNo: string
   title: string
   score: number | null
+  /** 是否计分：不计分问卷不显示分数（否则会显示一个没有意义的「0 分」） */
+  hasScore: boolean
+  /** 是否合格：活动没配及格线时为 null */
+  passed: boolean | null
   batchNo: string
   finishedAt: string
 }
@@ -87,9 +91,44 @@ async function load(): Promise<void> {
       activityNo: String(row.activity_no ?? ''),
       title: String(row.title ?? row.activity_no ?? '问卷'),
       score: row.score === null || row.score === undefined ? null : Number(row.score),
+      hasScore: true,
+      passed: null,
       batchNo: String(row.fill_batch_no ?? ''),
       finishedAt: formatDateTime(row.end_time ?? row.start_time),
     }))
+
+    /*
+     * 记录行不带 `act_option` / `passing_mark`（那是活动表字段），要判「是否计分」「是否合格」
+     * 必须再查一次活动配置。用 `in` 一次拿全，不按条循环。
+     */
+    const activityNos = [...latest.keys()]
+    if (activityNos.length > 0) {
+      const cfgEnvelope = await bxSelect<DaqActivityRow>({
+        serviceName: 'srvdaq_activity_cfg_select',
+        colNames: ['activity_no', 'act_option', 'passing_mark', 'total_points'],
+        condition: [{ colName: 'activity_no', ruleType: 'in', value: activityNos.join(',') }],
+        page: { pageNo: 1, rownumber: activityNos.length },
+      })
+      const cfgByNo = new Map(
+        (cfgEnvelope.data ?? []).map(row => [String(row.activity_no ?? ''), row]),
+      )
+      items.value = items.value.map((item) => {
+        const cfg = cfgByNo.get(item.activityNo)
+        const actOption = String(cfg?.act_option ?? '').trim()
+        // 与结果页同一判据：先判「不评分」再判「评分」（'不评分'.includes('评分') 为真），
+        // 字段缺失时回退到分值合计
+        const hasScore = actOption.includes('不评分')
+          ? false
+          : actOption.includes('评分')
+            ? true
+            : Number(cfg?.total_points ?? 0) > 0
+        const passingMark = Number(cfg?.passing_mark ?? Number.NaN)
+        const passed = hasScore && item.score !== null && Number.isFinite(passingMark)
+          ? item.score >= passingMark
+          : null
+        return { ...item, hasScore, passed }
+      })
+    }
   }
   catch (error) {
     // 不用 toast：失败由页面级错误态呈现，避免同一错误提示两遍
@@ -236,14 +275,22 @@ void load()
 
             <view class="cp-row__main">
               <text class="cp-row__title">{{ item.title }}</text>
-              <view v-if="item.score !== null" class="cp-row__score">
+              <!-- 不计分问卷不显示分数：否则会显示一个没有意义的「0 分」 -->
+              <view v-if="item.hasScore && item.score !== null" class="cp-row__score">
                 <text class="cp-row__score-num">{{ item.score }}</text>
                 <text class="cp-row__score-unit">分</text>
+                <text
+                  v-if="item.passed !== null"
+                  class="cp-row__pass"
+                  :class="item.passed ? 'cp-row__pass--ok' : 'cp-row__pass--bad'"
+                >
+                  {{ item.passed ? '合格' : '未合格' }}
+                </text>
               </view>
             </view>
 
             <view class="cp-row__foot">
-              <text v-if="item.batchNo" class="cp-row__batch">批次 {{ item.batchNo }}</text>
+              <!-- 批次号是 32 位内部编号，对用户没有意义（结果页已按需求去掉），这里也不再常驻 -->
               <view class="cp-row__actions">
                 <view
                   class="cp-row__action"
@@ -467,6 +514,25 @@ void load()
   display: inline-flex;
   align-items: baseline;
   gap: 2px;
+}
+
+/* 合格 / 未合格：与分数同排的小标签，颜色之外还有文字（不只靠颜色传达） */
+.cp-row__pass {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 16px;
+  border-radius: var(--bx-radius-xs);
+}
+
+.cp-row__pass--ok {
+  color: var(--bx-success);
+  background-color: var(--bx-success-soft);
+}
+
+.cp-row__pass--bad {
+  color: var(--bx-danger);
+  background-color: var(--bx-danger-soft);
 }
 
 .cp-row__score-num {
