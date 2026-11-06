@@ -49,6 +49,14 @@ const {
 } = useResultPage()
 
 /**
+ * 逐题回顾是否收起
+ *
+ * 题多时这一整块能有十几屏，用户想先扫一遍标题再挑着看。收起只影响作答区，
+ * 标题与对错标签仍可见，不损失信息。
+ */
+const reviewCollapsed = ref(false)
+
+/**
  * 分数计数动画（规范 §6.1）：0 → 目标值，900ms ease-out
  *
  * 只在**数值**上插值，字重与字距全程不变 —— 数字一动就改字重会抖。
@@ -309,7 +317,21 @@ function openShare(): void {
         <view v-if="rows.length > 0" class="r-review">
           <view class="r-section__head">
             <text class="r-section__title">逐题回顾</text>
-            <text class="r-section__meta">{{ rows.length }} 道题</text>
+            <view class="r-review__toggle-group">
+              <text class="r-section__meta">{{ rows.length }} 道题</text>
+              <view
+                class="r-review__toggle"
+                role="button"
+                tabindex="0"
+                :aria-expanded="!reviewCollapsed"
+                :aria-label="reviewCollapsed ? '展开全部作答' : '收起全部作答'"
+                @click="reviewCollapsed = !reviewCollapsed"
+                @keydown.enter.prevent="reviewCollapsed = !reviewCollapsed"
+                @keydown.space.prevent="reviewCollapsed = !reviewCollapsed"
+              >
+                <text class="r-review__toggle-text">{{ reviewCollapsed ? '展开全部' : '收起全部' }}</text>
+              </view>
+            </view>
           </view>
 
           <view class="r-review__card">
@@ -334,7 +356,11 @@ function openShare(): void {
               </view>
 
               <!-- 需求 7：没有「正确答案」时只有一列，必须铺满而不是占半宽 -->
-              <view class="r-rq__cols" :class="{ 'r-rq__cols--single': !row.expected }">
+              <view
+                v-show="!reviewCollapsed"
+                class="r-rq__cols"
+                :class="{ 'r-rq__cols--single': !row.expected }"
+              >
                 <view class="r-rq__col">
                   <text class="r-rq__label">我的作答</text>
                   <view v-if="row.isImage" class="r-rq__images">
@@ -710,6 +736,29 @@ function openShare(): void {
   line-height: var(--bx-leading-caption);
   color: var(--bx-text-3);
   font-variant-numeric: tabular-nums;
+}
+
+/* 逐题回顾的收起开关：与「N 道题」成组靠右，主色文字 + 足够的点击热区 */
+.r-review__toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.r-review__toggle {
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+.r-review__toggle:focus-visible {
+  outline: 2px solid var(--bx-primary);
+  outline-offset: 2px;
+}
+
+.r-review__toggle-text {
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-primary);
 }
 
 /* ── 逐题回顾卡片 ────────────────────────────────────────────────── */
