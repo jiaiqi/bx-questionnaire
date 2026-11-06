@@ -394,7 +394,12 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
         </view>
       </view>
 
-      <view v-else class="editor-list__card">
+      <view
+        v-else
+        class="editor-list__card"
+        :class="{ 'editor-list__card--busy': loading }"
+        :aria-busy="loading ? 'true' : 'false'"
+      >
         <!-- 表头：12/500，窄屏隐藏（一行放不下） -->
         <view class="editor-list__thead">
           <text class="editor-list__th editor-list__th--main">问卷</text>
@@ -873,6 +878,16 @@ async function onRemove(row: DaqActivityRow): Promise<void> {
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
   box-shadow: var(--bx-elev-1);
+}
+
+/*
+ * 翻页 / 刷新中：旧数据还在，页码却已经跳到目标页。
+ * 压暗并挡住点击，避免用户点到上一页的行（点进去是另一份问卷）。
+ */
+.editor-list__card--busy {
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity var(--bx-duration-fast) var(--bx-ease-out);
 }
 
 /*
