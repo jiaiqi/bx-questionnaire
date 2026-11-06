@@ -151,8 +151,10 @@ function toggleRequired(): void {
 
 <template>
   <view class="bx-eip">
-    <!-- ── 题目 ── -->
+    <!-- ── 基础 ── -->
     <view class="bx-eip__group">
+      <text class="bx-eip__group-title">基础</text>
+
       <EditorFormField label="题型" required :hint="spec ? spec.hint : ''" :error="errorFor('type')">
         <view
           class="bx-eip__select"
