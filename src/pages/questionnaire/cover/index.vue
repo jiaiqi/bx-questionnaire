@@ -100,6 +100,20 @@ const count = computed(() => fields.value.filter(field => field.widget !== 'sect
 const ended = computed(() => activity.value?.status === '已结束')
 
 /**
+ * 尚未开始
+ *
+ * 此前只判「已结束」：未开始的活动照样显示「开始作答」，用户点进去才发现答不了，
+ * 或者答完提交时才被平台拒绝。这里把状态三态化，未开始直接禁掉主按钮。
+ */
+const notStarted = computed(() => activity.value?.status === '未开始')
+
+/** 开始时间：与 deadline 同一口径，只取到天 */
+const startAt = computed(() => {
+  const raw = String(activity.value?.start_time ?? '').trim()
+  return raw.length >= 10 ? raw.slice(0, 10) : ''
+})
+
+/**
  * 标题上方的小标签
  *
  * 已结束优先说状态 —— 此时「能不能答」比「匿名还是登录」更重要；
@@ -382,7 +396,11 @@ function onShareKeydown(event: KeyboardEvent): void {
 
           <!-- 主行动：通栏 50px，次行动 ghost -->
           <view class="c-actions">
-            <BxButton v-if="!ended" size="large" block @click="start">
+            <!-- 未开始不给「开始作答」：点进去答不了、提交还会被平台拒 -->
+            <BxButton v-if="notStarted" size="large" block disabled>
+              尚未开始
+            </BxButton>
+            <BxButton v-else-if="!ended" size="large" block @click="start">
               开始作答
             </BxButton>
             <BxButton v-else type="secondary" size="large" block @click="start">
@@ -391,7 +409,10 @@ function onShareKeydown(event: KeyboardEvent): void {
             <BxButton type="ghost" size="large" block @click="openRecords">
               查看我的记录
             </BxButton>
-            <text class="c-actions__tip">作答过程中会自动保存草稿，可随时返回继续</text>
+            <text v-if="notStarted" class="c-actions__tip">
+              {{ startAt ? `本问卷将于 ${startAt} 开始，届时可作答` : '本问卷尚未开始' }}
+            </text>
+            <text v-else class="c-actions__tip">作答过程中会自动保存草稿，可随时返回继续</text>
             <text class="c-actions__foot">{{ privacyFoot }}</text>
           </view>
 
