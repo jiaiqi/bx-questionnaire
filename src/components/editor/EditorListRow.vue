@@ -50,6 +50,14 @@ function text(value: unknown): string {
 const title = computed(() => text(props.row.title) || '未命名问卷')
 const status = computed(() => text(props.row.status) || '未开始')
 
+/**
+ * 只有「进行中」才是真作答
+ *
+ * 未开始 / 已结束点进去是只读查看（答题页自己按 status 判只读），这里只管文案与
+ * 无障碍标签 —— 对已结束的问卷写「去作答」，用户点进去发现读不出题会很困惑。
+ */
+const canAnswer = computed(() => status.value === '进行中')
+
 /** 状态修饰类：进行中 accent / 未开始 warn / 已结束 ink-3 */
 const statusClass = computed(() => {
   if (status.value === '进行中') {
@@ -117,11 +125,11 @@ const deadline = computed(() => text(props.row.end_time).slice(0, 10) || '—')
         class="bx-editor-row__act"
         role="button"
         tabindex="0"
-        aria-label="去作答"
+        :aria-label="canAnswer ? '去作答' : '查看问卷内容'"
         @click="emit('answer')"
         @keydown.enter.prevent="emit('answer')"
       >
-        <text class="bx-editor-row__act-text">作答</text>
+        <text class="bx-editor-row__act-text">{{ canAnswer ? '作答' : '查看' }}</text>
       </view>
       <view
         class="bx-editor-row__act bx-editor-row__act--danger"
