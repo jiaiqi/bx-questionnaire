@@ -668,11 +668,12 @@ void fetchPage(true)
   color: var(--bx-text-3);
 }
 
+/* 触摸目标 44px：全文的设计约定，32px 在手机上点偏一次就会误触到旁边的文字 */
 .records__notice-link {
   flex: none;
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 2px;
   cursor: pointer;
 }
@@ -713,9 +714,10 @@ void fetchPage(true)
 .records__seg-item {
   flex: 1;
   padding: 0 8px;
-  height: 28px;
+  /* 40px：分段是并排的相邻目标，比单按钮更容易点错，取 40 兼顾触摸与视觉高度 */
+  height: 40px;
   font-size: var(--bx-font-sub);
-  line-height: 28px;
+  line-height: 40px;
   color: var(--bx-text-3);
   text-align: center;
   border-radius: var(--bx-radius-pill);
