@@ -51,6 +51,7 @@
     "@vueuse/core": "9.13.0",
     "@vueuse/shared": "^9.13.0",
     "pinia": "2.2.4",
+    "qrcode-generator": "^2.0.4",
     "vue": "3.4.21",
     "vue-i18n": "9.6.2",
     "vue-router": "4.5.1"
