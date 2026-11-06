@@ -15,7 +15,6 @@ import type { EntryParams } from '@/domain/questionnaire/prefill'
 
 import { computed, nextTick, ref, watch } from 'vue'
 
-import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
@@ -385,7 +384,6 @@ async function init(): Promise<void> {
     }
 
     applyEntryPrefill()
-    await restoreDraftBatch()
   }
 }
 
@@ -403,36 +401,6 @@ function restoreLocalDraft(): void {
   const valid = fromLocalDraft(saved, fields.value, props.fillBatchNo || session.fillBatchNo || '')
   if (Object.keys(valid).length > 0) {
     replace(valid)
-  }
-}
-
-/**
- * 续答：取回未完成记录的批次号
- *
- * 实测草稿保存（srvdaq_activity_result_save）**不回传** fill_batch_no，
- * 只有提交才在 response[0].response.fill_batch_no 里回传。
- * 因此若不在作答前取回草稿批次号，提交会新建一条记录而不是续答。
- */
-async function restoreDraftBatch(): Promise<void> {
-  const userNo = session.userInfo?.user_no
-  if (!userNo) {
-    return
-  }
-
-  try {
-    const envelope = await recordReplySelect({
-      activityNo: props.activityNo,
-      userNo,
-      state: '未完成',
-      rownumber: 1,
-    })
-    const batchNo = envelope.data?.[0]?.fill_batch_no
-    if (batchNo) {
-      session.setFillBatchNo(String(batchNo))
-    }
-  }
-  catch {
-    // 无未完成记录或接口异常都不影响作答
   }
 }
 
