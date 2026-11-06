@@ -14,11 +14,14 @@ function renderServerValue(field: QuestionField, raw: string): string {
 }
 
 describe('mapper · 题型映射', () => {
-  it('单选 → radio，数字 → number，文本 → text', () => {
+  it('单选 → radio，数字 → number，文本一律 → textarea', () => {
     expect(resolveWidget({ item_no: 'a', item_type: '单选' })).toEqual({ widget: 'radio', multi: false })
     expect(resolveWidget({ item_no: 'b', item_type: '数字' })).toEqual({ widget: 'number', multi: false })
-    expect(resolveWidget({ item_no: 'c', item_type: '文本' })).toEqual({ widget: 'text', multi: false })
-    expect(resolveWidget({ item_no: 'd', item_type: '文本', item_type_attr: { view_model: 'textarea' } }))
+    // 需求（2026-11-06）：文本题一律多行，`view_model` 不再影响渲染
+    expect(resolveWidget({ item_no: 'c', item_type: '文本' })).toEqual({ widget: 'textarea', multi: false })
+    expect(resolveWidget({ item_no: 'd', item_type: '文本', item_type_attr: { view_model: 'text' } }))
+      .toEqual({ widget: 'textarea', multi: false })
+    expect(resolveWidget({ item_no: 'e', item_type: '文本', item_type_attr: { view_model: 'textarea' } }))
       .toEqual({ widget: 'textarea', multi: false })
   })
 
@@ -45,10 +48,10 @@ describe('mapper · 真实数据适配', () => {
     expect(fields[1]!.widget).toBe('number')
   })
 
-  it('5 题真实活动：文本题未带 view_model 时识别为 text，且 item_seq 重复时保持平台顺序', () => {
+  it('5 题真实活动：文本题一律识别为 textarea，且 item_seq 重复时保持平台顺序', () => {
     const fields = toQuestionFields(activity5.item_data)
     expect(fields).toHaveLength(5)
-    expect(fields[0]!.widget).toBe('text')
+    expect(fields[0]!.widget).toBe('textarea')
     // 真实数据中前 3 题 item_seq 都是 1，排序需稳定
     expect(fields.slice(0, 3).map(field => field.seq)).toEqual([1, 1, 1])
     expect(fields[0]!.label).toBe('使用舒适度')
@@ -74,6 +77,46 @@ describe('mapper · 真实数据适配', () => {
       ],
     })
     expect(options.map(option => option.serialChar)).toEqual(['A', '7', '3'])
+  })
+
+  it('选项按 option_view_no 升序排列，与平台返回的数组顺序无关', () => {
+    const options = toFieldOptions({
+      item_no: 'x',
+      option_data: [
+        { option_no: 'o3', option_value: '丙', option_view_no: 'C' },
+        { option_no: 'o1', option_value: '甲', option_view_no: 'A' },
+        { option_no: 'o4', option_value: '丁', option_view_no: 'D' },
+        { option_no: 'o2', option_value: '乙', option_view_no: 'B' },
+      ],
+    })
+    expect(options.map(option => option.no)).toEqual(['o1', 'o2', 'o3', 'o4'])
+    expect(options.map(option => option.viewNo)).toEqual(['A', 'B', 'C', 'D'])
+  })
+
+  it('选项排序：缺标识的排在有标识之后，同组内按 option_seq 升序', () => {
+    const options = toFieldOptions({
+      item_no: 'x',
+      option_data: [
+        { option_no: 'noView', option_value: '无标识' },
+        { option_no: 'b', option_value: '乙', option_view_no: 'B' },
+        { option_no: 'seq2', option_value: '序号2', option_seq: 2 },
+        { option_no: 'a', option_value: '甲', option_view_no: 'A' },
+        { option_no: 'seq1', option_value: '序号1', option_seq: 1 },
+      ],
+    })
+    expect(options.map(option => option.no)).toEqual(['a', 'b', 'seq1', 'seq2', 'noView'])
+  })
+
+  it('选项排序不就地改写平台返回的 option_data 数组', () => {
+    const optionData = [
+      { option_no: 'o2', option_value: '乙', option_view_no: 'B' },
+      { option_no: 'o1', option_value: '甲', option_view_no: 'A' },
+    ]
+    const options = toFieldOptions({ item_no: 'x', option_data: optionData })
+    // 输出已按 A→B 排序
+    expect(options.map(option => option.no)).toEqual(['o1', 'o2'])
+    // 入参数组保持原顺序（响应数据不该被就地改写）
+    expect(optionData.map(option => option.option_no)).toEqual(['o2', 'o1'])
   })
 })
 

@@ -37,10 +37,16 @@ export function resolveWidget(raw: DaqItemRow): { widget: QuestionWidget, multi:
 
   switch (itemType) {
     case '文本':
-      return {
-        widget: readAttr(raw, 'view_model') === 'textarea' ? 'textarea' : 'text',
-        multi: false,
-      }
+      /*
+       * 一律多行。
+       *
+       * 平台枚举里没有独立的「多行文本」题型，多行原本靠
+       * `item_type_attr.view_model === 'textarea'` 表达（编辑器为此提供了
+       * 「单行 / 多行」分段选择器）。业务方 2026-11-06 明确要求**文本题一律
+       * 按多行渲染**，不再区分该属性 —— 因此 `view_model` 对本分支不再生效，
+       * 编辑器的「输入形态」选择器也已失去作用（保留仅为了历史数据可读）。
+       */
+      return { widget: 'textarea', multi: false }
     case '数字':
       return { widget: 'number', multi: false }
     case '单选':
@@ -74,27 +80,70 @@ export function resolveWidget(raw: DaqItemRow): { widget: QuestionWidget, multi:
   }
 }
 
-/** 解析选项列表 */
+/**
+ * 选项排序比较器
+ *
+ * 选项顺序只可能由客户端负责：平台三张配置表的 `order` 参数传了会报「系统繁忙」，
+ * 服务端也不对 `option_data` 排序。权威顺序是 `option_view_no`（平台列枚举 A..Z，
+ * 214 实测单选/多选都只写了它、`option_seq` 全为 null）；缺失时退到 `option_seq`
+ * 升序，两者都缺失则返回 0，交给 `Array.prototype.sort` 的稳定性保持平台返回顺序。
+ *
+ * 修的是历史缺陷：此前完全按 `option_data` 数组顺序渲染，一旦平台返回顺序与配置
+ * 的 A/B/C/D 不一致，界面上选项就是乱的（多选尤其明显）。
+ */
+function compareOptions(a: DaqOptionRow, b: DaqOptionRow): number {
+  const viewA = String(a.option_view_no ?? '').trim()
+  const viewB = String(b.option_view_no ?? '').trim()
+
+  if (viewA !== viewB) {
+    if (!viewA) {
+      return 1
+    }
+    if (!viewB) {
+      return -1
+    }
+    return viewA < viewB ? -1 : 1
+  }
+
+  const seqA = a.option_seq
+  const seqB = b.option_seq
+  const hasSeqA = seqA !== null && seqA !== undefined
+  const hasSeqB = seqB !== null && seqB !== undefined
+
+  if (hasSeqA !== hasSeqB) {
+    return hasSeqA ? -1 : 1
+  }
+  if (hasSeqA && hasSeqB && Number(seqA) !== Number(seqB)) {
+    return Number(seqA) - Number(seqB)
+  }
+
+  return 0
+}
+
+/** 解析选项列表（按 `option_view_no` 升序） */
 export function toFieldOptions(raw: DaqItemRow): FieldOption[] {
   const options = raw.option_data
   if (!Array.isArray(options)) {
     return []
   }
 
-  return options.map((option: DaqOptionRow, index: number) => {
-    const serialChar = option.option_view_no
-      || (option.option_seq !== null && option.option_seq !== undefined ? String(option.option_seq) : '')
-      || String(index + 1)
+  // 拷贝后再排序：`option_data` 是平台响应的一部分，不应被就地改写
+  return [...options]
+    .sort(compareOptions)
+    .map((option: DaqOptionRow, index: number) => {
+      const serialChar = option.option_view_no
+        || (option.option_seq !== null && option.option_seq !== undefined ? String(option.option_seq) : '')
+        || String(index + 1)
 
-    return {
-      no: option.option_no,
-      value: option.option_value ?? '',
-      viewNo: option.option_view_no ?? '',
-      label: option.option_value ?? '',
-      serialChar,
-      isAnswer: option.answer === '是',
-    }
-  })
+      return {
+        no: option.option_no,
+        value: option.option_value ?? '',
+        viewNo: option.option_view_no ?? '',
+        label: option.option_value ?? '',
+        serialChar,
+        isAnswer: option.answer === '是',
+      }
+    })
 }
 
 /** 读取题目分值 */
