@@ -79,6 +79,17 @@ function isDraft(row: DaqRecordReplyRow): boolean {
   return String(row.state ?? '') === '未完成'
 }
 
+/**
+ * 记录时间：**已提交优先取 `end_time`**（真实提交时刻），草稿才退回 `start_time`
+ *
+ * 与「我的测评」（couple）统一口径 —— 那边一直用 `end_time ?? start_time`。
+ * 此前这里固定取 `start_time` 却贴在「已提交」标签旁边，用户读到的「提交时间」
+ * 其实是开始作答时间，同一批次在两个页面显示的时间也不一样。
+ */
+function recordTime(row: DaqRecordReplyRow): string {
+  return formatDateTime(row.end_time) || formatDateTime(row.start_time)
+}
+
 /** 分段筛选后的行：草稿 = state 未完成，已提交 = 其余（含无状态的历史行） */
 const filteredRows = computed(() =>
   visibleRows.value.filter((row) => {
@@ -411,8 +422,8 @@ void fetchPage(true)
           <text class="record__state" :class="isDraft(row) ? 'record__state--draft' : 'record__state--done'">
             {{ isDraft(row) ? '草稿' : '已提交' }}
           </text>
-          <text v-if="formatDateTime(row.start_time)" class="record__time">
-            {{ formatDateTime(row.start_time) }}
+          <text v-if="recordTime(row)" class="record__time">
+            {{ recordTime(row) }}
           </text>
         </view>
 
