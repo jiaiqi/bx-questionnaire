@@ -16,7 +16,7 @@
  * - 校验失败时抖动对应输入框：只弹一行字很容易被忽略。
  */
 
-import { computed, nextTick, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 
 import BxButton from '@/components/base/BxButton.vue'
 import { useDialogFocus } from '@/composables/useDialogFocus'
@@ -32,11 +32,31 @@ const props = withDefaults(defineProps<Props>(), { notice: '请登录后继续' 
 
 const emit = defineEmits<{ success: [] }>()
 
+/**
+ * 忘记密码的联系方式
+ *
+ * 原来写死在模板里（「行政服务中心（内线 8100）」），换租户或园区要改代码。
+ * 提到常量，部署时只改这一处。
+ */
+const SUPPORT_CONTACT = '行政服务中心（内线 8100）'
+
 const { submitting, errorMessage, rememberedUser, login, clearError } = useLogin()
 
 /** 记住过账号就直接填上，用户只需要输密码 */
 const userNo = ref(rememberedUser.value)
 const password = ref('')
+
+/**
+ * 自动聚焦
+ *
+ * 记住账号时直接聚焦密码框（用户只需要输密码），否则聚焦账号框。
+ * 不聚焦的话 H5 首次进入要手动点一下输入框，多一步。
+ */
+const focusField = ref<'userNo' | 'password' | ''>('')
+
+onMounted(() => {
+  focusField.value = rememberedUser.value ? 'password' : 'userNo'
+})
 const remember = ref(rememberedUser.value !== '')
 /** 密码明文切换：只影响显示，不改变提交值 */
 const showPassword = ref(false)
@@ -209,6 +229,9 @@ async function onSubmit(): Promise<void> {
             placeholder="请输入账号"
             placeholder-class="login-field__placeholder"
             aria-label="账号"
+            autocomplete="username"
+            :aria-invalid="errorMessage ? 'true' : 'false'"
+            :focus="focusField === 'userNo'"
             :disabled="submitting"
             @input="onUserInput"
             @confirm="onSubmit"
@@ -225,6 +248,9 @@ async function onSubmit(): Promise<void> {
               placeholder="请输入密码"
               placeholder-class="login-field__placeholder"
               aria-label="密码"
+              autocomplete="current-password"
+              :aria-invalid="errorMessage ? 'true' : 'false'"
+              :focus="focusField === 'password'"
               :disabled="submitting"
               @input="onPasswordInput"
               @confirm="onSubmit"
@@ -289,6 +315,10 @@ async function onSubmit(): Promise<void> {
         >
           {{ errorMessage }}
         </text>
+        <!-- 平台连续失败会锁号 1 小时，但界面原来只有一次错误文案，用户不知道再试的代价 -->
+        <text v-if="errorMessage" class="login-form__error-hint">
+          连续输错会锁定账号，请确认后再试
+        </text>
 
         <BxButton type="primary" size="large" block :loading="submitting" @click="onSubmit">
           {{ submitting ? '登录中' : '登录' }}
@@ -331,7 +361,7 @@ async function onSubmit(): Promise<void> {
             <view class="forgot-note__dot" />
           </view>
           <text class="forgot-note__text">
-            账号密码由园区统一管理。请联系行政服务中心（内线 8100）重置密码，
+            账号密码由园区统一管理。请联系{{ SUPPORT_CONTACT }}重置密码，
             重置后使用新密码登录。
           </text>
         </view>
@@ -673,6 +703,15 @@ async function onSubmit(): Promise<void> {
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
   color: var(--bx-danger);
+}
+
+/* 锁号提示：比错误文案弱一级，跟在它下面 */
+.login-form__error-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--bx-font-caption);
+  line-height: var(--bx-leading-caption);
+  color: var(--bx-text-3);
 }
 
 .login-form .bx-button {
