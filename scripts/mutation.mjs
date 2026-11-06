@@ -58,12 +58,6 @@ const EQUIVALENT = [
       + 'length 为 16 时截断结果就是原值，length 为 17 时两条件都成立 —— 边界值不影响结果',
   },
   {
-    file: 'src/composables/useDraft.ts',
-    line: 43,
-    reason: '`savedAt = ref(0)` 的初始值不参与任何判断，只作为「尚未保存」的占位；'
-      + '保存成功后被赋成 `Date.now()`，0 与 1 在赋值前都不可观测',
-  },
-  {
     file: 'src/composables/useQuestionnaire.ts',
     line: 41,
     reason: '`loadToken` 只与自身递增后的值比较（`++loadToken` 后存进 token，再拿 token 与 loadToken 比），'
@@ -93,7 +87,6 @@ const TARGETS = [
   { file: 'src/api/daq/record.ts', test: 'test/api/daq-contract.spec.ts' },
   { file: 'src/api/daq/activity.ts', test: 'test/api/daq-contract.spec.ts' },
   // 组合式函数 / store / 环境与附件接口：补齐后覆盖全部有单测的模块
-  { file: 'src/composables/useDraft.ts', test: 'test/composables/useDraft.spec.ts' },
   { file: 'src/composables/useSubmit.ts', test: 'test/composables/useSubmit.spec.ts' },
   { file: 'src/composables/useQuestionnaire.ts', test: 'test/composables/useQuestionnaire.spec.ts' },
   { file: 'src/composables/useAnswerModel.ts', test: 'test/composables/useAnswerModel.spec.ts' },

@@ -2,8 +2,11 @@
  * 问卷作答记录接口
  *
  * 服务清单（接口契约迁移期间不变）：
- * - `srvdaq_activity_result_save`        草稿保存（逐题即时）
  * - `srvdaq_activity_result_submit`      提交整卷
+ *
+ * 注意：`srvdaq_activity_result_save`（逐题草稿上报）自 2026-11-06 起**不再调用**。
+ * 作答过程中的草稿改为只写本机（`domain/questionnaire/draft.ts` + `utils/storage.ts`），
+ * 一次作答只在提交时产生一次写请求；提交不带 `fill_batch_no` 时服务端新建记录并回传批次号。
  * - `srvdaq_record_reply_select`         答题记录 / 得分
  * - `srvdaq_record_reply_merge_select`   评估维度汇总
  * - `srvdaq_activity_sug_select`         评估建议文案
@@ -15,45 +18,12 @@ import type { BxCondition, BxOrder } from '@/utils/request/types'
 
 import { bxSelect, bxWrite } from '@/utils/request'
 
-/**
- * 草稿单项
- *
- * 注意：老工程草稿保存写入的是**选项主键 `option_no`**（提交才写 `option_value`），
- * 这里保持同一语义；回填匹配两种值都接受（见 `domain/questionnaire/mapper.ts`）。
- */
-export interface DraftItem {
-  item_no: string
-  option_data: string[]
-}
-
 /** 提交单项 */
 export interface SubmitItem {
   item_no: string
   option_data: string[]
   /** 选项展示序号，仅选项类题目带 */
   option_flag?: string[]
-}
-
-export interface ResultSaveParams {
-  activityNo: string
-  /** 首次保存时为空，响应会回传 fill_batch_no */
-  fillBatchNo?: string
-  itemData: DraftItem[]
-}
-
-/** 草稿保存：逐题即时上报 */
-export function resultSave(params: ResultSaveParams) {
-  const data: Record<string, unknown> = {
-    activity_no: params.activityNo,
-    item_data: params.itemData,
-  }
-  if (params.fillBatchNo) {
-    data.fill_batch_no = params.fillBatchNo
-  }
-
-  return bxWrite('operate', [
-    { serviceName: 'srvdaq_activity_result_save', data: [data] },
-  ])
 }
 
 export interface ResultSubmitParams {

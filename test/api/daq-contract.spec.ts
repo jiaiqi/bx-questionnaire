@@ -23,7 +23,6 @@ import {
   recordReplyMergeSelect,
   recordReplySelect,
   recordShareAdd,
-  resultSave,
   resultSubmit,
 } from '@/api/daq/record'
 
@@ -199,20 +198,6 @@ describe('recordShareAdd', () => {
     recordShareAdd({ bizNo: 'A1' })
     const data = lastWriteArg()[1][0]?.data[0]
     expect(data?.share_type).toBeUndefined()
-  })
-})
-
-describe('resultSave', () => {
-  it('首次保存不带 fill_batch_no（由响应回传批次号）', () => {
-    resultSave({ activityNo: 'A1', itemData: [{ item_no: 'col1', option_data: ['opt1'] }] })
-    const data = lastWriteArg()[1][0]?.data[0]
-    expect(data).toMatchObject({ activity_no: 'A1' })
-    expect(data).not.toHaveProperty('fill_batch_no')
-  })
-
-  it('续答时带上 fill_batch_no', () => {
-    resultSave({ activityNo: 'A1', fillBatchNo: 'B1', itemData: [] })
-    expect(lastWriteArg()[1][0]?.data[0]).toMatchObject({ fill_batch_no: 'B1' })
   })
 })
 

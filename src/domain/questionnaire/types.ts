@@ -71,12 +71,6 @@ export interface SubmitItem {
   option_flag?: string[]
 }
 
-/** 草稿单项 */
-export interface DraftItem {
-  item_no: string
-  option_data: string[]
-}
-
 /** 归一化为字符串数组 */
 export function toArray(value: AnswerValue | undefined | null): string[] {
   if (value === undefined || value === null) {

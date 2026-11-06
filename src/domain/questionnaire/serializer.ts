@@ -3,11 +3,13 @@
  *
  * 契约（迁移期间不变）：
  * - 提交：选项类写 `option_data = [option_value…]` + `option_flag = [option_view_no…]`；
- *         文本/数字类写 `option_data = [字符串]`；
- * - 草稿：写 `option_data = [option_no…]`（老工程语义，选项主键）。
+ *         文本/数字类写 `option_data = [字符串]`。
+ *
+ * 「草稿体」(`option_data = [option_no…]`) 随逐题草稿上报一起下线（2026-11-06）：
+ * 草稿现在只写本机，直接复用作答模型，不再需要单独的序列化口径。
  */
 
-import type { AnswerMap, DraftItem, QuestionField, SubmitItem } from './types'
+import type { AnswerMap, QuestionField, SubmitItem } from './types'
 import { toArray } from './types'
 
 /** 需要按选项主键反查映射的控件 */
@@ -53,25 +55,4 @@ export function toSubmitPayload(fields: QuestionField[], answers: AnswerMap): Su
   }
 
   return payload
-}
-
-/**
- * 组装单题草稿体
- *
- * 选项类写选项主键，文本/数字类写字符串；空值返回 null（不发起请求）。
- */
-export function toDraftPayload(field: QuestionField, answers: AnswerMap): DraftItem | null {
-  if (field.widget === 'section') {
-    return null
-  }
-
-  const values = toArray(answers[field.key]).map(value => String(value)).filter(value => value !== '')
-  if (values.length === 0) {
-    return null
-  }
-
-  return {
-    item_no: field.key,
-    option_data: values,
-  }
 }

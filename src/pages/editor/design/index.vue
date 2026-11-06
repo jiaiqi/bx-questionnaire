@@ -183,8 +183,11 @@ function closePreview(): void {
 /**
  * 内嵌预览里的「在新页面打开已保存版本」
  *
- * 与原来的预览行为一致：只有保存过（有 activity_no）才能打开真实作答页；
- * 有未保存修改时先确认 —— 新页面里看到的是已保存的版本。
+ * 打开的是**预览模式**（`formType=preview`）：只读、不可填写、不产生提交记录，
+ * 页面里带二维码，方便业务方扫码换到手机上核对真实版式。
+ *
+ * 只有保存过（有 activity_no）才能打开；有未保存修改时先确认 ——
+ * 新页面里看到的是已保存的版本。
  */
 async function onOpenLive(): Promise<void> {
   const activityNo = String(doc.value.activity.activityNo ?? '')
@@ -199,7 +202,12 @@ async function onOpenLive(): Promise<void> {
     }
   }
   closePreview()
-  uni.navigateTo({ url: answerUrl(activityNo, { status: String(doc.value.activity.status ?? '') }) })
+  uni.navigateTo({
+    url: answerUrl(activityNo, {
+      formType: 'preview',
+      status: String(doc.value.activity.status ?? ''),
+    }),
+  })
 }
 
 /** 发布 = 保存并把状态置为「进行中」（服务端不会自动改状态，必须显式写） */

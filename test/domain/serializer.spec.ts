@@ -5,7 +5,7 @@ import type { DaqItemRow } from '@/api/daq/types'
 import type { FieldOption, QuestionField } from '@/domain/questionnaire'
 import { describe, expect, it } from 'vitest'
 import { toQuestionFields } from '@/domain/questionnaire/mapper'
-import { toDraftPayload, toSubmitPayload } from '@/domain/questionnaire/serializer'
+import { toSubmitPayload } from '@/domain/questionnaire/serializer'
 import { activity8, buildRealistic19, realistic19Answers } from '../fixtures/questionnaire'
 
 describe('serializer · 提交体', () => {
@@ -71,26 +71,6 @@ describe('serializer · 提交体', () => {
   })
 })
 
-describe('serializer · 草稿体', () => {
-  it('草稿写选项主键 option_no（与老工程一致）', () => {
-    const fields = toQuestionFields(activity8.item_data)
-    const first = fields[0]!
-    const draft = toDraftPayload(first, { [first.key]: first.options[1]!.no })
-
-    expect(draft).toEqual({ item_no: first.key, option_data: [first.options[1]!.no] })
-  })
-
-  it('草稿文本题写字符串', () => {
-    const fields = toQuestionFields([{ item_no: 'q1', item_seq: 1, item_type: '文本' }])
-    expect(toDraftPayload(fields[0]!, { q1: '意见' })).toEqual({ item_no: 'q1', option_data: ['意见'] })
-  })
-
-  it('空值不产生草稿项', () => {
-    const fields = toQuestionFields([{ item_no: 'q1', item_seq: 1, item_type: '文本' }])
-    expect(toDraftPayload(fields[0]!, {})).toBeNull()
-  })
-})
-
 describe('serializer · 边界值', () => {
   function makeField(partial: Partial<QuestionField> & Pick<QuestionField, 'key' | 'widget'>): QuestionField {
     return {
@@ -129,11 +109,6 @@ describe('serializer · 边界值', () => {
     const payload = toSubmitPayload([field], { k3: 'n1' })
     expect(payload).toEqual([{ item_no: 'k3', option_data: ['v1'] }])
     expect(payload[0]).not.toHaveProperty('option_flag')
-  })
-
-  it('草稿：空数组不产生草稿项（不发起无意义的请求）', () => {
-    const field = makeField({ key: 'k4', widget: 'checkbox' })
-    expect(toDraftPayload(field, { k4: [] })).toBeNull()
   })
 
   it('选项类判空按选项主键 option_no，不存在的选项不会混进提交体', () => {

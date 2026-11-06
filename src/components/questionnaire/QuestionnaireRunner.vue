@@ -20,12 +20,13 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import BxProgressBar from '@/components/base/BxProgressBar.vue'
+import BxQrCode from '@/components/base/BxQrCode.vue'
 import BxSkeleton from '@/components/base/BxSkeleton.vue'
 import BxFieldRenderer from '@/components/form/BxFieldRenderer.vue'
 import { useAnswerModel } from '@/composables/useAnswerModel'
-import { useDraft } from '@/composables/useDraft'
 import { useEmbedResize } from '@/composables/useEmbedResize'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { useShare } from '@/composables/useShare'
 import { useSubmit } from '@/composables/useSubmit'
 import {
   clampStepIndex,
@@ -71,8 +72,8 @@ const emit = defineEmits<{ submitted: [{ batchNo: string }] }>()
 const session = useSessionStore()
 const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 const { answers, progress, replace } = useAnswerModel(() => fields.value)
-const { savedTip, save: saveDraftItem, waitIdle: waitDraftIdle } = useDraft()
 const { submitting, submit } = useSubmit()
+const { shareLink } = useShare()
 
 // 嵌入场景：内容变高时告诉父页面调整 iframe 高度
 useEmbedResize()
@@ -99,17 +100,39 @@ const intro = computed(() => activity.value?.start_remark || '')
 defineExpose({ activityTitle: title })
 /** 活动本身已结束 */
 const activityEnded = computed(() => activity.value?.status === '已结束')
-/** 已结束的活动按只读展示；formType 为 view / detail 亦为查看模式 */
+/**
+ * 预览模式（`formType=preview`）
+ *
+ * 给业务方在真机上核对版式用：只读、不产生提交记录，且**不读取任何已有作答**
+ * （否则看到的不是问卷原貌，而是自己上次答过的内容，见 `init`）。
+ */
+const isPreview = computed(() => props.formType === 'preview')
+/** 已结束的活动按只读展示；formType 为 view / detail / preview 亦为查看模式 */
 const readOnly = computed(() =>
-  activityEnded.value || props.formType === 'view' || props.formType === 'detail',
+  activityEnded.value
+  || props.formType === 'view'
+  || props.formType === 'detail'
+  || isPreview.value,
 )
 /**
- * 只读提示要区分原因：活动已结束，和用户点开自己的历史作答，是两回事。
- * 从「作答记录」进来时活动往往仍在进行中，此时若说「该问卷已结束」是误导。
+ * 只读提示要区分原因：已结束、预览、查看历史作答是三种不同场景，
+ * 都说成「以下为查看模式」要么误导、要么信息不足。
  */
-const readOnlyTip = computed(() =>
-  activityEnded.value ? '该问卷已结束，以下为查看模式' : '以下为查看模式，仅供查看',
-)
+const readOnlyTip = computed(() => {
+  if (isPreview.value) {
+    return '预览模式：不可填写，也不会产生提交记录'
+  }
+  return activityEnded.value ? '该问卷已结束，以下为查看模式' : '以下为查看模式，仅供查看'
+})
+
+/**
+ * 问卷首页（封面页）的绝对地址，作为预览页二维码的内容
+ *
+ * 扫码后要落到**问卷首页**而不是当前预览页：手机上应先看到标题、描述与
+ * 「开始作答」。`shareLink` 在非 H5 返回空串，此时二维码不渲染 ——
+ * 小程序里扫码给自己没有意义。
+ */
+const homeAbsoluteUrl = computed(() => shareLink(coverUrl(props.activityNo)))
 
 /**
  * 展示方式：逐个（一次一题）/ 全部（整卷一屏）
@@ -315,7 +338,19 @@ async function init(): Promise<void> {
     return
   }
 
-  const batchNo = props.fillBatchNo || session.fillBatchNo || undefined
+  /**
+   * 预览模式不读任何「已有作答」
+   *
+   * 三件事都不做：按批次号取 `user_data`、恢复本地草稿、登记信息预填。
+   * 否则业务方看到的不是问卷原貌，而是自己上次答过的内容 —— 那就不叫预览了。
+   *
+   * 另外预览固定用 `plain` 而非 `use`：`use` 要求活动处于「进行中」，
+   * 而预览最需要能看「已结束」的问卷。
+   */
+  const previewMode = isPreview.value
+  const batchNo = previewMode
+    ? undefined
+    : (props.fillBatchNo || session.fillBatchNo || undefined)
 
   // 有批次号时先按 use 取：能从服务端拿到该批次的 user_data，恢复已答内容。
   // 这是「点击未完成记录续答」的关键路径 —— 本地草稿只存在于同一浏览器，
@@ -339,17 +374,19 @@ async function init(): Promise<void> {
   // 同步补发一条，否则问卷被它嵌入时会一直停在「加载中」。
   notifyParent('h5_loaded', { serviceName: 'srvdaq_init_view_select' })
 
-  if (Object.keys(backfill.value).length > 0) {
-    replace(backfill.value)
-  }
-  else {
-    // 服务端没有回填（匿名用户拿不到 user_data）时用本地草稿续答：
-    // 否则用户填到一半刷新页面，答案会全部丢失、只恢复批次号。
-    restoreLocalDraft()
-  }
+  if (!previewMode) {
+    if (Object.keys(backfill.value).length > 0) {
+      replace(backfill.value)
+    }
+    else {
+      // 服务端没有回填（匿名用户拿不到 user_data）时用本地草稿续答：
+      // 否则用户填到一半刷新页面，答案会全部丢失、只恢复批次号。
+      restoreLocalDraft()
+    }
 
-  applyEntryPrefill()
-  await restoreDraftBatch()
+    applyEntryPrefill()
+    await restoreDraftBatch()
+  }
 }
 
 /**
@@ -435,10 +472,32 @@ watch(
 let draftPersistTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
+ * 本地草稿提示
+ *
+ * 需求变更（2026-11-06）：草稿**不再逐题上报后端**（`srvdaq_activity_result_save`
+ * 已下线调用），只写本机；提示语因此从「草稿已自动保存」改成「已保存到本机」，
+ * 避免让人误以为内容已经入库。真正落库只发生在提交那一次。
+ */
+const draftTip = ref('')
+let draftTipTimer: ReturnType<typeof setTimeout> | null = null
+
+function markDraftSaved(): void {
+  draftTip.value = '已保存到本机'
+  if (draftTipTimer) {
+    clearTimeout(draftTipTimer)
+  }
+  draftTipTimer = setTimeout(() => {
+    draftTipTimer = null
+    draftTip.value = ''
+  }, 2000)
+}
+
+/**
  * 答案变化时同步一份到本地
  *
- * 服务端草稿虽然也存了，但它是「逐题一条记录」且需要网络；本地这份保证
- * 刷新/闪退后至少能恢复已答内容。空答案不写入，避免把已有草稿清空。
+ * 这是**唯一**的草稿保存路径：刷新 / 闪退 / 切后台后至少能恢复已答内容；
+ * 服务端不再保存逐题草稿，因此跨设备续答能力随之取消（见 docs 的取舍说明）。
+ * 空答案不写入，避免把已有草稿清空。
  */
 watch(
   answers,
@@ -451,40 +510,21 @@ watch(
       const draft = toLocalDraft(fields.value, answers, session.fillBatchNo || props.fillBatchNo || '')
       if (draft) {
         storage.set(draftAnswersKey(props.activityNo), draft)
+        markDraftSaved()
       }
     }, 300)
   },
   { deep: true },
 )
 
-/**
- * 采纳服务端回传的批次号
- *
- * 两件事必须一起做，所以合并到一处而不是在调用点各写一遍：
- * 1. 写回会话（续答依赖它）；
- * 2. 记进「本机产生过的批次号」—— 作答记录页未登录时**只能靠这份本地记录**
- *    判定哪条是自己的（`record_reply_select` 不带 user_no 会返回全部人的记录）。
- *    漏记的后果是用户自己的记录在列表里消失。
- */
-function adoptBatchNo(batchNo: string): void {
-  session.setFillBatchNo(batchNo)
-  rememberMyBatch(props.activityNo, batchNo)
-}
-
 function onAnswerChange(field: QuestionField, value: AnswerValue): void {
   answers[field.key] = value
   if (errors.value[field.key]) {
     delete errors.value[field.key]
   }
-
-  // 逐题即时保存草稿（老工程方案），批次号回传后写回会话
-  void saveDraftItem({
-    activityNo: props.activityNo,
-    fillBatchNo: session.fillBatchNo || undefined,
-    field,
-    answers,
-    onBatchNo: adoptBatchNo,
-  })
+  // 草稿只落本机（见上面 watch(answers)），**不再逐题上报后端**：
+  // 一次作答只会在提交时产生一次写请求。批次号也因此不再由草稿保存产生 ——
+  // 提交时若不传 fill_batch_no，服务端会新建记录并在响应里回传批次号。
 }
 
 async function onSubmit(): Promise<void> {
@@ -531,10 +571,6 @@ async function onSubmit(): Promise<void> {
   if (!confirmed) {
     return
   }
-
-  // 先等草稿队列排空：否则草稿与提交并发，提交那一刻批次号可能还是空的，
-  // 于是提交也触发一次「首次保存」，两者分属不同批次且批次号互相覆盖
-  await waitDraftIdle()
 
   // 登记表单字段随提交写入结果表：老工程用 ...self.submitInfo 做同样的事，
   // 只带非空值，避免把空串写进 company / user_name / user_phone
@@ -773,6 +809,13 @@ function onHistoryKeydown(event: KeyboardEvent): void {
               <text class="runner__intro-meta-text">{{ activity.answer_times }}</text>
             </view>
             <text v-if="readOnly" class="runner__intro-readonly">{{ readOnlyTip }}</text>
+            <!--
+              预览模式的二维码：只在宽屏出现 —— 手机上扫码给自己没有意义，
+              还会把题目挤出首屏。
+            -->
+            <view v-if="isPreview && homeAbsoluteUrl" class="runner__preview-qr">
+              <BxQrCode :value="homeAbsoluteUrl" :size="112" caption="扫码在手机上打开问卷首页" />
+            </view>
           </view>
 
           <!--
@@ -806,7 +849,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
     </view>
 
     <view v-if="showFooter" class="runner__footer">
-      <text v-if="savedTip" class="runner__footer-tip">{{ savedTip }}</text>
+      <text v-if="draftTip" class="runner__footer-tip">{{ draftTip }}</text>
       <view class="runner__footer-actions" :class="{ 'runner__footer-actions--steps': stepMode }">
         <template v-if="stepMode">
           <view class="runner__footer-prev">
@@ -1159,6 +1202,24 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   font-size: var(--bx-font-caption);
   line-height: var(--bx-leading-caption);
   color: var(--bx-warn);
+}
+
+/*
+ * 预览模式的二维码
+ *
+ * 默认不渲染：手机端扫码给自己没有意义，还会把题目挤出首屏。
+ * 只在宽屏（业务方在 PC 上核对版式）出现。
+ */
+.runner__preview-qr {
+  display: none;
+}
+
+@media (min-width: 760px) {
+  .runner__preview-qr {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 16px;
+  }
 }
 
 /* ── 错误摘要：可点击的清单，点一条跳到那道题 ───────────────────── */
