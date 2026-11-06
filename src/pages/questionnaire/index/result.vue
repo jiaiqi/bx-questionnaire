@@ -13,7 +13,7 @@
  * 不引入 `<svg>`（微信小程序不支持该标签），也不使用 `color-mix`。
  */
 
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
@@ -41,10 +41,8 @@ const {
   passingMark,
   rows,
   answerImagesFailed,
-  canRetry,
   showSuggestionEntry,
   openSuggestion,
-  restart,
   goHome,
   coverUrl,
 } = useResultPage()
@@ -160,68 +158,19 @@ const verdictText = computed(() => {
 })
 
 /**
- * 逐题得分
+ * 口径说明里的「计分题」数量
  *
- * 没有真正的「维度」数据源（merge 服务返回的也是逐题汇总），
- * 所以这一段是**逐题得分率**，不是维度分；标题与口径保持一致。
+ * 需求 11 之后页面不再有「逐题得分」一节，但顶部「计分题 N 道 · 满分 X 分」
+ * 仍要给出数量，且必须与三栏统计同源，否则会出现
+ * 「计分题 4 道，答对 + 答错 + 未答却只有 2」的自相矛盾。
  *
- * 只列**能判分的计分题**（有分值且存在正确答案）：
- * - 没分值的题（演示问卷里 11 题有 9 题没分值）列出来只会淹掉得分；
- * - 有分值但没有正确答案的题（脏数据）无法判分，列出来会出现
- *   「计分题 4 道，答对 + 答错 + 未答却只有 2」的自相矛盾。
- * 两类题在下面的「逐题回顾」里仍然看得到，信息没丢。
+ * 口径 = 有分值且能判分的题（有正确答案）：
+ * - 没分值的题不参与统计；
+ * - 有分值但没有正确答案的题（脏数据）无法判分，也不算计分题。
  */
-const scoreRows = computed(() =>
-  rows.value
-    .filter(row => row.points > 0 && row.verdict !== 'unjudged')
-    .map(row => ({
-      key: row.key,
-      title: row.title,
-      percent: Math.round((row.earned / row.points) * 100),
-      earned: row.earned,
-      points: row.points,
-    })),
+const countedCount = computed(() =>
+  rows.value.filter(row => row.points > 0 && row.verdict !== 'unjudged').length,
 )
-
-/** 口径说明里的「计分题」数量：与上面的逐题得分、下面的三栏统计同源 */
-const countedCount = computed(() => scoreRows.value.length)
-
-/**
- * 逐题得分条是否做进场动画
- *
- * 逐项动画只在 H5 端做（规范 §6.1）：小程序端长列表逐项动画会掉帧。
- */
-const barsAnimated = ref(false)
-// #ifdef H5
-barsAnimated.value = true
-// #endif
-
-/** 得分条是否已翻到目标宽度（翻之前宽度为 0，过渡才有起点） */
-const barsReady = ref(false)
-
-watch(
-  () => rows.value.length,
-  (length) => {
-    if (length === 0 || barsReady.value) {
-      return
-    }
-    if (!barsAnimated.value) {
-      barsReady.value = true
-      return
-    }
-    /* 先让浏览器把 0% 画出来，再翻到目标值 */
-    void nextTick().then(() => {
-      setTimeout(() => {
-        barsReady.value = true
-      }, 40)
-    })
-  },
-  { immediate: true },
-)
-
-function barWidth(percent: number): string {
-  return `${barsReady.value ? percent : 0}%`
-}
 
 /** 逐题结论的短标签：颜色之外还要有文字，状态不能只靠颜色 */
 function verdictTag(verdict: string): string {
@@ -299,11 +248,10 @@ function openShare(): void {
       />
 
       <template v-else>
-        <!-- 状态条：成功点 + 文字，右侧批次号 -->
+        <!-- 状态条：成功点 + 文字（需求 5：不再展示批次号） -->
         <view class="r-status">
           <view class="r-status__dot" aria-hidden="true" />
           <text class="r-status__text">已提交</text>
-          <text v-if="batchNo" class="r-status__meta">批次 {{ batchNo }}</text>
         </view>
 
         <!--
@@ -353,25 +301,7 @@ function openShare(): void {
           </view>
         </view>
 
-        <!-- 逐题得分：一条细进度条 + 得分（保留既有能力，按 V6 收敛视觉） -->
-        <view v-if="scoreRows.length > 0" class="r-section">
-          <view class="r-section__head">
-            <text class="r-section__title">逐题得分</text>
-            <text class="r-section__meta">{{ scoreRows.length }} 道计分题</text>
-          </view>
-
-          <view class="r-scores">
-            <view v-for="row in scoreRows" :key="row.key" class="r-bar-row">
-              <text class="r-bar-row__title">{{ row.title }}</text>
-              <view class="r-bar-row__track">
-                <view class="r-bar-row__fill" :style="{ width: barWidth(row.percent) }" />
-              </view>
-              <text class="r-bar-row__value">{{ row.earned }} / {{ row.points }}</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 逐题回顾：我的作答 / 正确答案两列 -->
+        <!-- 逐题回顾：我的作答 / 正确答案两列（需求 11：不再显示逐题得分） -->
         <view v-if="rows.length > 0" class="r-review">
           <view class="r-section__head">
             <text class="r-section__title">逐题回顾</text>
@@ -382,7 +312,13 @@ function openShare(): void {
             <view v-for="row in rows" :key="row.key" class="r-rq">
               <view class="r-rq__head">
                 <text class="r-rq__title">{{ row.title }}</text>
+                <!--
+                  需求 6：不计分问卷不挂「不计分」标签。
+                  判据是活动行的 act_option（平台枚举「评分 / 不评分」），不是分值合计；
+                  计分问卷里「无标准答案的题」仍显示「不计分」，这是既有行为。
+                -->
                 <text
+                  v-if="hasScore"
                   class="r-rq__tag"
                   :class="{
                     'r-rq__tag--ok': row.verdict === 'correct',
@@ -391,16 +327,10 @@ function openShare(): void {
                 >
                   {{ verdictTag(row.verdict) }}
                 </text>
-                <text
-                  v-if="row.verdict !== 'unjudged'"
-                  class="r-rq__score"
-                  :class="{ 'r-rq__score--ok': row.verdict === 'correct', 'r-rq__score--bad': row.verdict === 'wrong' }"
-                >
-                  {{ row.earned }} / {{ row.points }}
-                </text>
               </view>
 
-              <view class="r-rq__cols">
+              <!-- 需求 7：没有「正确答案」时只有一列，必须铺满而不是占半宽 -->
+              <view class="r-rq__cols" :class="{ 'r-rq__cols--single': !row.expected }">
                 <view class="r-rq__col">
                   <text class="r-rq__label">我的作答</text>
                   <view v-if="row.isImage" class="r-rq__images">
@@ -469,11 +399,8 @@ function openShare(): void {
           </view>
         </view>
 
-        <!-- 底部动作：主行动在前 -->
+        <!-- 底部动作：主行动在前（需求 8：不再提供「重新测试」入口） -->
         <view class="r-page__actions">
-          <BxButton v-if="canRetry" size="large" block @click="restart">
-            重新测试
-          </BxButton>
           <!-- #ifdef H5 -->
           <BxButton type="secondary" block @click="openShare">
             分享结果
@@ -560,19 +487,6 @@ function openShare(): void {
   font-weight: 500;
   line-height: var(--bx-leading-sub);
   color: var(--bx-success);
-}
-
-.r-status__meta {
-  flex-shrink: 1;
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
-  font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
-  color: var(--bx-text-3);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 /* ── 分数主角 ────────────────────────────────────────────────────── */
@@ -748,8 +662,7 @@ function openShare(): void {
   color: var(--bx-text-3);
 }
 
-/* ── 小节标题 ────────────────────────────────────────────────────── */
-.r-section,
+/* ── 小节标题（逐题回顾） ────────────────────────────────────────── */
 .r-review {
   margin-top: 16px;
 }
@@ -776,84 +689,13 @@ function openShare(): void {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 逐题得分 ────────────────────────────────────────────────────── */
-.r-scores,
+/* ── 逐题回顾卡片 ────────────────────────────────────────────────── */
 .r-review__card {
   overflow: hidden;
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
   box-shadow: var(--bx-elev-1);
-}
-
-.r-bar-row {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-}
-
-.r-bar-row + .r-bar-row {
-  border-top: 1px solid var(--bx-line-2);
-}
-
-.r-bar-row__title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--bx-font-sub);
-  line-height: var(--bx-leading-sub);
-  color: var(--bx-text-2);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.r-bar-row__track {
-  flex: none;
-  width: 96px;
-  height: 4px;
-  margin-left: 16px;
-  overflow: hidden;
-  background-color: var(--bx-line-2);
-  border-radius: var(--bx-radius-pill);
-}
-
-.r-bar-row__fill {
-  height: 100%;
-  background-color: var(--bx-primary);
-  border-radius: var(--bx-radius-pill);
-}
-
-.r-bar-row__value {
-  flex: none;
-  width: 56px;
-  margin-left: 10px;
-  font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
-  color: var(--bx-text-2);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.r-bar-row__value--none {
-  color: var(--bx-text-3);
-}
-
-/*
- * 窄屏：细条与数值列各收一档，把宽度让给题干
- *
- * 375px 屏上题干只剩 130px 会被截成「您对当前工作的整体…」，
- * 而完整题干在下方「逐题回顾」里还有，这里只要能认出是哪一题就够。
- */
-@media (max-width: 420px) {
-  .r-bar-row__track {
-    width: 56px;
-    margin-left: 8px;
-  }
-
-  .r-bar-row__value {
-    width: 48px;
-    margin-left: 8px;
-  }
 }
 
 /* ── 逐题回顾 ────────────────────────────────────────────────────── */
@@ -896,28 +738,22 @@ function openShare(): void {
   color: var(--bx-danger);
 }
 
-.r-rq__score {
-  flex: none;
-  font-size: var(--bx-font-caption);
-  line-height: var(--bx-leading-caption);
-  color: var(--bx-text-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.r-rq__score--ok {
-  color: var(--bx-success);
-}
-
-.r-rq__score--bad {
-  color: var(--bx-danger);
-}
-
 /* 我的作答 / 正确答案：两列，标签在上、值在下 */
 .r-rq__cols {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 12px;
+}
+
+/*
+ * 没有「正确答案」的题只剩一列（需求 7）
+ *
+ * 不能只靠 `:only-child` 跨端兜底（小程序 Skyline 支持保守），
+ * 由模板按行给出修饰类，把单列铺满整宽，避免右半边空白。
+ */
+.r-rq__cols--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .r-rq__col {
@@ -1027,28 +863,5 @@ function openShare(): void {
   flex-direction: column;
   gap: 8px;
   margin-top: 16px;
-}
-
-/* ── 动效 ─────────────────────────────────────────────────────────
- * 逐题得分条：宽度 0 → 目标。
- *
- * 逐项动画只在 H5 端做（规范 §6.1）：小程序端长列表逐项动画会掉帧。
- */
-/* #ifdef H5 */
-.r-bar-row__fill {
-  transition: width 700ms var(--bx-ease-out);
-}
-/* #endif */
-
-/*
- * 逐条 delay（60ms 递增）
- *
- * 规则放在条件编译之外：没有 transition 时 transition-delay 不生效，
- * 小程序端自然退化为「无动画」。
- */
-@for $i from 1 through 20 {
-  .r-bar-row:nth-child(#{$i}) .r-bar-row__fill {
-    transition-delay: #{($i - 1) * 60}ms;
-  }
 }
 </style>

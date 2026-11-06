@@ -24,10 +24,10 @@ import {
   toMergeAnswerMap,
 } from '@/domain/questionnaire'
 import { addressAnswerTargets, pickAreaLabel } from '@/domain/questionnaire/addresses'
-import { shouldShowRetryEntry, shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
+import { shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
 import { imageAnswerTargets } from '@/domain/questionnaire/images'
 import { pickRefLabel, refAnswerTargets } from '@/domain/questionnaire/refs'
-import { answerUrl, coverUrl, suggestionUrl } from '@/domain/questionnaire/routes'
+import { coverUrl, suggestionUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 import { bxSelect } from '@/utils/request'
 
@@ -289,7 +289,34 @@ export function useResultPage() {
     }
     return localScore.value
   })
-  const hasScore = computed(() => score.value.total > 0)
+  /**
+   * 本问卷是否计分
+   *
+   * 优先看活动行 `act_option`（平台枚举「评分 / 不评分」），**不是**分值合计：
+   * 分值合计只能说明题目配了分，说明不了这问卷是不是按分数出的结果。
+   * 它同时门控分数环、三栏统计、顶部口径说明与逐题结论标签。
+   *
+   * 三处现实约束必须兼容（均有真实数据佐证，见 `test/fixtures/raw/activity-*.json`）：
+   *
+   * 1. **历史脏值是逗号组合**：`"评分,提交确认"` 真实存在（该活动总分 90、及格线 100，
+   *    确实是计分问卷）。所以不能用 `=== '评分'` 严格比较，否则会把它误判成不计分、
+   *    整块分数区静默消失；
+   * 2. **必须先判「不评分」**：`'不评分'.includes('评分')` 为真，两者顺序写反会把
+   *    不计分问卷判成计分；
+   * 3. **字段可能缺失**：旧环境或其它服务不返回该列时值为 `null`，此时回退到分值合计
+   *    推断，保持改造前的行为 —— 「平台少返回一列就让计分问卷不显示分数」是更大的回归。
+   */
+  const hasScore = computed(() => {
+    const actOption = String(activity.value?.act_option ?? '').trim()
+    if (actOption.includes('不评分')) {
+      return false
+    }
+    if (actOption.includes('评分')) {
+      return true
+    }
+    return score.value.total > 0
+  })
+
   const passingMark = computed(() => Number(activity.value?.passing_mark ?? 0))
   const passed = computed(() => {
     if (!hasScore.value || passingMark.value <= 0) {
@@ -355,9 +382,6 @@ export function useResultPage() {
       }),
   )
 
-  /** 活动已结束就不该给「重新测试」入口 —— 点进去也答不了 */
-  const canRetry = computed(() => shouldShowRetryEntry(activity.value?.status))
-
   /** 是否显示「查看评估结果」入口（判定规则见 shouldShowSuggestionEntry） */
   const showSuggestionEntry = computed(() =>
     shouldShowSuggestionEntry(activity.value?.info_collect_type, batchNo.value),
@@ -379,16 +403,6 @@ export function useResultPage() {
     uni.reLaunch({ url: coverUrl(activityNo.value) })
   }
 
-  /**
-   * 重新测试
-   *
-   * 与老工程 `restart()` 同一跳转目标；答题页把 formType 默认成 form，所以可以省略。
-   * 这里显式写上，避免依赖默认值。
-   */
-  function restart(): void {
-    uni.redirectTo({ url: answerUrl(activityNo.value, { status: '进行中' }) })
-  }
-
   // 只暴露模板用得到的引用与函数；内部状态（serverAnswers / answerImages / detailMap 等）
   // 刻意不导出，避免页面绕过这里的口径自己算一遍。
   return {
@@ -403,10 +417,8 @@ export function useResultPage() {
     passingMark,
     rows,
     answerImagesFailed,
-    canRetry,
     showSuggestionEntry,
     openSuggestion,
-    restart,
     goHome,
     // 模板里给导航栏兜底链接用，属页面级路由拼装，跟着页面逻辑一起走
     coverUrl,

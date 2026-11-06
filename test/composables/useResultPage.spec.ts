@@ -74,7 +74,6 @@ vi.mock('@/utils/request', async (importOriginal) => {
 
 const navigateTo = vi.fn()
 const reLaunch = vi.fn()
-const redirectTo = vi.fn()
 
 // ---------------------------------------------------------------- 夹具
 
@@ -190,6 +189,8 @@ function activityRow(overrides: Partial<DaqActivityRow> = {}): DaqActivityRow {
     title: '测试问卷',
     status: '进行中',
     info_collect_type: '评估',
+    // 「是否计分问卷」的权威判据（平台枚举「评分 / 不评分」），默认取计分问卷
+    act_option: '评分',
     passing_mark: 30,
     item_data: fullItems,
     ...overrides,
@@ -231,7 +232,7 @@ beforeEach(() => {
   for (const key of Object.keys(registered)) {
     delete registered[key]
   }
-  vi.stubGlobal('uni', { navigateTo, reLaunch, redirectTo })
+  vi.stubGlobal('uni', { navigateTo, reLaunch })
 
   mocks.initViewSelect.mockResolvedValue({ data: [activityRow()] })
   mocks.recordReplySelect.mockResolvedValue({ data: [] })
@@ -268,8 +269,6 @@ describe('useResultPage · 初始状态与 onLoad', () => {
     expect(page.passingMark.value).toBe(0)
     expect(page.passed.value).toBeNull()
     expect(page.answerImagesFailed.value).toBe(false)
-    // 活动还没加载出来（status 为 undefined）时不拦「重新测试」，与 shouldShowRetryEntry 一致
-    expect(page.canRetry.value).toBe(true)
     // 没有批次号就没有报告可看
     expect(page.showSuggestionEntry.value).toBe(false)
   })
@@ -465,9 +464,13 @@ describe('useResultPage · 服务端结果与容错', () => {
 })
 
 describe('useResultPage · 计分边界', () => {
-  it('没有客观题时 hasScore 为假、不给通过结论', async () => {
+  it('不计分问卷（act_option 为「不评分」）hasScore 为假、不给通过结论', async () => {
     mocks.initViewSelect.mockResolvedValue({
-      data: [activityRow({ item_data: [textItem], user_data: [answer('Q4', '请加强培训')] })],
+      data: [activityRow({
+        act_option: '不评分',
+        item_data: [textItem],
+        user_data: [answer('Q4', '请加强培训')],
+      })],
     })
 
     const page = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
@@ -485,6 +488,71 @@ describe('useResultPage · 计分边界', () => {
     expect(page.rows.value).toHaveLength(1)
     expect(page.rows.value[0]!.verdict).toBe('unjudged')
     expect(page.rows.value[0]!.mine).toBe('请加强培训')
+  })
+
+  /**
+   * 回归防护：「是否计分问卷」只看活动行的 `act_option`，**不看分值合计**。
+   *
+   * 这条红了说明 hasScore 又被写回 `score.total > 0`（或类似推断）：
+   * - 配上分值但活动声明「不评分」的问卷会错误地渲染分数环与三栏统计；
+   * - 反过来，`act_option === '评分'` 的活动又会被分值合计误判成不计分，
+   *   逐题结论标签整片消失。
+   */
+  it('是否计分以 act_option 为准，而不是分值合计（回归防护）', async () => {
+    // 题目配了分（合计 30）却声明「不评分」→ 不按计分问卷呈现
+    mocks.initViewSelect.mockResolvedValue({
+      data: [activityRow({ act_option: '不评分', user_data: allCorrect })],
+    })
+    const unscored = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
+
+    expect(unscored.score.value.total).toBe(30)
+    expect(unscored.hasScore.value).toBe(false)
+    expect(unscored.passed.value).toBeNull()
+
+    // 声明「评分」但题目都没配分值 → 仍算计分问卷（分数合计为 0 也不改判）
+    mocks.initViewSelect.mockResolvedValue({
+      data: [activityRow({ act_option: '评分', item_data: [textItem] })],
+    })
+    const scored = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
+
+    expect(scored.score.value.total).toBe(0)
+    expect(scored.hasScore.value).toBe(true)
+  })
+
+  it('act_option 缺失时回退到分值合计推断，保持改造前行为', async () => {
+    mocks.initViewSelect.mockResolvedValue({
+      data: [activityRow({ act_option: undefined, user_data: allCorrect })],
+    })
+
+    const page = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
+
+    expect(page.score.value.total).toBe(30)
+    // 平台没返回该列时不能把计分问卷的分数区整块藏掉
+    expect(page.hasScore.value).toBe(true)
+
+    // 既没有 act_option 又没有分值，才按不计分处理
+    mocks.initViewSelect.mockResolvedValue({
+      data: [activityRow({ act_option: undefined, item_data: [textItem] })],
+    })
+    const blank = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
+    expect(blank.score.value.total).toBe(0)
+    expect(blank.hasScore.value).toBe(false)
+  })
+
+  /**
+   * 历史脏值回归：真实 fixture `activity-20251108162243000001` 的 `act_option`
+   * 是逗号组合 `"评分,提交确认"`（该活动 `total_points=90`、`passing_mark=100`，
+   * 确实是计分问卷）。用 `=== '评分'` 严格比较会把它误判成不计分。
+   */
+  it('act_option 为历史逗号组合「评分,提交确认」时仍按计分问卷处理', async () => {
+    mocks.initViewSelect.mockResolvedValue({
+      data: [activityRow({ act_option: '评分,提交确认', user_data: allCorrect })],
+    })
+
+    const page = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
+
+    expect(page.hasScore.value).toBe(true)
+    expect(page.passed.value).toBe(true)
   })
 
   it('满分时 passed 为真', async () => {
@@ -746,16 +814,6 @@ describe('useResultPage · 图片 / 引用 / 地址的展示值', () => {
 })
 
 describe('useResultPage · 入口联动', () => {
-  it('活动已结束时不给「重新测试」入口', async () => {
-    mocks.initViewSelect.mockResolvedValue({ data: [activityRow({ status: '已结束' })] })
-    const ended = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
-    expect(ended.canRetry.value).toBe(false)
-
-    mocks.initViewSelect.mockResolvedValue({ data: [activityRow({ status: '进行中' })] })
-    const running = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
-    expect(running.canRetry.value).toBe(true)
-  })
-
   it('showSuggestionEntry 需要批次号，且排除「自测」「反馈」', async () => {
     const cases = [
       { label: '评估', type: '评估' as string | undefined, batch: 'B1', expected: true },
@@ -779,7 +837,7 @@ describe('useResultPage · 入口联动', () => {
     }
   })
 
-  it('三个跳转都带全参数（缺 activity_no 会把用户送进「缺少活动编号」死胡同）', async () => {
+  it('两个跳转都带全参数（缺 activity_no 会把用户送进「缺少活动编号」死胡同）', async () => {
     const page = await openResult({ activity_no: 'A1', fill_batch_no: 'B1' })
 
     page.openSuggestion()
@@ -790,11 +848,6 @@ describe('useResultPage · 入口联动', () => {
     page.goHome()
     expect(reLaunch).toHaveBeenCalledWith({
       url: '/pages/questionnaire/cover/index?activity_no=A1',
-    })
-
-    page.restart()
-    expect(redirectTo).toHaveBeenCalledWith({
-      url: '/pages/questionnaire/index/index?formType=form&activity_no=A1&status=进行中',
     })
 
     // 导航栏兜底链接用同一个拼装函数，参数口径必须一致

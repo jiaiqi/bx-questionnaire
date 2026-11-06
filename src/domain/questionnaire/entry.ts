@@ -34,8 +34,3 @@ export function shouldShowSuggestionEntry(
   }
   return infoCollectType !== COLLECT_TYPE_SELF_TEST && infoCollectType !== COLLECT_TYPE_FEEDBACK
 }
-
-/** 结果页是否显示「重新测试」入口：活动已结束就点不进去 */
-export function shouldShowRetryEntry(status: string | null | undefined): boolean {
-  return status !== '已结束'
-}

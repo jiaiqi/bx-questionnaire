@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { shouldShowRetryEntry, shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
+import { shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
 
 const BATCH = 'd9102bc941064d198405380e53431554'
 
@@ -32,21 +32,5 @@ describe('entry · 结果页「查看评估结果」入口', () => {
 
   it('取值大小写/空白不做宽容匹配 —— 平台枚举是固定中文，模糊匹配会误开入口', () => {
     expect(shouldShowSuggestionEntry(' 自测 ', BATCH)).toBe(true)
-  })
-})
-
-describe('entry · 结果页「重新测试」入口', () => {
-  it('进行中可重测', () => {
-    expect(shouldShowRetryEntry('进行中')).toBe(true)
-  })
-
-  it('已结束不给入口 —— 点进去也答不了', () => {
-    expect(shouldShowRetryEntry('已结束')).toBe(false)
-  })
-
-  it('未开始 / 状态缺失时放开 —— 只有「已结束」是明确的不可作答信号', () => {
-    expect(shouldShowRetryEntry('未开始')).toBe(true)
-    expect(shouldShowRetryEntry(undefined)).toBe(true)
-    expect(shouldShowRetryEntry(null)).toBe(true)
   })
 })
