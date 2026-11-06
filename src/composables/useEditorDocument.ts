@@ -49,6 +49,7 @@ import {
   isSingleChoice,
   issuesForItem,
   itemTypeSpec,
+  MAX_OPTIONS,
   moveInArray,
   planHasChanges,
   planSave,
@@ -96,6 +97,8 @@ export interface EditorDocumentController {
   moveItem: (from: number, to: number) => void
   changeItemType: (clientKey: string, type: string) => void
   addOption: (itemKey: string) => void
+  /** 批量替换选项文案（粘贴多行文本），按位置保留已有正确答案标记 */
+  replaceOptions: (itemKey: string, values: string[]) => void
   removeOption: (itemKey: string, optionKey: string) => void
   moveOption: (itemKey: string, from: number, to: number) => void
   /** 改选项内容 */
@@ -442,6 +445,31 @@ export function useEditorDocument(): EditorDocumentController {
     }
   }
 
+  /**
+   * 批量替换选项（粘贴多行文本）
+   *
+   * 按位置对齐保留已有选项的「正确答案」标记：前 N 个沿用原选项、只换文案，
+   * 多出来的新建、超出的丢弃。这样粘贴一份新清单不会把已设的答案全清掉。
+   */
+  function replaceOptions(itemKey: string, values: string[]): void {
+    const item = findItem(itemKey)
+    if (!item) {
+      return
+    }
+    const next = values
+      .map(value => value.trim())
+      .filter(Boolean)
+      .slice(0, MAX_OPTIONS)
+    if (next.length === 0) {
+      return
+    }
+    item.options = next.map((value, index) => {
+      const existing = item.options[index]
+      return existing ? { ...existing, value } : { ...emptyOption(), value }
+    })
+    touched.value = true
+  }
+
   function removeOption(itemKey: string, optionKey: string): void {
     const item = findItem(itemKey)
     if (item) {
@@ -522,6 +550,7 @@ export function useEditorDocument(): EditorDocumentController {
     moveItem,
     changeItemType,
     addOption,
+    replaceOptions,
     removeOption,
     moveOption,
     setOptionValue,

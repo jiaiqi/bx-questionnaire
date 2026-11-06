@@ -91,6 +91,8 @@ export interface EditorDesignController {
   onChangeType: (type: string) => void
   onBackToList: () => void
   onOptionAdd: () => void
+  /** 批量替换选项文案（粘贴多行文本） */
+  onOptionReplaceAll: (values: string[]) => void
   onOptionRemove: (index: number) => void
   onOptionMoveUp: (index: number) => void
   onOptionMoveDown: (index: number) => void
@@ -129,6 +131,7 @@ export function useEditorDesign(): EditorDesignController {
     moveItem,
     changeItemType,
     addOption,
+    replaceOptions,
     removeOption,
     moveOption,
     setOptionValue,
@@ -294,6 +297,14 @@ export function useEditorDesign(): EditorDesignController {
     }
   }
 
+  /** 批量替换选项（粘贴多行文本）：一次把整份清单贴进来，不用一行行加 */
+  function onOptionReplaceAll(values: string[]): void {
+    const item = selectedItem.value
+    if (item) {
+      replaceOptions(item.clientKey, values)
+    }
+  }
+
   function onOptionRemove(index: number): void {
     const item = selectedItem.value
     const optionKey = item?.options[index]?.clientKey
@@ -435,6 +446,7 @@ export function useEditorDesign(): EditorDesignController {
     onChangeType,
     onBackToList,
     onOptionAdd,
+    onOptionReplaceAll,
     onOptionRemove,
     onOptionMoveUp,
     onOptionMoveDown,
