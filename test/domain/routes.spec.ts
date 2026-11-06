@@ -45,6 +45,16 @@ describe('routes · 问卷页面地址', () => {
     expect(coverUrl(ACTIVITY)).toBe(`${QUESTIONNAIRE_ROUTES.cover}?activity_no=${ACTIVITY}`)
   })
 
+  /**
+   * 回归：`coverUrl('')` 曾经返回「不带参数的封面路径」，而调用方拿它当
+   * `BxNavBar` 的兜底地址 —— BxNavBar 只要地址非空就 reLaunch，于是参数缺失的页面
+   * 点返回会落到「缺少活动编号」错误页。空串会让它退回 navigateBack。
+   */
+  it('coverUrl 缺少 activity_no 时返回空串，避免兜底跳转到错误页', () => {
+    expect(coverUrl('')).toBe('')
+    expect(coverUrl('   ')).toBe('')
+  })
+
   it('答题页默认 formType=form，并带 activity_no', () => {
     const url = answerUrl(ACTIVITY)
     expect(url).toContain('formType=form')

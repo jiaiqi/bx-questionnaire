@@ -400,7 +400,18 @@ export function useResultPage() {
    * 带上活动号才是真实可用的页面。
    */
   function goHome(): void {
-    uni.reLaunch({ url: coverUrl(activityNo.value) })
+    const url = coverUrl(activityNo.value)
+    if (url) {
+      uni.reLaunch({ url })
+      return
+    }
+    // `activity_no` 缺失（分享链接被截断 / 手工改过地址）时没有可回的封面：
+    // 能退回上一页就退，栈里也没得退就回列表 —— 不要 reLaunch 一个空地址。
+    if (getCurrentPages().length > 1) {
+      uni.navigateBack()
+      return
+    }
+    uni.reLaunch({ url: '/pages/editor/list/index' })
   }
 
   // 只暴露模板用得到的引用与函数；内部状态（serverAnswers / answerImages / detailMap 等）

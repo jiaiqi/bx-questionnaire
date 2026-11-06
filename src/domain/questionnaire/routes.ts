@@ -54,8 +54,18 @@ export function withQuery(path: string, params: Record<string, QueryValue>): str
   return query ? `${path}?${query}` : path
 }
 
-/** 问卷封面地址（`activity_no` 必填） */
+/**
+ * 问卷封面地址（`activity_no` 必填）
+ *
+ * 传空值时**返回空串**，而不是「不带参数的封面路径」。调用方把它当 `BxNavBar`
+ * 的兜底地址，而 `BxNavBar` 只要地址非空就 `reLaunch`：参数缺失的页面
+ * （分享链接被截断、手工改地址）点返回会落到「缺少活动编号」错误页，比不跳更糟。
+ * 空串会让 `BxNavBar` 退回 `navigateBack()`。
+ */
 export function coverUrl(activityNo: string): string {
+  if (!String(activityNo ?? '').trim()) {
+    return ''
+  }
   return withQuery(QUESTIONNAIRE_ROUTES.cover, { activity_no: activityNo })
 }
 
