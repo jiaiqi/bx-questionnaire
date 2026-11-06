@@ -179,7 +179,13 @@ export function useEditorDocument(): EditorDocumentController {
     return documentFromRows(rawActivity, rawItems, groupOptionsByItemNo(rawOptions))
   }
 
-  async function load(activityNo: string): Promise<void> {
+  /**
+   * 读取文档
+   *
+   * `silent` 用于**保存成功后的整体重载**：数据已经在库里，重载失败只是刷新没成功，
+   * 不能把编辑器清空、也不能切到错误页 —— 那会让用户以为保存失败、编辑内容丢了。
+   */
+  async function load(activityNo: string, options: { silent?: boolean } = {}): Promise<void> {
     loading.value = true
     loadError.value = ''
     saveError.value = ''
@@ -214,6 +220,13 @@ export function useEditorDocument(): EditorDocumentController {
       loaded.value = true
     }
     catch (error) {
+      if (options.silent) {
+        // 保存后的重载失败：保留当前文档，只提示「已保存，刷新可看最新结果」。
+        // 把 loadError 置上会切走整个编辑器（页面是 v-if="loadError" 的错误页），
+        // 用户会以为保存失败、半小时的编辑白做了。
+        saveError.value = '已保存，但刷新失败；当前内容仍可继续编辑，刷新页面可看到最新结果'
+        return
+      }
       loadError.value = error instanceof BxError ? error.message : '问卷加载失败'
       rawActivity = null
       rawItems = []
@@ -306,8 +319,9 @@ export function useEditorDocument(): EditorDocumentController {
         await optionUpdate(update.optionNo, update.payload)
       }
 
-      // 整体重载：让界面显示库里真实的样子（seq 归一、默认值回填）
-      await load(activityNo)
+      // 整体重载：让界面显示库里真实的样子（seq 归一、默认值回填）。
+      // silent：重载失败不能把编辑器清空 —— 数据已经保存成功了。
+      await load(activityNo, { silent: true })
       return activityNo
     }
     catch (error) {
