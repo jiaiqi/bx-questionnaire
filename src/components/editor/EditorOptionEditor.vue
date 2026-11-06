@@ -18,7 +18,7 @@
 
 import type { EditorOption } from '@/domain/editor'
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { usePointerReorder } from '@/composables/usePointerReorder'
 import { MAX_OPTIONS, optionViewNo } from '@/domain/editor'
@@ -34,6 +34,8 @@ const props = withDefaults(defineProps<Props>(), { multi: false })
 
 const emit = defineEmits<{
   add: []
+  /** 批量替换：一行一个选项文案 */
+  replaceAll: [values: string[]]
   remove: [index: number]
   moveUp: [index: number]
   moveDown: [index: number]
@@ -50,6 +52,34 @@ const { dragging, fromIndex, overIndex, begin, onMove, onEnd, onCancel } = usePo
 })
 
 const canAdd = computed(() => props.options.length < MAX_OPTIONS)
+
+/**
+ * 批量编辑
+ *
+ * 选项多的时候一行行加太慢（一份清单十几个选项就要点十几次）。这里给一个
+ * 「一行一个选项」的文本框，粘贴整份清单一次替换。
+ *
+ * 打开时用当前选项预填，方便在已有清单上改；确认后由上层按位置对齐替换，
+ * 已设的「正确答案」标记会保留。
+ */
+const bulkOpen = ref(false)
+const bulkText = ref('')
+
+function openBulk(): void {
+  bulkText.value = props.options.map(option => option.value).join('\n')
+  bulkOpen.value = true
+}
+
+function confirmBulk(): void {
+  emit('replaceAll', bulkText.value.split('\n'))
+  bulkOpen.value = false
+}
+
+/** uni-app 的 input/textarea 事件把值放在 `detail.value`，H5 与小程序一致 */
+function onBulkInput(event: unknown): void {
+  const detail = (event as { detail?: { value?: string } })?.detail
+  bulkText.value = detail?.value ?? ''
+}
 
 /**
  * 落点插在目标行的上边还是下边
@@ -215,6 +245,49 @@ function onPointsInput(index: number, event: unknown): void {
       <text class="bx-editor-option__add-text">
         {{ canAdd ? '添加选项' : `已达上限 ${MAX_OPTIONS} 个` }}
       </text>
+    </view>
+
+    <!-- 批量编辑：一行一个选项，粘贴整份清单一次替换（选项多时比一行行加快得多） -->
+    <view
+      class="bx-editor-option__bulk"
+      role="button"
+      tabindex="0"
+      :aria-expanded="bulkOpen"
+      aria-label="批量编辑选项"
+      @click="bulkOpen ? (bulkOpen = false) : openBulk()"
+      @keydown.enter.prevent="bulkOpen ? (bulkOpen = false) : openBulk()"
+    >
+      <text class="bx-editor-option__bulk-text">{{ bulkOpen ? '收起批量编辑' : '批量编辑' }}</text>
+    </view>
+
+    <view v-if="bulkOpen" class="bx-editor-option__bulk-panel">
+      <textarea
+        class="bx-editor-option__bulk-input"
+        :value="bulkText"
+        aria-label="批量编辑选项"
+        placeholder="一行一个选项，粘贴后点「应用」"
+        @input="onBulkInput"
+      />
+      <view class="bx-editor-option__bulk-actions">
+        <view
+          class="bx-editor-option__bulk-btn"
+          role="button"
+          tabindex="0"
+          @click="bulkOpen = false"
+          @keydown.enter.prevent="bulkOpen = false"
+        >
+          <text class="bx-editor-option__bulk-btn-text">取消</text>
+        </view>
+        <view
+          class="bx-editor-option__bulk-btn bx-editor-option__bulk-btn--primary"
+          role="button"
+          tabindex="0"
+          @click="confirmBulk"
+          @keydown.enter.prevent="confirmBulk"
+        >
+          <text class="bx-editor-option__bulk-btn-text bx-editor-option__bulk-btn-text--primary">应用</text>
+        </view>
+      </view>
     </view>
 
     <text v-if="props.multi" class="bx-editor-option__hint">多选：可以把多个选项都设为正确答案</text>
@@ -542,6 +615,70 @@ function onPointsInput(index: number, event: unknown): void {
   border-radius: var(--bx-radius-xs);
   cursor: pointer;
   transition: background-color var(--bx-duration-fast) var(--bx-ease-out);
+}
+
+/* ── 批量编辑 ─────────────────────────────────────────────────────── */
+.bx-editor-option__bulk {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  height: 30px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.bx-editor-option__bulk-text {
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-primary);
+}
+
+.bx-editor-option__bulk-panel {
+  margin-top: 8px;
+  padding: 10px;
+  background-color: var(--bx-surface-2);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
+}
+
+.bx-editor-option__bulk-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  padding: 8px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text);
+  background-color: var(--bx-surface);
+  border: 1px solid var(--bx-line);
+  border-radius: var(--bx-radius-sm);
+}
+
+.bx-editor-option__bulk-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bx-editor-option__bulk-btn {
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: var(--bx-radius-sm);
+}
+
+.bx-editor-option__bulk-btn--primary {
+  background-color: var(--bx-primary);
+}
+
+.bx-editor-option__bulk-btn-text {
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text-2);
+}
+
+.bx-editor-option__bulk-btn-text--primary {
+  color: #fff;
 }
 
 @media (hover: hover) {

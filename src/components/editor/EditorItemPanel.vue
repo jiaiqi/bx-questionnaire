@@ -48,6 +48,7 @@ const emit = defineEmits<{
   changeType: [type: string]
   remove: []
   optionAdd: []
+  optionReplaceAll: [values: string[]]
   optionRemove: [index: number]
   optionMoveUp: [index: number]
   optionMoveDown: [index: number]
@@ -342,6 +343,7 @@ function toggleRequired(): void {
         :options="props.item.options"
         :multi="multiChoice"
         @add="emit('optionAdd')"
+        @replace-all="values => emit('optionReplaceAll', values)"
         @remove="index => emit('optionRemove', index)"
         @move-up="index => emit('optionMoveUp', index)"
         @move-down="index => emit('optionMoveDown', index)"

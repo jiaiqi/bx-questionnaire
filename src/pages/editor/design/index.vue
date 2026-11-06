@@ -76,6 +76,7 @@ const {
   onChangeType,
   onBackToList,
   onOptionAdd,
+  onOptionReplaceAll,
   onOptionRemove,
   onOptionMoveUp,
   onOptionMoveDown,
@@ -607,6 +608,7 @@ const itemDropPosition = computed<'before' | 'after' | undefined>(() => {
             @change-type="onChangeType"
             @remove="onRemoveCurrentItem"
             @option-add="onOptionAdd"
+            @option-replace-all="onOptionReplaceAll"
             @option-remove="onOptionRemove"
             @option-move-up="onOptionMoveUp"
             @option-move-down="onOptionMoveDown"
