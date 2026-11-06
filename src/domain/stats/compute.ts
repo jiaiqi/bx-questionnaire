@@ -536,11 +536,14 @@ function positiveCount(value: unknown): number {
  * - 选项题：按选项累加人数；多选每人每个选项各一行，累加即选择次数；
  * - 数字题：按「值 × 人数」还原加权分布；
  * - 文本题：只保留去重后的答案与人数（没有逐份昵称，这是聚合口径的取舍）。
+ *
+ * **基数就是传进来的 `batches.length`，没有单独的全量参数**：未答数只在这批样本里
+ * 统计，一旦允许调用方传「全量完成批次数」当基数，`answered = 全量 − 抽样内未答`
+ * 会在完成答卷超过抽样上限时系统性虚高。抽样口径由调用方在页面上注明。
  */
 export function buildQuestionStatsFromAggregates(
   fields: QuestionField[],
   batches: BatchQuestionAggregate[],
-  totalBatches = batches.length,
 ): QuestionStat[] {
   const valueCounts = new Map<string, Map<string, number>>()
   const unanswered = new Map<string, number>()
@@ -583,7 +586,7 @@ export function buildQuestionStatsFromAggregates(
   return answerable.map((field) => {
     const counts = valueCounts.get(field.key) ?? new Map<string, number>()
     const missing = unanswered.get(field.key) ?? 0
-    const answered = Math.max(0, totalBatches - missing)
+    const answered = Math.max(0, batches.length - missing)
     const base = {
       key: field.key,
       index: field.index,

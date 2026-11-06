@@ -128,16 +128,11 @@ export function useSurveyStats(activityNo: Ref<string>) {
     return buildScoreBuckets(filteredReplies.value, maxScore.value)
   })
 
-  /** 逐题聚合的完成批次数（用于未答基数） */
-  const completedBatches = computed(() => aggregates.value?.batches.length ?? 0)
-
   const questionStats = computed<QuestionStat[]>(() => {
     if (aggregates.value) {
-      return buildQuestionStatsFromAggregates(
-        fields.value,
-        batchRows.value,
-        completedBatches.value,
-      )
+      // 基数由函数内部取 batchRows.length（实际被检查的抽样份数），不再传全量完成批次数 ——
+      // 未答只在抽样里统计，用全量做基数会让 answered 在完成答卷超过抽样上限时系统性虚高。
+      return buildQuestionStatsFromAggregates(fields.value, batchRows.value)
     }
     return buildQuestionStats(fields.value, [])
   })

@@ -345,7 +345,7 @@ describe('服务端聚合', () => {
       { batchNo: 'B3', rows: [
         { item_title: '沟通方式', svalue: null, cnt: 1 },
       ] },
-    ], 3)
+    ])
     const first = stats[0]
     if (first?.kind !== 'choice') {
       throw new Error('expected choice stat')
@@ -359,6 +359,36 @@ describe('服务端聚合', () => {
     }
     expect(second.answered).toBe(2)
     expect(second.samples).toEqual([{ value: '很好', count: 2 }])
+  })
+
+  /**
+   * 回归：`answered` 的基数必须是**实际传入的批次数**
+   *
+   * 曾经调用方把「全量完成批次数」当第三个参数传进来，而未答只在抽样里统计，
+   * 于是 `answered = 全量 − 抽样内未答`：完成答卷超过抽样上限（200）时系统性虚高。
+   * 现在函数只从 `batches` 取基数，`answered + unanswered` 恒等于它的长度。
+   */
+  it('逐题统计：answered + unanswered 恒等于传入的批次数', () => {
+    const choice = field({
+      key: 'q1',
+      label: '沟通方式',
+      index: 1,
+      widget: 'radio',
+      options: [
+        { no: 'o1', value: '1', viewNo: 'A', label: '面对面', serialChar: 'A', isAnswer: false },
+      ],
+    })
+    const stats = buildQuestionStatsFromAggregates([choice], [
+      { batchNo: 'B1', rows: [{ item_title: '沟通方式', svalue: '面对面', cnt: 1 }] },
+      { batchNo: 'B2', rows: [] },
+    ])
+    const stat = stats[0]
+    if (stat?.kind !== 'choice') {
+      throw new Error('expected choice stat')
+    }
+    expect(stat.answered).toBe(1)
+    expect(stat.unanswered).toBe(1)
+    expect(stat.answered + stat.unanswered).toBe(2)
   })
 
   it('逐题分布 CSV 按题目展开', () => {
