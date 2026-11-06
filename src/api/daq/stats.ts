@@ -82,10 +82,24 @@ async function runSelects(
     return await bxMultiSelect<Record<string, unknown>>(requests)
   }
   catch {
+    /*
+     * 整块失败时逐条回退。
+     *
+     * 原来这里是**串行** `for + await`：一批 20 条、最多 200 批，弱网下最坏会退化成
+     * 4000 次串行请求，首屏看起来像卡死。改成**小并发**（5 路）：
+     * - 用 `Promise.all` + 每条自带 catch 而不是 `allSettled`，兼容低版本基础库；
+     * - 单条失败只丢那一条的数据，不影响同批其它批次。
+     */
+    const CONCURRENCY = 5
     const fallback: Array<{ data?: Record<string, unknown>[] | null }> = []
-    for (const request of requests) {
-      const result = await bxSelect<Record<string, unknown>>(request)
-      fallback.push({ data: result.data })
+    for (let start = 0; start < requests.length; start += CONCURRENCY) {
+      const slice = requests.slice(start, start + CONCURRENCY)
+      const settled = await Promise.all(
+        slice.map(request => bxSelect<Record<string, unknown>>(request).catch(() => null)),
+      )
+      for (const item of settled) {
+        fallback.push({ data: item?.data ?? null })
+      }
     }
     return fallback
   }
