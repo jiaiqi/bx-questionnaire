@@ -13,6 +13,13 @@ import { toArray } from './types'
 export interface LocalDraft {
   batchNo?: string
   answers?: Record<string, AnswerValue>
+  /**
+   * 保存时刻（ms）
+   *
+   * 服务端不再产生 `state='未完成'` 记录后，本机草稿成了「填到一半」的唯一线索，
+   * 记录页用它展示「本机草稿 · 保存于 X」。老草稿没有这个字段，读取方要容忍缺失。
+   */
+  savedAt?: number
 }
 
 /**
@@ -38,7 +45,7 @@ export function toLocalDraft(
     return null
   }
 
-  return { batchNo: batchNo || '', answers: snapshot }
+  return { batchNo: batchNo || '', answers: snapshot, savedAt: Date.now() }
 }
 
 /**

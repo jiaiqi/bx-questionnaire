@@ -13,19 +13,21 @@
 
 import type { DaqRecordReplyRow } from '@/api/daq/types'
 
-import { computed, ref, watch } from 'vue'
+import type { LocalDraft } from '@/domain/questionnaire/draft'
 
+import { computed, onMounted, ref, watch } from 'vue'
 import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNetworkBar from '@/components/base/BxNetworkBar.vue'
 import { useChunkedList } from '@/composables/useChunkedList'
+
 import { formatDateTime } from '@/domain/questionnaire'
 import { filterMyRecords } from '@/domain/questionnaire/records'
 import { answerUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
-import { getMyBatches } from '@/utils/storage'
+import { draftAnswersKey, getMyBatches, storage } from '@/utils/storage'
 import { toast } from '@/utils/ui'
 
 interface Props {
@@ -74,6 +76,37 @@ const ownership = computed(() => ({
 
 /** 只属于当前用户的记录 */
 const visibleRows = computed(() => filterMyRecords(rows.value, ownership.value).mine)
+
+/**
+ * 本机未提交的草稿
+ *
+ * 逐题上报下线后服务端不再产生 `state='未完成'` 记录：用户填一半退出，这个列表
+ * 此前**看不到任何痕迹**，只有再点一次「开始作答」才会被恢复。这里把本机草稿
+ * 显式渲染成一行，带保存时间与「继续作答」。
+ */
+const localDraft = ref<LocalDraft | null>(null)
+
+function refreshLocalDraft(): void {
+  const saved = storage.get<LocalDraft | null>(draftAnswersKey(props.activityNo), null)
+  const answers = saved?.answers ?? {}
+  localDraft.value = saved && Object.keys(answers).length > 0 ? saved : null
+}
+
+/** 毫秒时间戳 → `2026-11-06 19:08`；自己造的 Date，不涉及后端字符串解析的跨端坑 */
+function formatSavedAt(ms: number | undefined): string {
+  if (!ms) {
+    return ''
+  }
+  const date = new Date(ms)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function resumeLocalDraft(): void {
+  uni.navigateTo({ url: answerUrl(props.activityNo) })
+}
+
+onMounted(refreshLocalDraft)
 
 function isDraft(row: DaqRecordReplyRow): boolean {
   return String(row.state ?? '') === '未完成'
@@ -397,6 +430,32 @@ void fetchPage(true)
       </view>
 
       <!--
+        本机草稿：服务端不再产生「未完成」记录，填到一半的痕迹只能从本机读。
+        放在列表最上方 —— 它是用户最可能接着做的事。
+      -->
+      <view
+        v-if="localDraft"
+        class="record record--local-draft"
+        role="button"
+        tabindex="0"
+        aria-label="本机保存的草稿，继续作答"
+        @click="resumeLocalDraft"
+        @keydown.enter.prevent="resumeLocalDraft"
+        @keydown.space.prevent="resumeLocalDraft"
+      >
+        <view class="record__meta">
+          <view class="record__dot record__dot--draft" aria-hidden="true" />
+          <text class="record__state record__state--draft">未提交</text>
+          <text v-if="formatSavedAt(localDraft.savedAt)" class="record__time">
+            本机保存于 {{ formatSavedAt(localDraft.savedAt) }}
+          </text>
+        </view>
+        <view class="record__main">
+          <text class="record__title">继续作答（答案存在本机）</text>
+        </view>
+      </view>
+
+      <!--
         一行一条记录：状态点 + 状态 + 时间 / 标题 + 分数 / 批次 + 行动。
         记录是同质条目，每行都「浮」起来会变成盒子墙 —— 这里用一条细线分隔。
         只渲染分片前缀（首屏 20 条），其余靠底部「加载更多」/ 触底追加。
@@ -657,6 +716,12 @@ void fetchPage(true)
 
 .record + .record {
   border-top: 1px solid var(--bx-line-2);
+}
+
+/* 本机草稿：左侧主色条 + 淡底，与服务端记录区分，避免被误认为已提交 */
+.record--local-draft {
+  background-color: var(--bx-primary-soft);
+  box-shadow: inset 3px 0 0 var(--bx-primary);
 }
 
 /* 焦点可见性：uni-app 内置样式把 outline 设成 none */

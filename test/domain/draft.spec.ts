@@ -32,10 +32,12 @@ describe('toLocalDraft', () => {
 
   it('只收非空答案，并带上批次号', () => {
     const draft = toLocalDraft(FIELDS, { q1: '答了', q2: '', q3: ['a'] }, 'B1')
-    expect(draft).toEqual({
+    // savedAt 由 Date.now() 生成，不参与逐字对比，单独断言类型
+    expect(draft).toMatchObject({
       batchNo: 'B1',
       answers: { q1: '答了', q3: ['a'] },
     })
+    expect(typeof draft?.savedAt).toBe('number')
   })
 
   it('没有批次号时也写空串，保持结构稳定', () => {
