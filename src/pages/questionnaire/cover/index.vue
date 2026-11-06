@@ -295,11 +295,9 @@ function onShareKeydown(event: KeyboardEvent): void {
                 @keydown="onShareKeydown"
               >
                 <view class="c-share-icon" aria-hidden="true">
-                  <view class="c-share-icon__dot c-share-icon__dot--top" />
-                  <view class="c-share-icon__dot c-share-icon__dot--bottom" />
-                  <view class="c-share-icon__dot c-share-icon__dot--right" />
-                  <view class="c-share-icon__line c-share-icon__line--top" />
-                  <view class="c-share-icon__line c-share-icon__line--bottom" />
+                  <view class="c-share-icon__tip" />
+                  <view class="c-share-icon__shaft" />
+                  <view class="c-share-icon__box" />
                 </view>
               </view>
               <!-- #endif -->
@@ -581,55 +579,56 @@ function onShareKeydown(event: KeyboardEvent): void {
   outline-offset: -2px;
 }
 
+/*
+ * 分享图标：方框 + 向上箭头（「分享出去」的通用语义）
+ *
+ * 三段纯 CSS：border 三角作箭头、细长 view 作箭杆、顶部开口的方框作容器。
+ * 不用图标字体、不用 svg、不用伪元素 —— 小程序对三者支持都不好。
+ */
 .c-share-icon {
   position: relative;
+  box-sizing: border-box;
   width: 18px;
   height: 18px;
   color: var(--bx-text-3);
 }
 
-.c-share-icon__dot {
+/* 箭头：border 三角朝上，两端透明，跨端一致 */
+.c-share-icon__tip {
   position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+  top: 0;
+  left: 50%;
+  box-sizing: border-box;
+  width: 0;
+  height: 0;
+  margin-left: -4px;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid currentColor;
+  border-left: 4px solid transparent;
+}
+
+/* 箭杆：接在三角下方，穿过方框顶部缺口 */
+.c-share-icon__shaft {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 1.5px;
+  height: 8px;
+  margin-left: -0.75px;
   background-color: currentColor;
 }
 
-.c-share-icon__dot--top {
-  top: 1px;
-  left: 1px;
-}
-
-.c-share-icon__dot--bottom {
+/* 方框：顶部不画边，箭头从缺口穿出 */
+.c-share-icon__box {
+  position: absolute;
   bottom: 1px;
-  left: 1px;
-}
-
-.c-share-icon__dot--right {
-  top: 6.5px;
-  right: 1px;
-}
-
-.c-share-icon__line {
-  position: absolute;
-  width: 8px;
-  height: 1.5px;
-  background-color: currentColor;
-  border-radius: 1px;
-  transform-origin: left center;
-}
-
-.c-share-icon__line--top {
-  top: 5px;
-  left: 5px;
-  transform: rotate(-30deg);
-}
-
-.c-share-icon__line--bottom {
-  top: 12px;
-  left: 5px;
-  transform: rotate(30deg);
+  left: 2px;
+  box-sizing: border-box;
+  width: 14px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 3px 3px;
 }
 
 /* ── 标题区 ──────────────────────────────────────────────────────── */
