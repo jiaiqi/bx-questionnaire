@@ -182,6 +182,14 @@ const currentStepKey = computed(() => currentStepItem.value?.field.key ?? '')
 
 const stepTotal = computed(() => steps.value.length)
 const lastStep = computed(() => isLastStep(currentStep.value, stepTotal.value))
+
+/**
+ * 还有几道必答题没答
+ *
+ * 逐个模式一次只看得到一道题，用户到最后一题时并不知道前面漏了哪几道。
+ * 提交前给一次明确提示，避免「点了提交才发现还有 3 道没答」。
+ */
+const missingRequired = computed(() => validateRequired(fields.value, answers).length)
 const stepProgressView = computed(() => stepProgress(currentStep.value, stepTotal.value))
 /** 进度条：逐个模式表达「位置」，全部模式仍是「已答占比」 */
 const barPercent = computed(() =>
@@ -871,6 +879,10 @@ function onHistoryKeydown(event: KeyboardEvent): void {
       <!-- 提交失败：原因常驻底部栏（toast 会消失），按钮同时变「重试提交」 -->
       <text v-if="submitError" class="runner__footer-error" aria-live="assertive">{{ submitError }}</text>
       <text v-else-if="draftTip" class="runner__footer-tip">{{ draftTip }}</text>
+      <!-- 逐个模式最后一题：提示还有几道必答没答，给一次回看机会 -->
+      <text v-else-if="stepMode && lastStep && missingRequired > 0" class="runner__footer-tip">
+        还有 {{ missingRequired }} 道必答题未作答，提交前可以回看
+      </text>
       <view class="runner__footer-actions" :class="{ 'runner__footer-actions--steps': stepMode }">
         <template v-if="stepMode">
           <view class="runner__footer-prev">
