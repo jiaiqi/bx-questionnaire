@@ -292,25 +292,29 @@ void load()
             <view class="cp-row__foot">
               <!-- 批次号是 32 位内部编号，对用户没有意义（结果页已按需求去掉），这里也不再常驻 -->
               <view class="cp-row__actions">
+                <!--
+                  两个入口功能不同：结果页看分数与逐题解析，只读答题页看完整题目与我的作答。
+                  原来叫「查看结果 / 查看作答」，用户分不清差别；改成「成绩与解析 / 完整答卷」。
+                -->
                 <view
                   class="cp-row__action"
                   role="button"
                   tabindex="0"
-                  :aria-label="`查看 ${item.title} 的结果`"
+                  :aria-label="`查看 ${item.title} 的成绩与解析`"
                   @click.stop="openResult(item)"
                   @keydown.stop="onActionKeydown($event, 'result', item)"
                 >
-                  查看结果
+                  成绩与解析
                 </view>
                 <view
                   class="cp-row__action cp-row__action--ghost"
                   role="button"
                   tabindex="0"
-                  :aria-label="`查看 ${item.title} 的作答`"
+                  :aria-label="`查看 ${item.title} 的完整答卷`"
                   @click.stop="openRecord(item)"
                   @keydown.stop="onActionKeydown($event, 'record', item)"
                 >
-                  查看作答
+                  完整答卷
                 </view>
               </view>
             </view>
