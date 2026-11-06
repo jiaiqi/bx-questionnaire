@@ -225,9 +225,12 @@ void load()
             class="cp-row"
             @click="openResult(item)"
           >
+            <!--
+              小节标题已经写明「已完成」，每行再常驻一次「已提交」只是噪音
+              （一屏十几行都是同一句话）。保留圆点让状态不只靠颜色，时间才是这一行的信息。
+            -->
             <view class="cp-row__meta">
               <view class="cp-row__dot" aria-hidden="true" />
-              <text class="cp-row__state">已提交</text>
               <text v-if="item.finishedAt" class="cp-row__time">{{ item.finishedAt }}</text>
             </view>
 
