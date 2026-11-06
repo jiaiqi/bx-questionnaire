@@ -27,7 +27,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { EditorActivity, EditorDocument, EditorIssue, EditorItem } from '@/domain/editor'
 
 import { onLoad } from '@dcloudio/uni-app'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { ITEM_ROW_HEIGHT } from '@/components/editor/constants'
 import { useEditorDocument } from '@/composables/useEditorDocument'
@@ -152,6 +152,36 @@ export function useEditorDesign(): EditorDesignController {
   const selectedItem = computed<EditorItem | undefined>(() =>
     selectedIndex.value >= 0 ? doc.value.items[selectedIndex.value] : undefined,
   )
+
+  /**
+   * 记住当前选中题目的平台编号
+   *
+   * 保存成功后 `useEditorDocument` 会整体重载，`documentFromRows` 给每道题**重新生成**
+   * `clientKey`。选中态按 `clientKey` 记，重载后就对不上 —— 右栏跳回「问卷信息」、
+   * 窄屏浮层被关掉，用户保存一次就被踢出当前编辑位置。
+   * 这里按 `item_no`（平台主键，重载前后不变）把选中态找回来。
+   */
+  let selectedItemNo = ''
+
+  watch(selectedItem, (item) => {
+    if (item) {
+      selectedItemNo = item.itemNo
+    }
+  })
+
+  watch(() => doc.value.items, (items) => {
+    if (!selectedKey.value || !selectedItemNo) {
+      return
+    }
+    // 当前 clientKey 还在（没有重载）就不用管
+    if (items.some(item => item.clientKey === selectedKey.value)) {
+      return
+    }
+    const restored = items.find(item => item.itemNo === selectedItemNo)
+    if (restored) {
+      selectedKey.value = restored.clientKey
+    }
+  })
 
   const navTitle = computed(() => (isNew.value ? '新建问卷' : '问卷设计'))
 
