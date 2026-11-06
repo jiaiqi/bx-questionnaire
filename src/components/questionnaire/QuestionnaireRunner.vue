@@ -21,6 +21,7 @@ import BxNavBar from '@/components/base/BxNavBar.vue'
 import BxProgressBar from '@/components/base/BxProgressBar.vue'
 import BxQrCode from '@/components/base/BxQrCode.vue'
 import BxSkeleton from '@/components/base/BxSkeleton.vue'
+import { plainText } from '@/components/editor/plainText'
 import BxFieldRenderer from '@/components/form/BxFieldRenderer.vue'
 import { useAnswerModel } from '@/composables/useAnswerModel'
 import { useEmbedResize } from '@/composables/useEmbedResize'
@@ -102,7 +103,22 @@ const hostChrome = isHostChrome()
 const errors = ref<Record<string, string>>({})
 
 const title = computed(() => activity.value?.title || '问卷')
-const intro = computed(() => activity.value?.start_remark || '')
+
+/**
+ * 卷首描述
+ *
+ * 优先 `start_remark`（开始语），为空时回退到 `remark`（活动描述）——
+ * 从分享链接直接进答题页的用户看不到封面，卷首是唯一能看到问卷说明的地方。
+ * 平台实测 `summary` 与 `start_remark` 常常都是 null，只有 `remark` 有内容，
+ * 所以不回退的话这类问卷的卷首永远是空的。
+ */
+const intro = computed(() => {
+  const start = plainText(String(activity.value?.start_remark ?? ''))
+  if (start) {
+    return start
+  }
+  return plainText(String(activity.value?.remark ?? ''))
+})
 
 /**
  * 供宿主页面取用（例如小程序的分享标题）

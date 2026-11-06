@@ -32,9 +32,16 @@ import { toast } from '@/utils/ui'
 
 interface Props {
   activityNo: string
+  /**
+   * 记录称呼：调研场景叫「调研记录」，其余叫「作答记录」
+   *
+   * 两个记录页共用本组件，空态与提示文案里的称呼必须跟着场景走，
+   * 否则调研页会出现「暂无作答记录」这种串味的说法。
+   */
+  label?: string
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { label: '作答记录' })
 
 const session = useSessionStore()
 
@@ -207,8 +214,8 @@ const loginHint = computed(() => {
   }
   const hidden = filterMyRecords(rows.value, ownership.value).hidden
   return hidden > 0
-    ? `未登录，仅显示本机作答记录（已隐藏 ${hidden} 条其他账号的记录）`
-    : '未登录，仅显示本机作答记录'
+    ? `未登录，仅显示本机${props.label}（已隐藏 ${hidden} 条其他账号的记录）`
+    : `未登录，仅显示本机${props.label}`
 })
 
 /**
@@ -434,7 +441,7 @@ void fetchPage(true)
 
     <view v-else-if="visibleRows.length === 0 && loaded" class="records__empty">
       <BxEmpty
-        text="暂无作答记录"
+        :text="`暂无${props.label}`"
         :tip="emptyTip"
       />
       <view class="records__retry">

@@ -124,6 +124,13 @@ const kicker = computed(() => {
     return '已结束'
   }
   const perm = String(activity.value?.perm_type ?? '').trim()
+  // 「匿名访问 / 登录访问」是权限术语，对填写者换成能直接读懂的表述
+  if (perm === '登录访问') {
+    return '需登录后作答'
+  }
+  if (perm === '匿名访问') {
+    return '无需登录'
+  }
   const status = String(activity.value?.status ?? '').trim()
   return perm || status || '问卷'
 })

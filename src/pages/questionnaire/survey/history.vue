@@ -18,5 +18,5 @@ const { activityNo, title, pageRef } = useRecordHistoryPage()
 </script>
 
 <template>
-  <RecordHistory ref="pageRef" :activity-no="activityNo" :title="title" />
+  <RecordHistory ref="pageRef" :activity-no="activityNo" :title="title" label="调研记录" />
 </template>

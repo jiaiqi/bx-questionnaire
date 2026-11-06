@@ -20,9 +20,11 @@ import BxNavBar from '@/components/base/BxNavBar.vue'
 import RecordList from '@/components/questionnaire/RecordList.vue'
 import { coverUrl } from '@/domain/questionnaire/routes'
 
-defineProps<{
+const props = defineProps<{
   activityNo: string
   title: string
+  /** 记录称呼：调研页传「调研记录」，其余用默认的「作答记录」 */
+  label?: string
 }>()
 
 const listRef = ref<InstanceType<typeof RecordList>>()
@@ -52,7 +54,7 @@ defineExpose({ loadMore, refresh })
     <BxNavBar :title="title" :fallback-url="coverUrl(activityNo)" />
 
     <view class="history-page__body bx-container">
-      <RecordList v-if="activityNo" ref="listRef" :activity-no="activityNo" />
+      <RecordList v-if="activityNo" ref="listRef" :activity-no="activityNo" :label="props.label" />
       <BxEmpty v-else text="缺少活动编号" tip="请从问卷页进入记录列表" />
     </view>
   </view>
