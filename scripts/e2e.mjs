@@ -1,11 +1,11 @@
 /**
- * 端到端交互冒烟：真实作答 → 校验状态 → 自动保存草稿
+ * 端到端交互冒烟：真实作答 → 校验状态 → 本地草稿 → （可选）提交
  *
  * 此前的冒烟只验证「页面能渲染」，没有验证过任何一次真实交互。
  * 这里用 CDP 派发真实鼠标/键盘事件走一遍作答流程，验证：
  *   1. 点选项能改变作答状态（进度从「已答 0」变成「已答 4」）；
  *   2. 输入框输入能进入状态（不是只改了 DOM value）；
- *   3. 「暂存草稿」能真的调用保存接口并回传批次号。
+ *   3. 草稿只写本机、**不再逐题上报后端**（2026-11-06 起），刷新后能恢复。
  *
  * 注意必须用 Input.dispatchMouseEvent / Input.insertText —— 直接改 DOM 的
  * value 或用 element.click() 都不会让 Vue 的 v-model 更新，测出来的「通过」
@@ -55,8 +55,11 @@ let send
 /**
  * 抓到的网络请求（只留写操作）。
  *
- * 「出现成功提示」不足以证明按钮生效 —— 自动保存也会给出同样的提示。
- * 必须看到真的发出了 srvdaq_activity_result_save 请求才算数。
+ * 「出现成功提示」不足以证明按钮生效 —— 必须看到真的发出了
+ * `srvdaq_activity_result_submit` 请求才算提交成功。
+ *
+ * 注意：`srvdaq_activity_result_save`（逐题草稿上报）自 2026-11-06 起已下线，
+ * 现在反过来用它做**负向断言**：作答过程中不该出现该请求。
  */
 const writeRequests = []
 
@@ -262,7 +265,7 @@ async function main() {
   checks.push({ name: '答题页有「记录」入口', pass: String(navExtra.result.value).includes('记录') })
 
   console.log('\n开始作答：')
-  // 草稿是逐题自动保存的：从这里开始累计写请求，后面按题目合并校验
+  // 从这里开始累计写请求：后面用它做「作答期间没有保存请求」的负向断言
   const draftStart = writeRequests.length
   // 单选：选第 1 项
   await clickSelector(`#${ITEMS.radio} .bx-option`, '单选题第 1 项')
@@ -288,66 +291,34 @@ async function main() {
 
   console.log(`\n作答后：已答 ${afterNumber.answered}`)
 
-  // 自动保存草稿（V6 起没有手动「暂存草稿」按钮：每答一题就落一次库）
-  console.log('\n自动保存草稿：')
+  // 草稿策略（2026-11-06 起）：作答过程中**不再逐题上报后端**，草稿只写本机
+  // （`bxq:draft_answers:<activity_no>`）；一次作答只在提交时产生一次写请求。
+  // 这里验证「没有保存请求」与「本地提示出现」两件事。
+  console.log('\n草稿只落本机（不再逐题上报后端）：')
   const draftBefore = await readState()
   const reqBefore = writeRequests.length
-  // 重新输入相同内容即可再触发一次 input 事件，验证「逐题自动保存」链路仍然生效
-  await typeInto(`#${ITEMS.text} input`, '端到端测试建议', '触发自动保存-填空题')
-  await sleep(3500)
+  // 重新输入相同内容会再触发一次 input，用来确认这条链路走的是本地存储而不是接口
+  await typeInto(`#${ITEMS.text} input`, '端到端测试建议', '触发本地草稿-填空题')
+  await sleep(1500)
   const afterDraft = await readState()
   const newReqs = writeRequests.slice(reqBefore)
   console.log(`  提示文本尾部：${afterDraft.text.slice(-140)}`)
-  console.log(`  新增写请求 ${newReqs.length} 个：`)
+  console.log(`  本次作答期间新增写请求 ${writeRequests.slice(draftStart).length} 个`)
   for (const r of newReqs) {
     console.log(`    ${r.url.split('/').slice(-3).join('/')}`)
-    if (r.postData) console.log(`      请求体：${r.postData.slice(0, 500)}`)
   }
 
   checks.push({
-    name: '作答后自动发出保存请求',
-    pass: newReqs.some(r => r.url.includes('activity_result_save')),
+    name: '作答过程中不再逐题上报后端（没有 activity_result_save 请求）',
+    pass: !writeRequests.slice(draftStart).some(r => r.url.includes('activity_result_save')),
+  })
+  checks.push({
+    name: '本地草稿保存后给出「已保存到本机」提示',
+    pass: afterDraft.text.includes('已保存到本机'),
   })
   checks.push({
     name: '自动保存后进度未丢失',
     pass: afterDraft.answered === draftBefore.answered,
-  })
-
-  // 草稿体结构断言（默认跑也会执行，无需 --submit）：
-  // V6 起草稿是**逐题自动保存**——每答一题发一次请求，itemData 只有 1 项，
-  // 所以要把本次作答期间的所有保存请求合并起来看，而不是只看最后一次。
-  const draftItems = (() => {
-    const merged = new Map()
-    for (const req of writeRequests.slice(draftStart)) {
-      if (!req.url.includes('activity_result_save') || !req.postData) {
-        continue
-      }
-      try {
-        const parsedReq = JSON.parse(req.postData)
-        for (const item of parsedReq?.[0]?.data?.[0]?.item_data ?? []) {
-          merged.set(item.item_no, item)
-        }
-      }
-      catch {
-        // 非 JSON 请求体（例如预检）忽略
-      }
-    }
-    return [...merged.values()]
-  })()
-  const draftCheckbox = draftItems.find(i => i.item_no === ITEMS.checkbox.replace(/^q-/, ''))
-  const expectedItemNos = [ITEMS.radio, ITEMS.checkbox, ITEMS.text, ITEMS.number]
-    .map(key => key.replace(/^q-/, ''))
-  checks.push({
-    name: '草稿体包含多选题',
-    pass: !!draftCheckbox,
-  })
-  checks.push({
-    name: '草稿体多选题带 2 个 option_no（多选多值未被截断）',
-    pass: Array.isArray(draftCheckbox?.option_data) && draftCheckbox.option_data.length === 2,
-  })
-  checks.push({
-    name: '逐题自动保存覆盖四道题',
-    pass: expectedItemNos.every(no => draftItems.some(item => item.item_no === no)),
   })
 
   // ── 场景一续：刷新后本地草稿应恢复 ──────────────────────────────
@@ -464,27 +435,15 @@ async function main() {
         && checkboxItem.option_flag.length === checkboxItem.option_data.length,
     })
     checks.push({
-      name: '提交体携带 fill_batch_no（复用草稿批次而非新建）',
-      pass: !!parsed?.[0]?.data?.[0]?.fill_batch_no,
+      name: '新建作答的提交体不带 fill_batch_no（服务端据此新建记录并回传批次号）',
+      pass: !parsed?.[0]?.data?.[0]?.fill_batch_no,
     })
 
     /**
-     * 再留一条草稿，让后面的记录页能同时验证「已提交」与「草稿」两条路径
-     *
-     * 提交会把本批次变成「已提交」，本浏览器就再没有草稿记录了 ——
-     * 而记录页现在按归属过滤（未登录只显示本机记录），拿不到别人的记录来凑。
-     * 所以提交后再答一题触发自动保存，产生一条新的草稿记录。
+     * 草稿改造（2026-11-06）后，作答过程中不写服务端，**不会再有「未完成」记录**，
+     * 所以这里不再补草稿 —— 记录页只剩「已提交」一条路径。续答能力改由本地草稿承担
+     * （见上面「刷新后本地草稿恢复」那段）。
      */
-    console.log('\n补一条草稿（供记录页验证「草稿」续答路径）：')
-    await send('Page.navigate', { url: 'about:blank' })
-    await sleep(400)
-    await send('Page.navigate', {
-      url: `${BASE}/#/pages/questionnaire/index/index?activity_no=${ACTIVITY_NO}&formType=form&status=进行中`,
-    })
-    await sleep(9000)
-    await clickSelector(`#${ITEMS.radio} .bx-option`, '补草稿-单选题第 1 项')
-    // 逐题自动保存：选中即落库，不需要手动暂存
-    await sleep(4000)
   }
   else {
     console.log('\n（未加 --submit，跳过提交，避免产生真实记录）')
@@ -626,23 +585,30 @@ async function main() {
   console.log(`  归属门槛：本机记录 ${gate.mineCount} 条，渲染 ${gate.total} 条，他人 ${gate.foreign.length} 条`)
   console.log(`  归属提示：${JSON.stringify(gate.notice)}`)
 
-  // 前提：本轮 e2e 一定产生过本机记录（暂存草稿），否则下面的断言没有意义
-  checks.push({
-    name: '前置条件：本机已记录批次号（否则归属断言无从谈起）',
-    pass: gate.mineCount > 0,
-  })
-  checks.push({
-    name: '记录页渲染出的记录全部来自本机（归属过滤生效）',
-    pass: gate.foreign.length === 0,
-  })
-  checks.push({
-    name: '渲染条数不超过本机记录数（没有把他人记录混进来）',
-    pass: gate.total <= gate.mineCount,
-  })
-  checks.push({
-    name: '未登录时给出「仅显示本机记录」提示',
-    pass: gate.notice.includes('仅显示本机作答记录'),
-  })
+  // 归属过滤的验证需要「本机确实有记录」这个前提。
+  // 草稿改造后只有**提交**才会记批次号，默认跑（不带 --submit）没有前提，
+  // 这里明确跳过而不是假装通过。
+  if (DO_SUBMIT) {
+    checks.push({
+      name: '前置条件：本机已记录批次号（否则归属断言无从谈起）',
+      pass: gate.mineCount > 0,
+    })
+    checks.push({
+      name: '记录页渲染出的记录全部来自本机（归属过滤生效）',
+      pass: gate.foreign.length === 0,
+    })
+    checks.push({
+      name: '渲染条数不超过本机记录数（没有把他人记录混进来）',
+      pass: gate.total <= gate.mineCount,
+    })
+    checks.push({
+      name: '未登录时给出「仅显示本机记录」提示',
+      pass: gate.notice.includes('仅显示本机作答记录'),
+    })
+  }
+  else {
+    console.log('  ⚠ 未加 --submit：本机没有提交记录，跳过归属过滤相关断言')
+  }
 
   /**
    * 找指定状态的记录卡片，找不到就先滚动加载更多
@@ -672,19 +638,13 @@ async function main() {
     return { idx: -1, scrolls: maxScrolls }
   }
 
-  const undoneFound = await findCardIndexWithLoadMore('草稿')
-  console.log(`  「草稿」记录卡片下标：${undoneFound.idx}（滚动 ${undoneFound.scrolls} 次后）`)
-  checks.push({
-    name: '记录页能找到「草稿」记录（续答检查的前提）',
-    pass: undoneFound.idx >= 0,
-  })
-  const undoneNav = undoneFound.idx >= 0 ? await clickCard(undoneFound.idx) : null
-  if (undoneNav) {
-    console.log(`    跳转：${undoneNav.hash.slice(0, 110)}`)
-    checks.push({ name: '点「草稿」记录走续答（formType=form）', pass: undoneNav.hash.includes('formType=form') })
-    checks.push({ name: '续答带上 fill_batch_no', pass: undoneNav.hash.includes('fill_batch_no') })
-    checks.push({ name: '续答页可编辑（有提交按钮）', pass: undoneNav.text.includes('提交问卷') })
-  }
+  // 草稿改造（2026-11-06）后，作答过程中不写服务端，**不会再产生「草稿」记录**；
+  // 续答改由本地草稿承担（已在场景一「刷新后本地草稿恢复」验证）。这里明确说明跳过，
+  // 不假装验证过 —— 「跳过必须是响亮的」是本脚本的既有约定。
+  console.log('')
+  console.log('  ⚠ 跳过：「草稿」记录续答路径 —— 草稿已改为只写本机，不再产生未完成记录')
+  console.log('  ⚠ 续答能力由本地草稿承担，见场景一「刷新后本地草稿恢复」')
+  console.log('')
 
   // 回到记录页，点「完成」记录
   await send('Page.navigate', { url: 'about:blank' })
@@ -912,14 +872,18 @@ async function main() {
   console.log(`  作答一题后：已答 ${surveyAfter.answered}`)
   checks.push({ name: '调研页可作答（进度 +1）', pass: surveyAfter.answered === '1' })
 
-  // 逐题自动保存：改一题就会落库，确认调研页与作答页共用同一套
+  // 草稿改造后：调研页与作答页共用同一套「只写本机」的策略，同样不发保存请求
   const surveyDraftBefore = writeRequests.length
-  await typeInto(`#${ITEMS.text} input`, '调研端到端建议', '调研页填空题（触发自动保存）')
-  await sleep(3500)
+  await typeInto(`#${ITEMS.text} input`, '调研端到端建议', '调研页填空题（触发本地草稿）')
+  await sleep(1500)
   const surveyDrafts = writeRequests.slice(surveyDraftBefore)
   checks.push({
-    name: '调研页作答后自动发出保存请求',
-    pass: surveyDrafts.some(r => r.url.includes('activity_result_save')),
+    name: '调研页作答后同样不逐题上报后端（与作答页共用草稿策略）',
+    pass: !surveyDrafts.some(r => r.url.includes('activity_result_save')),
+  })
+  checks.push({
+    name: '调研页本地草稿提示出现',
+    pass: (await readState()).text.includes('已保存到本机'),
   })
 
   // 提交后必须落到 survey/result，而不是 index/result
