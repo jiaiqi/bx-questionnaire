@@ -463,6 +463,17 @@ let draftPersistTimer: ReturnType<typeof setTimeout> | null = null
 const draftTip = ref('')
 let draftTipTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * 提交失败信息
+ *
+ * 失败原先只在 toast 里闪一下，用户常常没看清就消失了，只能重新点提交再等一轮；
+ * 重试也没有任何可感知的入口。这里把它固定显示在底部栏，按钮同时变成「重试提交」。
+ */
+const submitError = ref('')
+
+/** 提交按钮文案：失败后改为「重试提交」 */
+const submitButtonLabel = computed(() => (submitError.value ? '重试提交' : submitLabel.value))
+
 function markDraftSaved(): void {
   draftTip.value = '已保存到本机'
   if (draftTipTimer) {
@@ -510,6 +521,9 @@ function onAnswerChange(field: QuestionField, value: AnswerValue): void {
 }
 
 async function onSubmit(): Promise<void> {
+  // 每次提交都清掉上一次的失败信息：成功则底部栏复原，失败会重新写上
+  submitError.value = ''
+
   const issues = validateRequired(fields.value, answers)
   if (issues.length > 0) {
     const next: Record<string, string> = {}
@@ -611,7 +625,10 @@ async function onSubmit(): Promise<void> {
     })
   }
   catch (error) {
-    toast(error instanceof BxError ? error.message : '提交失败，请稍后重试')
+    const message = error instanceof BxError ? error.message : '提交失败，请稍后重试'
+    // toast 给即时反馈，底部栏留住原因并让按钮变「重试提交」—— 一个会消失，一个不会
+    submitError.value = message
+    toast(message)
   }
 }
 
@@ -835,7 +852,9 @@ function onHistoryKeydown(event: KeyboardEvent): void {
     </view>
 
     <view v-if="showFooter" class="runner__footer">
-      <text v-if="draftTip" class="runner__footer-tip">{{ draftTip }}</text>
+      <!-- 提交失败：原因常驻底部栏（toast 会消失），按钮同时变「重试提交」 -->
+      <text v-if="submitError" class="runner__footer-error" aria-live="assertive">{{ submitError }}</text>
+      <text v-else-if="draftTip" class="runner__footer-tip">{{ draftTip }}</text>
       <view class="runner__footer-actions" :class="{ 'runner__footer-actions--steps': stepMode }">
         <template v-if="stepMode">
           <view class="runner__footer-prev">
@@ -851,7 +870,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
           <view class="runner__footer-next">
             <!-- 最后一题主按钮变「提交」；只读查看时没有提交，末题禁用「下一题」 -->
             <BxButton v-if="!readOnly && lastStep" :loading="submitting" block @click="onSubmit">
-              {{ submitLabel }}
+              {{ submitButtonLabel }}
             </BxButton>
             <BxButton v-else block :disabled="lastStep" @click="onNextStep">
               下一题
@@ -859,7 +878,7 @@ function onHistoryKeydown(event: KeyboardEvent): void {
           </view>
         </template>
         <BxButton v-else :loading="submitting" block @click="onSubmit">
-          {{ submitLabel }}
+          {{ submitButtonLabel }}
         </BxButton>
       </view>
     </view>
@@ -1331,6 +1350,26 @@ function onHistoryKeydown(event: KeyboardEvent): void {
   box-shadow: var(--bx-elev-sticky);
   /* 首次出现：上移 10px + 淡入（规范 §5.2 第 8 条） */
   animation: bx-survey-footer-in 240ms var(--bx-ease-out) both;
+}
+
+/*
+ * 提交失败：同样绝对定位在操作栏上方，但要**能点**（与保存提示的 pointer-events: none 相反），
+ * 用户可能想选中错误文案去反馈。危险色 + 淡底，与「已保存到本机」的弱提示区分开。
+ */
+.runner__footer-error {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  display: block;
+  padding: 8px 16px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-danger);
+  text-align: center;
+  word-break: break-word;
+  background-color: var(--bx-danger-soft);
+  border-top: 1px solid var(--bx-danger-line);
 }
 
 /*
