@@ -45,7 +45,7 @@ import {
   validateRequired,
 } from '@/domain/questionnaire'
 import { matchEntryPrefill } from '@/domain/questionnaire/prefill'
-import { coverUrl, historyUrl, withQuery } from '@/domain/questionnaire/routes'
+import { answerUrl, coverUrl, historyUrl, withQuery } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { buildSubmitPayload, isHostChrome, notifyParent } from '@/utils/embed'
 import { BxError } from '@/utils/request'
@@ -69,7 +69,21 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{ submitted: [{ batchNo: string }] }>()
 
 const session = useSessionStore()
-const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
+const { loading, activity, fields, backfill, errorMessage, needLogin, load } = useQuestionnaire()
+
+/**
+ * 登录引导
+ *
+ * 「登录访问」的问卷在**加载阶段**就被平台按活动 `perm_type` 拦下（`0011`），
+ * 此前页面只显示一句通用加载失败，用户不知道要登录。这里送去登录并带上本页地址。
+ */
+function goLogin(): void {
+  const redirect = answerUrl(props.activityNo, {
+    formType: props.formType,
+    fillBatchNo: props.fillBatchNo,
+  })
+  uni.reLaunch({ url: `/pages/login/index?reason=required&redirect=${encodeURIComponent(redirect)}` })
+}
 const { answers, progress, replace } = useAnswerModel(() => fields.value)
 const { submitting, submit } = useSubmit()
 const { shareLink } = useShare()
@@ -717,11 +731,15 @@ function onHistoryKeydown(event: KeyboardEvent): void {
         </view>
       </view>
 
-      <BxEmpty
-        v-else-if="errorMessage"
-        :text="errorMessage"
-        tip="请确认链接是否有效，或联系活动发起人"
-      />
+      <view v-else-if="errorMessage" class="runner__login">
+        <BxEmpty
+          :text="errorMessage"
+          :tip="needLogin ? '该问卷仅限登录后作答' : '请确认链接是否有效，或联系活动发起人'"
+        />
+        <BxButton v-if="needLogin" size="large" block @click="goLogin">
+          登录后作答
+        </BxButton>
+      </view>
 
       <template v-else>
         <!--
@@ -1033,6 +1051,13 @@ function onHistoryKeydown(event: KeyboardEvent): void {
    * 提示行绝对定位在它上方，不占操作栏的高度，所以这里也恒定。
    */
   padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+/* 加载失败 / 需要登录：空态下方给一个明确的出口按钮 */
+.runner__login {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bx-space-lg);
 }
 
 .runner__state {

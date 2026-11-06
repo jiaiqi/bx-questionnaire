@@ -37,9 +37,22 @@ import { readQuery } from '@/utils/query'
  */
 definePage({ style: { enableShareTimeline: true } })
 
-const { loading, activity, fields, errorMessage, load } = useQuestionnaire()
+const { loading, activity, fields, errorMessage, needLogin, load } = useQuestionnaire()
 
 const activityNo = ref('')
+
+/**
+ * 登录引导
+ *
+ * 「登录访问」的问卷在**加载阶段**就会被平台拦下（`0011 当前活动接口需要登录访问`），
+ * 页面此前只显示一句通用加载失败，用户刷新多少次都一样。这里给出明确出口：
+ * 送去登录，成功后用 redirect 回到本页。
+ */
+function goLogin(): void {
+  const redirect = coverUrl(activityNo.value)
+  uni.reLaunch({ url: `/pages/login/index?reason=required&redirect=${encodeURIComponent(redirect)}` })
+}
+
 /** 作答说明默认收起：首屏只留「这是什么、要答多久、怎么开始」 */
 const expanded = ref(false)
 /** 分享面板只在 H5 打开（小程序端入口用条件编译隐藏） */
@@ -264,11 +277,17 @@ function onShareKeydown(event: KeyboardEvent): void {
           <view class="c-skeleton__grid" />
         </view>
 
-        <BxEmpty
-          v-else-if="errorMessage"
-          :text="errorMessage"
-          tip="请确认链接是否有效，或联系活动发起人"
-        />
+        <view v-else-if="errorMessage" class="c-error">
+          <BxEmpty
+            :text="errorMessage"
+            :tip="needLogin ? '该问卷仅限登录后作答' : '请确认链接是否有效，或联系活动发起人'"
+          />
+          <view v-if="needLogin" class="c-error__action">
+            <BxButton size="large" block @click="goLogin">
+              登录后作答
+            </BxButton>
+          </view>
+        </view>
 
         <template v-else>
           <!-- 顶部：品牌小字 + 分享 / 记录入口（44px 触摸目标） -->
@@ -629,6 +648,12 @@ function onShareKeydown(event: KeyboardEvent): void {
   border: 1.5px solid currentColor;
   border-top: 0;
   border-radius: 0 0 3px 3px;
+}
+
+/* 加载失败 / 需要登录：空态下方给一个明确的出口按钮 */
+.c-error__action {
+  margin-top: var(--bx-space-lg);
+  padding: 0 var(--bx-space-lg);
 }
 
 /* ── 标题区 ──────────────────────────────────────────────────────── */

@@ -155,4 +155,40 @@ describe('useQuestionnaire · 加载竞态', () => {
     await expect(q.load('A1', { autoUpdateState: false })).resolves.toBe(false)
     expect(mocks.activityCfgUpdate).not.toHaveBeenCalled()
   })
+
+  /**
+   * 平台按活动 `perm_type` 在**加载阶段**就返回 0011（parkDev 实测 0 行数据）。
+   * 页面需要据此换成登录引导，否则用户只看到一句「加载失败」，刷新多少次都一样。
+   */
+  it('平台按活动权限拦截（0011）时标记 needLogin', async () => {
+    mocks.initViewSelect.mockRejectedValueOnce(new BxError('当前活动接口需要登录访问', '0011'))
+
+    const q = useQuestionnaire()
+    await expect(q.load('A1')).resolves.toBe(false)
+    expect(q.needLogin.value).toBe(true)
+    expect(q.errorMessage.value).toBe('当前活动接口需要登录访问')
+  })
+
+  /** 反例：不能把所有失败都当成「需要登录」，否则真正的配置错误会引导用户去登录 */
+  it('普通失败不标记 needLogin', async () => {
+    mocks.initViewSelect.mockRejectedValueOnce(new BxError('活动编号不存在', 'FAILURE'))
+
+    const q = useQuestionnaire()
+    await expect(q.load('A1')).resolves.toBe(false)
+    expect(q.needLogin.value).toBe(false)
+  })
+
+  it('重新加载成功后清掉 needLogin', async () => {
+    mocks.initViewSelect
+      .mockRejectedValueOnce(new BxError('当前活动接口需要登录访问', '0011'))
+      .mockResolvedValueOnce(envelopeWithTitle('登录后恢复正常'))
+
+    const q = useQuestionnaire()
+    await q.load('A1')
+    expect(q.needLogin.value).toBe(true)
+
+    await q.load('A1')
+    expect(q.needLogin.value).toBe(false)
+    expect(q.activity.value?.title).toBe('登录后恢复正常')
+  })
 })

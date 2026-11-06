@@ -33,6 +33,18 @@ export function useQuestionnaire() {
   const errorMessage = ref('')
 
   /**
+   * 加载失败是否因为「需要登录」
+   *
+   * 平台在**加载阶段**就按活动 `perm_type` 拦：匿名拉「登录访问」活动会直接返回
+   * `0011 当前活动接口需要登录访问`，拿不到任何数据（parkDev 实测 0 行）。
+   * 也就是说「匿名用户白填一整卷、提交才被拒」并不成立，真正的问题是这一层拦下来之后
+   * 页面只显示一句通用的加载失败，用户不知道要登录。
+   *
+   * 调用方据此换成登录引导，而不是让用户对着「加载失败」反复刷新。
+   */
+  const needLogin = ref(false)
+
+  /**
    * 加载序号
    *
    * 用来丢弃过期响应：activityNo / fillBatchNo 变化时会重新加载，
@@ -44,6 +56,7 @@ export function useQuestionnaire() {
     const token = ++loadToken
     loading.value = true
     errorMessage.value = ''
+    needLogin.value = false
 
     try {
       const envelope = await initViewSelect({
@@ -75,6 +88,7 @@ export function useQuestionnaire() {
 
       const message = error instanceof BxError ? error.message : '问卷加载失败'
       errorMessage.value = message
+      needLogin.value = error instanceof BxError && error.isSessionExpired
 
       // 「活动已结束」：复刻老工程自动置状态的语义
       if (options.autoUpdateState !== false && message.includes('活动已结束')) {
@@ -101,6 +115,7 @@ export function useQuestionnaire() {
     fields,
     backfill,
     errorMessage,
+    needLogin,
     load,
   }
 }
