@@ -336,6 +336,15 @@ onLoad((query) => {
 
       <view v-else-if="showEmpty" class="stats__state">
         <BxEmpty text="还没有回收记录" tip="问卷发出后，这里会显示回收份数、完成率与逐题分布" />
+        <!-- 空态给出口：看完提示总得知道下一步去哪 -->
+        <view class="stats__state-actions">
+          <BxButton type="secondary" size="small" aria-label="去填写问卷" @click="goAnswer">
+            去填一份
+          </BxButton>
+          <BxButton type="ghost" size="small" aria-label="去编辑问卷" @click="goDesign">
+            去编辑问卷
+          </BxButton>
+        </view>
       </view>
 
       <template v-else>
@@ -847,6 +856,14 @@ onLoad((query) => {
   background-color: var(--bx-surface);
   border: 1px solid var(--bx-line);
   border-radius: var(--bx-radius-card);
+}
+
+/* 空态动作：两个按钮并排，与提示文案留出间距 */
+.stats__state-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: var(--bx-space-md);
 }
 
 /* ── KPI ──────────────────────────────────────────────────────────── */
