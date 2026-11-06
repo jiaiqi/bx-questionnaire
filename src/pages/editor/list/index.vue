@@ -117,7 +117,8 @@ onReachBottom(() => {
 
 onPullDownRefresh(async () => {
   try {
-    await load(1)
+    // 保持当前页：在第 3 页下拉刷新又跳回第 1 页，等于把用户的浏览位置弄丢
+    await load(pageNo.value)
   }
   finally {
     // 指示器一定要收；异常刻意不吞（load 内部已转成页面错误态）

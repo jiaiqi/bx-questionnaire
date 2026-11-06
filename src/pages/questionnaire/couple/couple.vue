@@ -157,7 +157,11 @@ void load()
 
 <template>
   <view class="cp-page">
-    <BxNavBar title="我的测评" />
+    <!--
+      兜底回问卷列表：从外部链接直接打开时页面栈只有 1 层，
+      没有兜底地址的返回键会静默失效（本页空态已经在用同一路径）
+    -->
+    <BxNavBar title="我的测评" fallback-url="/pages/editor/list/index" />
 
     <view class="cp-page__body bx-container">
       <!-- 个人信息：一行，头像 + 名字 + 账号 -->
