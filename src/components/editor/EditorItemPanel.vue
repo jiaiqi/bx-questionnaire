@@ -47,6 +47,8 @@ const emit = defineEmits<{
   attrPatch: [patch: Record<string, unknown>]
   changeType: [type: string]
   remove: []
+  /** 复制当前题目（副本插在原题之后） */
+  duplicate: []
   optionAdd: []
   optionReplaceAll: [values: string[]]
   optionRemove: [index: number]
@@ -355,8 +357,18 @@ function toggleRequired(): void {
       <text v-if="optionIssue" class="bx-eip__option-error">{{ optionIssue.message }}</text>
     </view>
 
-    <!-- ── 删除题目 ── -->
+    <!-- ── 复制 / 删除题目 ── -->
     <view class="bx-eip__danger">
+      <view
+        class="bx-eip__danger-btn bx-eip__danger-btn--copy"
+        role="button"
+        tabindex="0"
+        aria-label="复制此题"
+        @click="emit('duplicate')"
+        @keydown.enter.prevent="emit('duplicate')"
+      >
+        <text class="bx-eip__danger-text bx-eip__danger-text--copy">复制此题</text>
+      </view>
       <view
         class="bx-eip__danger-btn"
         role="button"
@@ -655,5 +667,10 @@ function toggleRequired(): void {
   color: var(--bx-danger);
   font-size: 12px;
   line-height: 18px;
+}
+
+/* 复制是常规动作，用主色而不是危险色，避免和「删除题目」混成一片红 */
+.bx-eip__danger-text--copy {
+  color: var(--bx-primary);
 }
 </style>

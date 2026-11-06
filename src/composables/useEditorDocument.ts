@@ -55,6 +55,7 @@ import {
   planSave,
   validateDocument,
 } from '@/domain/editor'
+import { nextClientKey } from '@/domain/editor/types'
 import { EditorValidationError } from '@/domain/editor/validation'
 import { BxError } from '@/utils/request'
 
@@ -93,6 +94,8 @@ export interface EditorDocumentController {
   /** 改题目的 `item_type_attr` */
   patchItemAttr: (clientKey: string, patch: Record<string, unknown>) => void
   addItem: (type: string) => EditorItem | null
+  /** 复制题目：副本插在原题之后，不带平台主键 */
+  duplicateItem: (clientKey: string) => EditorItem | null
   removeItem: (clientKey: string) => void
   moveItem: (from: number, to: number) => void
   changeItemType: (clientKey: string, type: string) => void
@@ -402,6 +405,37 @@ export function useEditorDocument(): EditorDocumentController {
     return findItem(item.clientKey) ?? null
   }
 
+  /**
+   * 复制题目
+   *
+   * 多道同构题（一组量表题之类）只能逐题重建，复制能省掉大部分重复输入。
+   * 副本**不带平台主键**：`itemNo` 清空、`raw` 置 null，保存时按新增处理；
+   * 选项同理清掉 `optionNo`，否则会把原题的 option_no 带过去。
+   */
+  function duplicateItem(clientKey: string): EditorItem | null {
+    const source = findItem(clientKey)
+    if (!source) {
+      return null
+    }
+    const copy: EditorItem = {
+      ...source,
+      clientKey: nextClientKey('item'),
+      itemNo: '',
+      raw: null,
+      options: source.options.map(option => ({
+        ...option,
+        clientKey: nextClientKey('option'),
+        optionNo: '',
+      })),
+    }
+    const index = doc.value.items.findIndex(item => item.clientKey === clientKey)
+    const next = [...doc.value.items]
+    next.splice(index + 1, 0, copy)
+    doc.value.items = next
+    touched.value = true
+    return copy
+  }
+
   function removeItem(clientKey: string): void {
     doc.value.items = doc.value.items.filter(item => item.clientKey !== clientKey)
     touched.value = true
@@ -546,6 +580,7 @@ export function useEditorDocument(): EditorDocumentController {
     patchItem,
     patchItemAttr,
     addItem,
+    duplicateItem,
     removeItem,
     moveItem,
     changeItemType,

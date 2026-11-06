@@ -71,6 +71,7 @@ const {
   onItemIssues,
   onPickType,
   onRemoveItem,
+  onDuplicateItem,
   onSelectItem,
   onClosePanel,
   onChangeType,
@@ -161,6 +162,14 @@ function onRemoveCurrentItem(): void {
   const item = selectedItem.value
   if (item) {
     void onRemoveItem(item.clientKey)
+  }
+}
+
+/** 复制当前题目：副本插在原题之后并自动选中，方便直接改文案 */
+function onDuplicateCurrentItem(): void {
+  const item = selectedItem.value
+  if (item) {
+    onDuplicateItem(item.clientKey)
   }
 }
 
@@ -607,6 +616,7 @@ const itemDropPosition = computed<'before' | 'after' | undefined>(() => {
             @attr-patch="onItemAttrPatch"
             @change-type="onChangeType"
             @remove="onRemoveCurrentItem"
+            @duplicate="onDuplicateCurrentItem"
             @option-add="onOptionAdd"
             @option-replace-all="onOptionReplaceAll"
             @option-remove="onOptionRemove"

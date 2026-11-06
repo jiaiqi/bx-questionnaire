@@ -86,6 +86,8 @@ export interface EditorDesignController {
   onItemIssues: (clientKey: string) => EditorIssue[]
   onPickType: (type: string) => void
   onRemoveItem: (clientKey: string) => Promise<void>
+  /** 复制题目：副本插在原题之后并自动选中 */
+  onDuplicateItem: (clientKey: string) => void
   onSelectItem: (clientKey: string) => void
   onClosePanel: () => void
   onChangeType: (type: string) => void
@@ -127,6 +129,7 @@ export function useEditorDesign(): EditorDesignController {
     patchItem,
     patchItemAttr,
     addItem,
+    duplicateItem,
     removeItem,
     moveItem,
     changeItemType,
@@ -247,6 +250,14 @@ export function useEditorDesign(): EditorDesignController {
     }
     selectedKey.value = item.clientKey
     activeTab.value = 'items'
+  }
+
+  /** 复制题目：副本插在原题之后并选中它，方便直接改文案 */
+  function onDuplicateItem(clientKey: string): void {
+    const copy = duplicateItem(clientKey)
+    if (copy) {
+      selectedKey.value = copy.clientKey
+    }
   }
 
   async function onRemoveItem(clientKey: string): Promise<void> {
@@ -440,6 +451,7 @@ export function useEditorDesign(): EditorDesignController {
     onItemAttrPatch,
     onItemIssues,
     onPickType,
+    onDuplicateItem,
     onRemoveItem,
     onSelectItem,
     onClosePanel,
