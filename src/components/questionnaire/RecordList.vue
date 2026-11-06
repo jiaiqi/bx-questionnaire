@@ -155,8 +155,41 @@ const {
 /** 实际渲染的行：前缀切片，下标与原数组一致 */
 const renderedRows = computed(() => filteredRows.value.slice(0, recordRenderedCount.value))
 
-/** 切换筛选后回到首屏条数：不同筛选结果之间没有可复用的渲染窗口 */
-watch(filter, () => resetRenderWindow())
+/** 服务端命中的总条数；只在登录态可信 —— 未登录时该服务返回的是所有人的记录 */
+const serverTotal = ref(0)
+
+/**
+ * 是否展示「共 N 条」
+ *
+ * 三个条件缺一不可：登录态（未登录时服务端返回所有人的记录，总数会包含别人的）、
+ * 「全部」分段（分段时 total 是过滤后的，与已加载数对比意义不大）、以及确实拿到了值。
+ * 其余情况仍显示「已显示 x / y 条」。
+ */
+const showServerTotal = computed(() => session.isLogin && filter.value === 'all' && serverTotal.value > 0)
+
+/**
+ * 条数文案
+ *
+ * 用计算属性而不是模板里的 `v-if`/三元：小程序的 `<text>` 只接受纯文本子节点，
+ * 里面塞 `<template>` 或 `<view>` 会被编译器丢掉。
+ */
+const countText = computed(() =>
+  showServerTotal.value
+    ? `共 ${serverTotal.value} 条 · 已显示 ${renderedRows.value.length}`
+    : `${renderedRows.value.length} / ${filteredRows.value.length} 条`,
+)
+
+/**
+ * 切换筛选：回到首屏条数并**重新拉第一页**
+ *
+ * 「草稿」这个分段已经下推成服务端 `state='未完成'` 条件。不重新拉的话，
+ * 分段里看到的永远只是「已加载的前 20 条」里筛出来的那几条，
+ * 用户会以为草稿记录丢了。
+ */
+watch(filter, () => {
+  resetRenderWindow()
+  void fetchPage(true)
+})
 
 /** 底部「加载更多」是否可用：本地还有未渲染的，或服务端还有下一页 */
 const canLoadMore = computed(() => hasMoreLoaded.value || !finished.value)
@@ -178,8 +211,17 @@ const loginHint = computed(() => {
     : '未登录，仅显示本机作答记录'
 })
 
+/**
+ * 请求序号
+ *
+ * 切换筛选会 `reset` 重拉，而 `loading` 锁只挡得住「触底加载」：快速来回点分段时，
+ * 旧请求后返回会把新筛选的结果覆盖掉。用序号丢弃过期响应（含 catch / finally）。
+ */
+let fetchToken = 0
+
 async function fetchPage(reset = false): Promise<void> {
-  if (loading.value) {
+  // 触底加载不抢占进行中的请求；`reset`（切换筛选 / 下拉刷新）必须抢占
+  if (loading.value && !reset) {
     return
   }
   if (reset) {
@@ -191,18 +233,25 @@ async function fetchPage(reset = false): Promise<void> {
     return
   }
 
+  const token = ++fetchToken
   loading.value = true
   try {
     const envelope = await recordReplySelect({
       activityNo: props.activityNo,
       // 用 || 而非 ??：空字符串也要视为「无用户」，否则会传 user_no eq '' 导致查不到任何记录
       userNo: session.userInfo?.user_no || undefined,
+      // 「草稿」下推成服务端条件；「已提交」是「非未完成」，eq 表达不了，仍走本地过滤
+      state: filter.value === 'draft' ? '未完成' : undefined,
       pageNo: pageNo.value,
       rownumber,
     })
+    if (token !== fetchToken) {
+      return
+    }
 
     const page = envelope.data ?? []
     rows.value = [...rows.value, ...page]
+    serverTotal.value = Number(envelope.page?.total ?? rows.value.length)
 
     const total = envelope.page?.total ?? rows.value.length
     finished.value = rows.value.length >= total || page.length === 0
@@ -211,6 +260,9 @@ async function fetchPage(reset = false): Promise<void> {
     failed.value = false
   }
   catch (error) {
+    if (token !== fetchToken) {
+      return
+    }
     // 不置 finished：一次网络抖动不该让列表永久停在「没有更多了」；
     // pageNo 也不递增，重试请求的仍是同一页。
     const message = error instanceof BxError ? error.message : '记录加载失败'
@@ -223,7 +275,10 @@ async function fetchPage(reset = false): Promise<void> {
     }
   }
   finally {
-    loading.value = false
+    // 只有最新一次请求结束时才收起 loading，否则加载态会提前消失
+    if (token === fetchToken) {
+      loading.value = false
+    }
   }
 }
 
@@ -411,7 +466,7 @@ void fetchPage(true)
             {{ tab.label }}
           </view>
         </view>
-        <text class="records__count">{{ renderedRows.length }} / {{ filteredRows.length }} 条</text>
+        <text class="records__count">{{ countText }}</text>
       </view>
 
       <!-- 筛选后为空：给回「查看全部」的出口 -->
