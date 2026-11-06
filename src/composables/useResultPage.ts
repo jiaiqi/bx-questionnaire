@@ -11,7 +11,7 @@
 import { onLoad } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import { areaAdjSelectByNo } from '@/api/config/area'
-import { recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
+import { activityScoreSugSelect, recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
 import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import {
@@ -28,6 +28,7 @@ import { shouldShowSuggestionEntry } from '@/domain/questionnaire/entry'
 import { imageAnswerTargets } from '@/domain/questionnaire/images'
 import { pickRefLabel, refAnswerTargets } from '@/domain/questionnaire/refs'
 import { coverUrl, suggestionUrl } from '@/domain/questionnaire/routes'
+import { useSessionStore } from '@/stores/session'
 import { readQuery } from '@/utils/query'
 import { bxSelect } from '@/utils/request'
 
@@ -36,6 +37,8 @@ export function useResultPage() {
 
   const activityNo = ref('')
   const batchNo = ref('')
+  /** 平台按分数区间配置的结果说明（登录态可得），空串表示没有或拿不到 */
+  const scoreSuggestion = ref('')
 
   /** 服务端权威结果：得分 / 每题作答值（拿不到时回退本地计算） */
   const serverScore = ref<number | null>(null)
@@ -92,6 +95,8 @@ export function useResultPage() {
     await loadAnswerImages()
     await loadAnswerRefs()
     await loadAnswerAddresses()
+    // 分数此时已定（loadServerResult 里取过服务端 score），再去匹配区间说明
+    void loadScoreSuggestion()
   }
 
   /**
@@ -289,6 +294,45 @@ export function useResultPage() {
     }
     return localScore.value
   })
+
+  /**
+   * 分值区间结果说明
+   *
+   * 平台允许按活动配置若干分数区间与对应文案（214 上有 58 条真实存量）。命中哪段就展示
+   * 哪段 —— 结果页此前只用前端按及格线拼的结论，等于把这批运营配置白放着。
+   *
+   * 服务是**登录访问**（匿名返回 0011「无权限访问」），所以只在登录态且分数有效时才请求；
+   * 失败一律静默，结果页主体（分数、逐题回顾）不依赖它。
+   *
+   * 必须定义在 `score` 之后：它要读 `score.value.score`，放在前面会被 `ts/no-use-before-define` 拦下。
+   */
+  async function loadScoreSuggestion(): Promise<void> {
+    const value = score.value.score
+    if (value === null || value === undefined) {
+      return
+    }
+    try {
+      // store 必须在 try 内取：纯逻辑单测不装 Pinia，`useSessionStore()` 会直接抛错，
+      // 而这里是 `void` 调用，抛到外面就是 unhandled rejection，会带崩整个测试文件。
+      const session = useSessionStore()
+      if (!session.isLogin) {
+        return
+      }
+      const envelope = await activityScoreSugSelect(activityNo.value)
+      const hit = (envelope.data ?? []).find((row) => {
+        const start = Number(row.start_score)
+        const end = Number(row.end_score)
+        return Number.isFinite(start) && Number.isFinite(end)
+          && value >= start && value <= end
+          && String(row.remark ?? '').trim() !== ''
+      })
+      scoreSuggestion.value = hit ? String(hit.remark).trim() : ''
+    }
+    catch {
+      // 建议是增强信息：拿不到就不显示，不影响分数与逐题回顾
+    }
+  }
+
   /**
    * 本问卷是否计分
    *
@@ -426,6 +470,7 @@ export function useResultPage() {
     hasScore,
     passed,
     passingMark,
+    scoreSuggestion,
     rows,
     answerImagesFailed,
     showSuggestionEntry,

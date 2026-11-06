@@ -39,6 +39,7 @@ const {
   hasScore,
   passed,
   passingMark,
+  scoreSuggestion,
   rows,
   answerImagesFailed,
   showSuggestionEntry,
@@ -277,6 +278,9 @@ function openShare(): void {
               <text class="r-chip__text">{{ levelChip.text }}</text>
             </view>
           </template>
+
+          <!-- 平台按分数区间配置的结果说明（登录态可得），比前端按及格线拼的结论更权威 -->
+          <text v-if="scoreSuggestion" class="r-sug">{{ scoreSuggestion }}</text>
 
           <text class="r-verdict">{{ verdictText }}</text>
 
@@ -609,6 +613,25 @@ function openShare(): void {
   line-height: var(--bx-leading-body);
   color: var(--bx-text-2);
   text-align: center;
+}
+
+/*
+ * 平台配置的分数区间说明
+ *
+ * 比 r-verdict 更"实"：运营按区间写好的具体建议。用浅底卡片与那句简短结论区分开，
+ * 说明常常两三句，必须能换行。
+ */
+.r-sug {
+  display: block;
+  margin-top: 12px;
+  padding: 12px 14px;
+  font-size: var(--bx-font-sub);
+  line-height: var(--bx-leading-sub);
+  color: var(--bx-text-2);
+  text-align: left;
+  word-break: break-word;
+  background-color: var(--bx-surface-2);
+  border-radius: var(--bx-radius-sm);
 }
 
 .r-hero__cap {
