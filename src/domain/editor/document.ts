@@ -28,9 +28,11 @@
  */
 
 import type { EditorActivity, EditorDocument, EditorItem, EditorOption } from './types'
-import type { DaqActivityRow, DaqItemRow, DaqOptionCfgRow } from '@/api/daq/types'
 
+import type { DaqActivityRow, DaqItemRow, DaqOptionCfgRow } from '@/api/daq/types'
 import { parseItemTypeAttr } from '@/domain/questionnaire/refs'
+
+import { normalizeActOption } from './enums'
 import { optionViewNo } from './itemTypes'
 import { emptyActivity, nextClientKey } from './types'
 
@@ -97,7 +99,7 @@ export function activityFromRow(row: DaqActivityRow): EditorActivity {
     submitLabel: text(row.submit_label),
     modifyAfterSubmit: text(row.modify_after_submit) || '否',
     modifyPeriond: text(row.modify_periond) || '一次',
-    actOption: text(row.act_option) || '提交确认',
+    actOption: normalizeActOption(text(row.act_option)),
     passingMark: text(row.passing_mark),
     raw: row,
   }

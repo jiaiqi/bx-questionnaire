@@ -190,7 +190,7 @@ export function emptyActivity(): EditorActivity {
     submitLabel: '',
     modifyAfterSubmit: '否',
     modifyPeriond: '一次',
-    actOption: '提交确认',
+    actOption: '不评分',
     passingMark: '',
     raw: null,
   }

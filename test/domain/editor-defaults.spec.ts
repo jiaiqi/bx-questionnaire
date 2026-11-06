@@ -99,7 +99,7 @@ describe('editor-defaults · 空实体工厂', () => {
     expect(activity.itemDispWay).toBe('全部')
     expect(activity.modifyAfterSubmit).toBe('否')
     expect(activity.modifyPeriond).toBe('一次')
-    expect(activity.actOption).toBe('提交确认')
+    expect(activity.actOption).toBe('不评分')
     expect(activity.passingMark).toBe('')
     expect(activity.raw).toBeNull()
   })

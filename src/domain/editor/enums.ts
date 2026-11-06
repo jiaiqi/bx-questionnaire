@@ -43,8 +43,34 @@ export const ANSWER_TIMES_OPTIONS = ['1次', '多次'] as const
 /** 问题显示方式：全部 = 一页列完，逐个 = 一题一屏 */
 export const ITEM_DISP_WAY_OPTIONS = ['全部', '逐个'] as const
 
-/** 选项模式：评分 / 提交确认 */
-export const ACT_OPTION_OPTIONS = ['评分', '提交确认'] as const
+/**
+ * 选项模式：评分 / 不评分
+ *
+ * 平台 `act_option` 的枚举就是这两个值（parkDev 实测）。此前这里误写成
+ * `['评分', '提交确认']`，导致编辑器**配不出「不评分」问卷**，还会往库里写
+ * 平台不认的「提交确认」。
+ */
+export const ACT_OPTION_OPTIONS = ['评分', '不评分'] as const
+
+/**
+ * 历史脏值归一
+ *
+ * 老编辑器写过「提交确认」，线上还有逗号组合 `评分,提交确认`（真实活动
+ * `20251108162243000001`）。不归一的话，打开这类旧问卷时分段选择器两个都不高亮，
+ * 保存又把脏值写回去。
+ *
+ * 必须先判「不评分」：`'不评分'.includes('评分')` 为真，顺序反了会把不评分判成评分。
+ */
+export function normalizeActOption(raw: string): string {
+  const value = String(raw ?? '').trim()
+  if (value.includes('不评分')) {
+    return '不评分'
+  }
+  if (value.includes('评分')) {
+    return '评分'
+  }
+  return '不评分'
+}
 
 /** 提交后是否可修改 */
 export const MODIFY_AFTER_SUBMIT_OPTIONS = ['是', '否'] as const
