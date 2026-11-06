@@ -28,6 +28,16 @@ import { readQuery } from '@/utils/query'
  * 与页面里的 `definePage({ type: 'home' })`。
  */
 
+/**
+ * 小程序页面配置
+ *
+ * `onShareTimeline` 只负责**返回值**；微信端还需要页面配置里开了
+ * `enableShareTimeline`，右上角菜单才会出现「分享到朋友圈」入口 ——
+ * 只写回调不写配置是静默失效（与 `enablePullDownRefresh` 属同一类坑，
+ * `style` 嵌套是 uni-app 的硬要求）。封面页已按同样方式补过。
+ */
+definePage({ style: { enableShareTimeline: true } })
+
 const activityNo = ref('')
 const formType = ref('form')
 const fillBatchNo = ref('')

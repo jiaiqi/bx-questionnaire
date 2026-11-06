@@ -100,7 +100,11 @@ export function historyUrl(activityNo: string, title?: string): string {
 }
 
 /**
- * 小程序分享路径（不带前导 `/`，`onShareAppMessage` 要求）
+ * 小程序分享路径片段（**不带**前导 `/`）
+ *
+ * 返回的是「页面路径 + 查询串」。调用方把它拼进 `onShareAppMessage` 的 `path` 时
+ * **必须自己补一个前导 `/`** —— 微信要求该字段是「以 / 开头的完整路径」。
+ * 答题页与封面页都按 `` `/${shareAnswerPath(...)}` `` 的方式拼接，改一处要同步另一处。
  *
  * 好友点开可直接作答，因此固定带 `formType=form` 与 `status=进行中`。
  */

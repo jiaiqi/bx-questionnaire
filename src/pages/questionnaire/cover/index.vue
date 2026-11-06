@@ -6,22 +6,36 @@
  * 老链接（#/questionnaire/index/index）由 main.ts 的 hash 重写兼容，本页用于新入口。
  *
  * 视觉（docs/UI-UX-V6-设计系统.md §5/§6）：
- * 冷白画布 + 左对齐的排版层级：小标签 → 32/600 大标题 → 副标题 → 引言 →
- * 2×2 细分隔信息网格 → 可展开的「作答说明」→ 50px 通栏主行动 + ghost 次行动。
- * 不用卡片墙分区：层级由字号、字重与 1px 细线承担。
+ * 冷白画布 + 左对齐的排版层级：小标签 → 32/600 大标题 → 副标题（分享摘要）→
+ * 描述（活动描述）→ 2×2 细分隔信息网格 → 可展开的「作答说明」→ 50px 通栏主行动 +
+ * ghost 次行动。不用卡片墙分区：层级由字号、字重与 1px 细线承担。
+ *
+ * 分享：H5 走页内分享面板（ShareSheet），小程序走右上角转发 —— 后者需要在
+ * `onShareAppMessage` / `onShareTimeline` 里注册，路径与答题页共用 `shareAnswerPath`。
  */
 
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 import BxAppearanceSheet from '@/components/base/BxAppearanceSheet.vue'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
+import BxQrCode from '@/components/base/BxQrCode.vue'
+import { plainText } from '@/components/editor/plainText'
 import ShareSheet from '@/components/share/ShareSheet.vue'
 
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useShare } from '@/composables/useShare'
-import { answerUrl, historyUrl } from '@/domain/questionnaire/routes'
+import { answerUrl, coverUrl, historyUrl, queryString, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
+
+/**
+ * 开放「分享到朋友圈」
+ *
+ * `onShareTimeline` 只负责**返回值**；小程序端还要页面配置里开了这项，右上角才会
+ * 出现「分享到朋友圈」入口，否则回调注册了也没有触发路径（与 `enablePullDownRefresh`
+ * 必须在 `definePage` 里声明是同一类静默失效）。`style` 嵌套是 uni-app 的硬要求。
+ */
+definePage({ style: { enableShareTimeline: true } })
 
 const { loading, activity, fields, errorMessage, load } = useQuestionnaire()
 
@@ -39,9 +53,36 @@ const shareUrl = computed(() =>
   shareLink(answerUrl(activityNo.value, { status: String(activity.value?.status ?? '进行中') })),
 )
 
+/**
+ * 二维码内容：**本页**（问卷首页）的绝对地址
+ *
+ * 与 `shareUrl` 刻意不同 —— 那个指向答题页，用于「邀请别人作答」；
+ * 二维码是给业务方自己换到手机上继续看的，扫开必须落在同一个封面页。
+ * `shareLink` 在非 H5 返回空串，此时二维码不渲染（小程序里扫给自己没意义）。
+ */
+const homeQrUrl = computed(() => shareLink(coverUrl(activityNo.value)))
+
 const title = computed(() => activity.value?.title || '问卷')
-const intro = computed(() => String(activity.value?.start_remark ?? '').trim())
-const summary = computed(() => String(activity.value?.summary ?? '').trim())
+
+/**
+ * 副标题与描述：口径与设计器封面预览（EditorCanvas 的 coverSub / coverIntro）一致
+ *
+ * 平台把这三列用得很反直觉，实测（214 两个真实活动）：
+ * - `remark` 是**活动描述**（富文本 HTML），也是编辑器里唯一必填的一段，实际有内容的就是它；
+ * - `summary` 是分享摘要，`start_remark` 是开始语 —— 两个活动里**都是 null**。
+ *
+ * 本页此前读的是 `start_remark`，于是设计器预览看得见描述、真机封面却空着。
+ * 现在按设计器口径：`summary` 作副标题在最上，`remark` 作描述在下（都走 plainText）。
+ *
+ * `start_remark` 只作为描述的**兜底**保留：它在前端出现过的唯一位置就是本页，
+ * 直接丢掉会让「只写了开始语」的活动从有字变成没字；作为 remark 之后的兜底，
+ * 描述非空时两者显示的文本与设计器预览完全一致，不会多出一段。
+ */
+const subtitle = computed(() => plainText(activity.value?.summary))
+const description = computed(
+  () => plainText(activity.value?.remark) || plainText(activity.value?.start_remark),
+)
+
 const count = computed(() => fields.value.filter(field => field.widget !== 'section').length)
 const ended = computed(() => activity.value?.status === '已结束')
 
@@ -109,7 +150,13 @@ const notes = computed(() => {
   return rows
 })
 
-const hasMore = computed(() => !!summary.value || notes.value.length > 0)
+/**
+ * 展开区的内容：只有说明行
+ *
+ * 分享摘要（`summary`）已经作为副标题显示在标题下方，这里**不再重复渲染** ——
+ * 同一段文字在首屏与展开区各出现一次，读者会以为活动写了两遍。
+ */
+const hasMore = computed(() => notes.value.length > 0)
 
 /**
  * 页脚隐私说明
@@ -136,6 +183,29 @@ async function init(): Promise<void> {
   }
   await load(activityNo.value, { mode: 'plain' })
 }
+
+/**
+ * 小程序转发
+ *
+ * 封面页此前**没有**注册转发回调，全仓只有答题页注册过 —— 小程序里停在封面时
+ * 右上角「转发」拿不到自定义标题与路径，等于转发不可用。这里补齐，与答题页同一套写法。
+ *
+ * 分享目标是**答题页**（好友点开可直接作答），路径复用 `shareAnswerPath`。
+ *
+ * `path` 要自己补前导 `/`：微信 `onShareAppMessage` 要求的是「以 / 开头的完整路径」，
+ * `shareAnswerPath` 只返回去掉了 `/` 的片段（便于调用方按需拼接）。这与答题页
+ * `index/index.vue` 的 `path: \`/${shareAnswerPath(...)}\`` 是同一写法，改一处必须改另一处。
+ */
+onShareAppMessage(() => ({
+  title: title.value,
+  path: `/${shareAnswerPath(activityNo.value)}`,
+}))
+
+/** 分享到朋友圈：只接受 `query`（查询串），页面路径由微信按当前页补全 */
+onShareTimeline(() => ({
+  title: title.value,
+  query: queryString({ formType: 'form', activity_no: activityNo.value, status: '进行中' }),
+}))
 
 function start(): void {
   uni.navigateTo({ url: answerUrl(activityNo.value, { status: activity.value?.status ?? '进行中' }) })
@@ -247,11 +317,12 @@ function onShareKeydown(event: KeyboardEvent): void {
             </view>
           </view>
 
-          <!-- 标题区：小标签 → 32/600 大标题 → 引言（活动简介在「作答说明」里展开） -->
+          <!-- 标题区：小标签 → 32/600 大标题 → 副标题（分享摘要）→ 描述（活动描述） -->
           <view class="c-head">
             <text class="c-head__kicker">{{ kicker }}</text>
             <text class="c-head__title">{{ title }}</text>
-            <text v-if="intro" class="c-head__intro">{{ intro }}</text>
+            <text v-if="subtitle" class="c-head__subtitle">{{ subtitle }}</text>
+            <text v-if="description" class="c-head__intro">{{ description }}</text>
           </view>
 
           <!-- 信息网格：2×2，细线分隔，不是四个卡 -->
@@ -282,7 +353,6 @@ function onShareKeydown(event: KeyboardEvent): void {
             </view>
 
             <view v-if="expanded" class="c-more__body">
-              <text v-if="summary" class="c-more__para">{{ summary }}</text>
               <view v-for="note in notes" :key="note.label" class="c-more__row">
                 <text class="c-more__row-label">{{ note.label }}</text>
                 <text class="c-more__row-value">{{ note.value }}</text>
@@ -306,6 +376,16 @@ function onShareKeydown(event: KeyboardEvent): void {
             </BxButton>
             <text class="c-actions__tip">作答过程中会自动保存草稿，可随时返回继续</text>
             <text class="c-actions__foot">{{ privacyFoot }}</text>
+          </view>
+
+          <!--
+            问卷二维码
+
+            只在宽屏出现：手机上打开本页时扫码给自己没有意义，还会占掉首屏。
+            内容是本页（问卷首页）的绝对地址，扫开落在同一个封面。
+          -->
+          <view v-if="homeQrUrl" class="c-qr">
+            <BxQrCode :value="homeQrUrl" :size="128" caption="扫码在手机上打开问卷首页" />
           </view>
         </template>
       </view>
@@ -582,12 +662,31 @@ function onShareKeydown(event: KeyboardEvent): void {
   overflow-wrap: break-word;
 }
 
+/*
+ * 副标题（分享摘要）：夹在 32px 大标题与 15px 描述之间，取 h2 字阶（17px）
+ * 并加重一档字重 —— 与描述靠字号 + 颜色区分，不靠留白猜。
+ */
+.c-head__subtitle {
+  display: block;
+  max-width: 34em;
+  margin-top: 10px;
+  font-size: var(--bx-font-h2);
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--bx-text-2);
+}
+
+/*
+ * 描述（活动描述，富文本已 plainText 化）：正文大小、1.75 行高，比副标题轻一档
+ * 用 `pre-line`：plainText 把 `<br>` 还原成 `\n`，两端的 `text` 都能按行换行
+ */
 .c-head__intro {
   display: block;
   max-width: 34em;
-  margin-top: 12px;
+  margin-top: 8px;
   font-size: var(--bx-font-body);
   line-height: 1.75;
+  white-space: pre-line;
   color: var(--bx-text-2);
 }
 
@@ -696,13 +795,6 @@ function onShareKeydown(event: KeyboardEvent): void {
   padding: 0 0 12px;
 }
 
-.c-more__para {
-  display: block;
-  font-size: var(--bx-font-sub);
-  line-height: 1.75;
-  color: var(--bx-text-2);
-}
-
 .c-more__row {
   display: flex;
   align-items: baseline;
@@ -727,7 +819,7 @@ function onShareKeydown(event: KeyboardEvent): void {
   font-variant-numeric: tabular-nums;
 }
 
-/* 活动没有简介也没有额外说明时的兜底：说明区不空着 */
+/* 活动没有额外说明时的兜底：说明区不空着 */
 .c-more__empty {
   display: block;
   padding-top: 4px;
@@ -775,5 +867,23 @@ function onShareKeydown(event: KeyboardEvent): void {
   letter-spacing: 0.04em;
   color: var(--bx-text-3);
   text-align: center;
+}
+
+/*
+ * 问卷二维码
+ *
+ * 默认不渲染：手机上打开本页时扫码给自己没有意义，还会占掉首屏。
+ * 只在宽屏（业务方在 PC 上核对、需要换到手机继续看）出现。
+ */
+.c-qr {
+  display: none;
+}
+
+@media (min-width: 760px) {
+  .c-qr {
+    display: flex;
+    justify-content: center;
+    margin-top: 32px;
+  }
 }
 </style>
