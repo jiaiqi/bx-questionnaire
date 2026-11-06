@@ -59,7 +59,7 @@ const filter = ref<RecordFilter>('all')
 const filterTabs: Array<{ key: RecordFilter, label: string }> = [
   { key: 'all', label: '全部' },
   { key: 'done', label: '已提交' },
-  { key: 'draft', label: '草稿' },
+  { key: 'draft', label: '未提交' },
 ]
 
 /**
@@ -509,7 +509,7 @@ void fetchPage(true)
         放在列表最上方 —— 它是用户最可能接着做的事。
       -->
       <view
-        v-if="localDraft"
+        v-if="localDraft && filter !== 'done'"
         class="record record--local-draft"
         role="button"
         tabindex="0"
