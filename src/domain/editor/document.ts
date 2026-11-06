@@ -251,9 +251,15 @@ export function itemPayload(
     answer: item.answer,
     answer_analysis: item.answerAnalysis,
     score_strategy: item.scoreStrategy,
-    // 题目来源与「是否模板」不是编辑器让用户填的东西，取平台默认值
-    item_ori: '自定义',
-    is_public: '否',
+    /*
+     * 题目来源与「是否模板」不是编辑器让用户填的东西：**已有题目保留原值**，
+     * 只有新建才用平台默认值。
+     *
+     * 写死成 `自定义 / 否` 会让题库题（`is_public='是'`）被编辑一次就悄悄失去模板标记，
+     * 从题库里再也选不到它 —— 用户完全感知不到这个改动。
+     */
+    item_ori: text(item.raw?.item_ori) || '自定义',
+    is_public: text(item.raw?.is_public) || '否',
     item_type_attr: JSON.stringify(item.attr),
   }
 }

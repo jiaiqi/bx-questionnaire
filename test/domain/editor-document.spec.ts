@@ -76,6 +76,26 @@ describe('itemPayload · 可写列', () => {
     expect(itemPayload(item, 0, 'A1').item_seq).toBe(1)
   })
 
+  /**
+   * 回归：题库题被编辑一次就失去模板标记
+   *
+   * 原来 `item_ori` / `is_public` 写死成「自定义 / 否」，编辑题库题（`is_public='是'`）
+   * 保存后它就从题库里消失了，而用户完全感知不到这个改动。
+   */
+  it('已有题目保留 is_public / item_ori，只有新建才用平台默认值', () => {
+    const existing = {
+      ...emptyItem('单选', { radioType: 'single' }),
+      raw: { item_no: 'I1', is_public: '是', item_ori: '题库' } as DaqItemRow,
+    }
+    const existingPayload = itemPayload(existing, 0, 'A1')
+    expect(existingPayload.is_public).toBe('是')
+    expect(existingPayload.item_ori).toBe('题库')
+
+    const freshPayload = itemPayload(emptyItem('单选', { radioType: 'single' }), 0, 'A1')
+    expect(freshPayload.is_public).toBe('否')
+    expect(freshPayload.item_ori).toBe('自定义')
+  })
+
   it('item_type_attr 序列化成 JSON 字符串（传对象平台会报 Incorrect string value）', () => {
     const item = { ...emptyItem('单选', { radioType: 'single' }), title: '单选题' }
     const payload = itemPayload(item, 0, 'A1')
