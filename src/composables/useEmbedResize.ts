@@ -7,6 +7,17 @@
  * 老工程是在 `survey/result.vue` 里 `watch` 建议列表后发
  * `{type:'height', value: scrollHeight}` —— 只覆盖一个页面、且消息类型不在契约内。
  * 这里改成通用 composable：任何可能变高的页面接一行即可。
+ *
+ * ⚠️ 作答页**不要**让宿主按这个高度撑高 iframe。
+ *
+ * 本页是「iframe 内部自己滚动」的整页应用，吸底操作栏（`.runner__footer`）用
+ * `position: fixed` 相对 **iframe 视口**贴底。宿主若把 iframe 撑到内容全高
+ * （这里报的是整页 `scrollHeight`，常见 8000+ px），`fixed` 就会贴到内容末端，
+ * 按钮跑到页面最下方、滚动时才偶尔露面。
+ *
+ * 正确的宿主做法是：iframe 高度固定等于「屏幕可视区 - 宿主自己的标题栏」
+ * （H5 宿主用 `calc(100vh - var(--window-top) - var(--window-bottom))`），
+ * 让子页自己滚。`RESIZE` 只用于**非吸底**的长内容页（结果页、建议页）。
  */
 
 import { onMounted, onUnmounted } from 'vue'
