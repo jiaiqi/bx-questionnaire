@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "dev": "unh dev",
-    "build": "unh build",
+    "build": "unh build && node scripts/generate-version.cjs --appName=\"问卷调查\"",
+    "create-tag": "node scripts/create-tag.cjs",
+    "create-tag:push": "node scripts/create-tag.cjs --push",
     "about": "unh info",
     "type-check": "vue-tsc --noEmit",
     "lint": "eslint .",
