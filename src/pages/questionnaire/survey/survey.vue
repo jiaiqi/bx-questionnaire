@@ -14,8 +14,12 @@ import { ref } from 'vue'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import QuestionnaireRunner from '@/components/questionnaire/QuestionnaireRunner.vue'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { queryString, QUESTIONNAIRE_ROUTES, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 /** 小程序页面配置：只写 onShareTimeline 回调不够，还要开 enableShareTimeline 才有入口 */
 definePage({ style: { enableShareTimeline: true } })

@@ -15,6 +15,7 @@ import { ref } from 'vue'
 
 import LoginScreen from '@/components/auth/LoginScreen.vue'
 import { DEFAULT_LOGIN_NOTICE, isKnownLoginReason, loginNotice } from '@/domain/auth/notice'
+import { useSessionStore } from '@/stores/session'
 import { readQueryDeeply } from '@/utils/query'
 
 /**
@@ -49,6 +50,15 @@ onLoad((query) => {
     ? loginNotice(reason)
     : readQueryDeeply(query, 'notice', DEFAULT_LOGIN_NOTICE)
   redirect.value = safeRedirect(readQueryDeeply(query, 'redirect'))
+
+  // 宿主带票打开登录页（或本地已有有效登录态）时直接回跳，不再展示登录表单。
+  // 票据可能已被 App.vue 的 onLaunch 先采纳、并从地址栏清掉，所以这里看**会话状态**，
+  // 而不是只看本次 query 是否带票 —— 否则会停在登录页，免登录失效。
+  const session = useSessionStore()
+  session.adoptUrlTicket(query)
+  if (session.isLogin) {
+    uni.reLaunch({ url: redirect.value || HOME_PATH })
+  }
 })
 
 function onSuccess(): void {

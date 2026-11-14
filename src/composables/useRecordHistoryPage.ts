@@ -16,6 +16,7 @@ import { onLoad, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 
 import { ref } from 'vue'
 
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { readQuery } from '@/utils/query'
 
 export interface RecordHistoryPage {
@@ -43,6 +44,9 @@ export interface RecordHistoryPage {
 export const RECORD_HISTORY_PAGE_STYLE = { enablePullDownRefresh: true } as const
 
 export function useRecordHistoryPage(defaultTitle = '作答记录'): RecordHistoryPage {
+  // 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+  useUrlTicket()
+
   const activityNo = ref('')
   const title = ref(defaultTitle)
   const pageRef = ref<InstanceType<typeof RecordHistory>>()

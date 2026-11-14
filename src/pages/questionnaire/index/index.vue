@@ -11,8 +11,12 @@ import { ref } from 'vue'
 
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import QuestionnaireRunner from '@/components/questionnaire/QuestionnaireRunner.vue'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { queryString, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 /**
  * 本页**不再是首页**：首页已改为问卷列表 `pages/editor/list/index`

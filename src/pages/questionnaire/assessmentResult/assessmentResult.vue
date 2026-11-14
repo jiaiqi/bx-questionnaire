@@ -10,7 +10,11 @@ import { onLoad } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 
 import SuggestionResultShell from '@/components/questionnaire/SuggestionResultShell.vue'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { readQuery } from '@/utils/query'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 const activityNo = ref('')
 const fillBatchNo = ref('')

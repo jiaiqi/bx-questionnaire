@@ -25,10 +25,14 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxSkeleton from '@/components/base/BxSkeleton.vue'
 import { useSurveyStats } from '@/composables/useSurveyStats'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { editorDesignUrl, editorListUrl } from '@/domain/editor/routes'
 import { coverUrl } from '@/domain/questionnaire/routes'
 import { widgetLabel } from '@/domain/stats'
 import { readQuery } from '@/utils/query'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 definePage({ style: { enablePullDownRefresh: true } })
 

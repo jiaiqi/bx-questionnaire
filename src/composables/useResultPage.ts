@@ -14,6 +14,7 @@ import { areaAdjSelectByNo } from '@/api/config/area'
 import { activityScoreSugSelect, recordReplyMergeSelect, recordReplySelect } from '@/api/daq/record'
 import { attachmentSelect, resolveFileUrl } from '@/api/file/attachment'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import {
   calcScore,
   describeAnswer,
@@ -33,6 +34,9 @@ import { readQuery } from '@/utils/query'
 import { bxSelect } from '@/utils/request'
 
 export function useResultPage() {
+  // 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+  useUrlTicket()
+
   const { loading, activity, fields, backfill, errorMessage, load } = useQuestionnaire()
 
   const activityNo = ref('')

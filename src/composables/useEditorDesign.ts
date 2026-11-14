@@ -32,6 +32,7 @@ import { computed, ref, watch } from 'vue'
 import { ITEM_ROW_HEIGHT } from '@/components/editor/constants'
 import { useEditorDocument } from '@/composables/useEditorDocument'
 import { usePointerReorder } from '@/composables/usePointerReorder'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import {
   describeIssues,
   editorDesignUrl,
@@ -109,6 +110,9 @@ export interface EditorDesignController {
 }
 
 export function useEditorDesign(): EditorDesignController {
+  // 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+  useUrlTicket()
+
   const {
     doc,
     loading,

@@ -275,6 +275,34 @@ iframe 自动识别，微信内置浏览器 / 小程序 / App 的 web-view 看 U
 - **回跳地址做白名单校验**：`redirect` 来自 URL，只接受本应用内的相对路径，
   挡掉 `//evil.com` 这类开放重定向。
 
+### URL 票据免登录
+
+宿主（门户 / 小程序壳 / 第三方系统）可以在**任意页面**的 URL 上带 `bx_auth_ticket`
+参数，应用会直接采纳这张票据，不再走账号密码登录：
+
+```text
+https://host/quest/?bx_auth_ticket=<票据>#/pages/questionnaire/cover/index?activity_no=...
+```
+
+- **读取顺序**：页面 query → H5 地址栏（`location.search` 与 hash 查询串）→
+  小程序 / App 当前页面栈。宿主常把参数加在 `#` 之前，这部分不在 uni-app 的路由
+  query 里，所以必须单独读地址栏（`src/utils/url-ticket.ts`）。
+- **直接使用**：不调登录接口、不做票据校验（合法性只能由服务端判定）；票据写入会话
+  与本地存储后，请求层自动带双 header。票据失效仍走 `0011` → 登录页。
+- **优先级**：URL 票据高于本地已有票据；票据变化时清掉旧的 `login_user_info`，
+  避免「按 user_no 查询」用错账号。
+- **所有页面**：每个页面在 setup 顶部调用 `useUrlTicket()`（页面逻辑在 composable 的
+  则在 composable 第一行调用），保证首个数据请求前票据已生效；`App.vue` 的
+  `onLaunch` / `onShow` 再兜一层。登录页带票打开时直接回跳到 `redirect`（或首页），
+  不再展示登录表单。
+- **过期回跳不带票**：会话过期跳登录页时，`redirect` 会剔除 `bx_auth_ticket`，
+  避免过期票据在「登录页 → 原页 → 0011 → 登录页」之间反复回跳。
+- **地址栏清理**：H5 采纳后会把票据从 `#` 之前的查询串移除（保留其它参数与 hash 路由），
+  既减少凭据外泄，也保证「退出登录」后切页不会被再次自动登录。
+
+> 安全提示：URL 里的票据会进浏览器历史 / 日志 / Referer，宿主应使用短时效票据，
+> 并避免把带票链接转发给他人。
+
 ### 端到端验证
 
 ```bash

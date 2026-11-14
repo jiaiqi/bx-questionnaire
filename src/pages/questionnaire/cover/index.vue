@@ -25,8 +25,12 @@ import ShareSheet from '@/components/share/ShareSheet.vue'
 
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
 import { useShare } from '@/composables/useShare'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { answerUrl, coverUrl, historyUrl, queryString, shareAnswerPath } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 /**
  * 开放「分享到朋友圈」

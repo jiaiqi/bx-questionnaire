@@ -11,6 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { SHARED_KEYS, storage, STORAGE_KEYS } from '@/utils/storage'
+import { clearUrlTicketFromSearch, resolveUrlTicket } from '@/utils/url-ticket'
 
 export const useSessionStore = defineStore('session', () => {
   /** 平台票据（与宿主共享 key） */
@@ -32,6 +33,33 @@ export const useSessionStore = defineStore('session', () => {
   function setUserInfo(info: BxLoginUserInfo | null): void {
     userInfo.value = info
     storage.set(SHARED_KEYS.LOGIN_USER_INFO, info)
+  }
+
+  /**
+   * 采纳 URL 传入的票据（免登录）
+   *
+   * 宿主在任意页面 URL 上带 `bx_auth_ticket` 时，直接把它当作当前会话票据：
+   * 不调登录接口、不做校验（合法性由服务端判定，失效仍走 `0011` → 登录页）。
+   *
+   * 票据变化时必须清掉旧的 `login_user_info` —— 它属于上一个身份，
+   * 留着会让「按 user_no 查询」用错账号（记录列表 / 我的测评）。
+   *
+   * @returns 是否采纳到票据（调用方据此判断本次 URL 是否带票）
+   */
+  function adoptUrlTicket(query?: Record<string, unknown> | null): boolean {
+    const next = resolveUrlTicket(query)
+    if (!next) {
+      return false
+    }
+    if (next !== ticket.value) {
+      if (userInfo.value) {
+        setUserInfo(null)
+      }
+      setTicket(next)
+    }
+    // 采纳后清掉地址栏里的票据：避免退出登录后切页又被自动登录
+    clearUrlTicketFromSearch()
+    return true
   }
 
   function setFillBatchNo(value: string): void {
@@ -67,6 +95,7 @@ export const useSessionStore = defineStore('session', () => {
     isLogin,
     setTicket,
     setUserInfo,
+    adoptUrlTicket,
     setFillBatchNo,
     clearFillBatchNo,
     clear,

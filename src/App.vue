@@ -27,6 +27,7 @@ import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useSessionStore } from '@/stores/session'
 import { setSessionExpiredHandler } from '@/utils/request'
 import { toast } from '@/utils/ui'
+import { URL_TICKET_KEY } from '@/utils/url-ticket'
 
 const LOGIN_PATH = '/pages/login/index'
 
@@ -42,6 +43,9 @@ function currentPageUrl(): string {
   }
 
   const query = Object.entries(page.options ?? {})
+    // 票据是凭据，不能塞进登录页的 redirect 参数：既会外泄，也会让过期票据
+    // 在「登录页 → 原页 → 0011 → 登录页」之间反复回跳。
+    .filter(([key]) => key !== URL_TICKET_KEY)
     .map(([key, value]) => `${key}=${value}`)
     .join('&')
 
@@ -67,8 +71,13 @@ watch(network.isOffline, (offline, previous) => {
   toast('网络已恢复', 'success')
 })
 
-onLaunch(() => {
+onLaunch((options) => {
   const session = useSessionStore()
+
+  // URL 票据免登录：宿主在任意页面 URL 上带 bx_auth_ticket 时直接采纳。
+  // 页面自己的 onLoad 也会采纳一次（H5 的 App onLaunch 可能晚于首屏页面），
+  // 这里兜住没有 onLoad 的页面与后续冷启动。
+  session.adoptUrlTicket(options?.query)
 
   // 会话过期统一入口：请求层清票据后回调这里，由这里决定跳登录并回跳
   setSessionExpiredHandler(() => {
@@ -101,6 +110,11 @@ onLaunch(() => {
 
 /** 应用回到前台：重新订阅并立即检测一次（后台期间可能已断网 / 恢复） */
 onShow(() => {
+  // 宿主可能在应用退到后台期间换了票据（重新打开 iframe / 小程序切回），
+  // 回前台时再采纳一次；没有票据时是空操作。
+  // 这里不传 options：App 级 onShow 的类型没有参数，地址栏与页面栈由
+  // resolveUrlTicket 自己兜底（冷启动的 query 已由 onLaunch 采纳）。
+  useSessionStore().adoptUrlTicket()
   network.start()
 })
 

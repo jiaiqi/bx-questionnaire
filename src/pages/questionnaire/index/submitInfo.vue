@@ -20,10 +20,14 @@ import BxButton from '@/components/base/BxButton.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
 import { useAriaLabel } from '@/composables/useAriaLabel'
 import { useQuestionnaire } from '@/composables/useQuestionnaire'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { answerUrl, coverUrl } from '@/domain/questionnaire/routes'
 import { readQuery } from '@/utils/query'
 import { storage, STORAGE_KEYS } from '@/utils/storage'
 import { toast } from '@/utils/ui'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 const { activity, load } = useQuestionnaire()
 

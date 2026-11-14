@@ -36,11 +36,15 @@ import BxSkeleton from '@/components/base/BxSkeleton.vue'
 import EditorListRow from '@/components/editor/EditorListRow.vue'
 import EditorSegmented from '@/components/editor/EditorSegmented.vue'
 import { ACTIVITY_STATUS_OPTIONS, EDITOR_LIST_PAGE_SIZE, useEditorList } from '@/composables/useEditorList'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { editorCreateUrl, editorDesignUrl, editorStatsUrl } from '@/domain/editor/routes'
 import { answerUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError } from '@/utils/request'
 import { confirmDialog, toast } from '@/utils/ui'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 /**
  * 页面级配置

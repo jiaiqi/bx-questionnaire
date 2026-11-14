@@ -14,16 +14,21 @@
 
 import type { DaqActivityRow, DaqRecordReplyRow } from '@/api/daq/types'
 
+import { onLoad } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
 
 import { recordReplySelect } from '@/api/daq/record'
 import BxButton from '@/components/base/BxButton.vue'
 import BxEmpty from '@/components/base/BxEmpty.vue'
 import BxNavBar from '@/components/base/BxNavBar.vue'
+import { useUrlTicket } from '@/composables/useUrlTicket'
 import { formatDateTime } from '@/domain/questionnaire'
 import { answerUrl, resultUrl } from '@/domain/questionnaire/routes'
 import { useSessionStore } from '@/stores/session'
 import { BxError, bxSelect } from '@/utils/request'
+
+// 先采纳 URL 票据：必须在页面自己的 onLoad 之前注册（uni-app 按注册顺序调用）
+useUrlTicket()
 
 interface AssessmentItem {
   activityNo: string
@@ -191,7 +196,10 @@ function onActionKeydown(event: KeyboardEvent, kind: 'result' | 'record', item: 
   }
 }
 
-void load()
+// 数据加载放到 onLoad：setup 末尾直接 load 会早于票据采纳，首个请求可能以匿名身份发出
+onLoad(() => {
+  void load()
+})
 </script>
 
 <template>
